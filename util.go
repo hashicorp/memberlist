@@ -2,6 +2,7 @@ package memberlist
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"net"
 )
@@ -32,8 +33,9 @@ func decode(buf []byte, out interface{}) error {
 }
 
 // Encode writes a GOB encoded object to a new bytes buffer
-func encode(in interface{}) (*bytes.Buffer, error) {
+func encode(msgType int, in interface{}) (*bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
+	binary.Write(buf, binary.BigEndian, uint32(msgType))
 	enc := gob.NewEncoder(buf)
 	err := enc.Encode(in)
 	return buf, err
