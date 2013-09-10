@@ -139,20 +139,45 @@ func (m *Memberlist) handlePing(buf []byte, from net.Addr) {
 		return
 	}
 	ack := ackResp{p.SeqNo}
-	out, err := encode(ackRespMsg, ack)
-	if err != nil {
-		log.Printf("[ERR] Failed to encode ack response: %s", err)
-		return
-	}
-	if err := m.sendMsg(from, out); err != nil {
+	if err := m.encodeAndSendMsg(from, ackRespMsg, &ack); err != nil {
 		log.Printf("[ERR] Failed to send ack: %s", err)
 	}
 }
 
 func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
+	var ind indirectPingReq
+	if err := decode(buf, &ind); err != nil {
+		log.Printf("[ERR] Failed to decode indirect ping request: %s", err)
+		return
+	}
+
+	// Send a ping to the correct host
+	localSeqNo := m.nextSeqNo()
+	ping := ping{SeqNo: localSeqNo}
+	destAddr := &net.UDPAddr{IP: ind.Target, Port: m.config.UDPPort}
+
+	// Setup a response handler to relay the ack
+	respHandler := func() {
+		ack := ackResp{ind.SeqNo}
+		if err := m.encodeAndSendMsg(from, ackRespMsg, &ack); err != nil {
+			log.Printf("[ERR] Failed to forward ack: %s", err)
+		}
+	}
+	m.setAckHandler(localSeqNo, respHandler, m.config.RTT)
+
+	// Send the ping
+	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
+		log.Printf("[ERR] Failed to send ping: %s", err)
+	}
 }
 
 func (m *Memberlist) handleAck(buf []byte, from net.Addr) {
+	var ack ackResp
+	if err := decode(buf, &ack); err != nil {
+		log.Printf("[ERR] Failed to decode ack response: %s", err)
+		return
+	}
+	m.invokeAckHandler(ack.SeqNo)
 }
 
 func (m *Memberlist) handleSuspect(buf []byte, from net.Addr) {
@@ -162,6 +187,18 @@ func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 }
 
 func (m *Memberlist) handleDead(buf []byte, from net.Addr) {
+}
+
+// encodeAndSendMsg is used to combine the encoding and sending steps
+func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType int, msg interface{}) error {
+	out, err := encode(msgType, msg)
+	if err != nil {
+		return err
+	}
+	if err := m.sendMsg(to, out); err != nil {
+		return err
+	}
+	return nil
 }
 
 // sendMsg is used to send a UDP message to another host
