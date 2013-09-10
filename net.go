@@ -24,37 +24,37 @@ const (
 
 // ping request sent directly to node
 type ping struct {
-	SeqNo int
+	SeqNo uint32
 }
 
 // indirect ping sent to an indirect ndoe
 type indirectPingReq struct {
-	SeqNo  int
-	Target string
+	SeqNo  uint32
+	Target []byte
 }
 
 // ack response is sent for a ping
 type ackResp struct {
-	SeqNo int
+	SeqNo uint32
 }
 
 // suspect is broadcast when we suspect a node is dead
 type suspect struct {
-	Incarnation int
+	Incarnation uint32
 	Node        string
 }
 
 // alive is broadcast when we know a node is alive.
 // Overloaded for nodes joining
 type alive struct {
-	Incarnation int
+	Incarnation uint32
 	Node        string
 }
 
 // dead is broadcast when we confirm a node is dead
 // Overloaded for nodes leaving
 type dead struct {
-	Incarnation int
+	Incarnation uint32
 	Node        string
 }
 
