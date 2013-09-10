@@ -194,8 +194,16 @@ func (m *Memberlist) Stop(ch chan<- net.Addr) {
 }
 
 // Members is used to return a list of all known live nodes
-func (m *Memberlist) Members() []net.Addr {
-	return nil
+func (m *Memberlist) Members() []*Node {
+	nodes := make([]*Node, 0, len(m.nodes))
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	for _, n := range m.nodes {
+		if n.State != StateDead {
+			nodes = append(nodes, &n.Node)
+		}
+	}
+	return nodes
 }
 
 // Leave will broadcast a leave message but will not shutdown

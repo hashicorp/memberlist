@@ -11,10 +11,15 @@ const (
 	StateDead
 )
 
+// Node is used to represent a known node
+type Node struct {
+	Name string   // Remote node name
+	Addr net.Addr // Remote address
+}
+
 // NodeState is used to manage our state view of another node
 type NodeState struct {
-	Name        string    // Remote node name
-	Addr        net.Addr  // Remote address
+	Node
 	Incarnation int       // Last known incarnation number
 	State       int       // Current state
 	StateChange time.Time // Time last state change happened

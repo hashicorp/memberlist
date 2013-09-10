@@ -2,6 +2,7 @@ package memberlist
 
 import (
 	"net"
+	"reflect"
 	"testing"
 )
 
@@ -85,5 +86,24 @@ func TestMemberList_Stop(t *testing.T) {
 	}
 	if len(m.notifyFail) != 0 {
 		t.Fatalf("did not remove")
+	}
+}
+
+func TestMemberList_Members(t *testing.T) {
+	n1 := &Node{Name: "test"}
+	n2 := &Node{Name: "test2"}
+	n3 := &Node{Name: "test3"}
+
+	m := &Memberlist{}
+	nodes := []*NodeState{
+		&NodeState{Node: *n1, State: StateAlive},
+		&NodeState{Node: *n2, State: StateDead},
+		&NodeState{Node: *n3, State: StateSuspect},
+	}
+	m.nodes = nodes
+
+	members := m.Members()
+	if !reflect.DeepEqual(members, []*Node{n1, n3}) {
+		t.Fatalf("bad members")
 	}
 }
