@@ -15,45 +15,45 @@ const (
 	pushPullMsg
 )
 
-// msgHeader is prefixed to messages to indicate type
-type msgHeader struct {
-	msgType int
-}
+const (
+	udpBufSize = 65536
+	udpSendBuf = 1500
+)
 
 // ping request sent directly to node
 type ping struct {
-	seqNo int
+	SeqNo int
 }
 
 // indirect ping sent to an indirect ndoe
-type indirectPing struct {
-	seqNo  int
-	target string
+type indirectPingReq struct {
+	SeqNo  int
+	Target string
 }
 
 // ack response is sent for a ping
 type ackResp struct {
-	seqNo int
+	SeqNo int
 }
 
 // suspect is broadcast when we suspect a node is dead
 type suspect struct {
-	incarnation int
-	node        string
+	Incarnation int
+	Node        string
 }
 
 // alive is broadcast when we know a node is alive.
 // Overloaded for nodes joining
 type alive struct {
-	incarnation int
-	node        string
+	Incarnation int
+	Node        string
 }
 
 // dead is broadcast when we confirm a node is dead
 // Overloaded for nodes leaving
 type dead struct {
-	incarnation int
-	node        string
+	Incarnation int
+	Node        string
 }
 
 // tcpListen listens for and handles incoming connections
