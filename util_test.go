@@ -53,3 +53,18 @@ func TestChannelDelete(t *testing.T) {
 		t.Fatalf("bad index")
 	}
 }
+
+func TestEncodeDecode(t *testing.T) {
+	msg := &ping{seqNo: 100}
+	buf, err := encode(msg)
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+	var out ping
+	if err := decode(buf.Bytes(), &out); err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+	if msg.seqNo != out.seqNo {
+		t.Fatalf("bad sequence no")
+	}
+}
