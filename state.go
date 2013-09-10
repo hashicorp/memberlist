@@ -100,3 +100,18 @@ func (m *Memberlist) invokeAckHandler(seqNo uint32) {
 	ah.timer.Stop()
 	ah.handler()
 }
+
+// aliveNode is invoked by the network layer when we get a message
+// about a live node
+func (m *Memberlist) aliveNode(a *alive) {
+}
+
+// suspectNode is invoked by the network layer when we get a message
+// about a suspect node
+func (m *Memberlist) suspectNode(s *suspect) {
+}
+
+// deadNode is invoked by the network layer when we get a message
+// about a dead node
+func (m *Memberlist) deadNode(d *dead) {
+}

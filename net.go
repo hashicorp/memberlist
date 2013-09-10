@@ -49,6 +49,7 @@ type suspect struct {
 type alive struct {
 	Incarnation uint32
 	Node        string
+	Addr        []byte
 }
 
 // dead is broadcast when we confirm a node is dead
@@ -181,12 +182,30 @@ func (m *Memberlist) handleAck(buf []byte, from net.Addr) {
 }
 
 func (m *Memberlist) handleSuspect(buf []byte, from net.Addr) {
+	var sus suspect
+	if err := decode(buf, &sus); err != nil {
+		log.Printf("[ERR] Failed to decode suspect message: %s", err)
+		return
+	}
+	m.suspectNode(&sus)
 }
 
 func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
+	var live alive
+	if err := decode(buf, &live); err != nil {
+		log.Printf("[ERR] Failed to decode alive message: %s", err)
+		return
+	}
+	m.aliveNode(&live)
 }
 
 func (m *Memberlist) handleDead(buf []byte, from net.Addr) {
+	var d dead
+	if err := decode(buf, &d); err != nil {
+		log.Printf("[ERR] Failed to decode dead message: %s", err)
+		return
+	}
+	m.deadNode(&d)
 }
 
 // encodeAndSendMsg is used to combine the encoding and sending steps
