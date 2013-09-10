@@ -23,11 +23,13 @@ package memberlist
 import (
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
 
 type Config struct {
+	Name           string        // Node name (FQDN)
 	BindAddr       string        // Binding address
 	UDPPort        int           // UDP port to listen on
 	TCPPort        int           // TCP port to listen on
@@ -49,10 +51,23 @@ type Memberlist struct {
 	notifyJoin  []chan<- net.Addr // Channels to notify on join
 	notifyLeave []chan<- net.Addr // Channels to notify on leave
 	notifyFail  []chan<- net.Addr // Channels to notify on failure
+
+	sequenceNum int // Local sequence number
+	incarnation int // Local incarnation number
+
+	nodeLock sync.RWMutex
+	nodes    []*NodeState          // Known nodes
+	nodeMap  map[string]*NodeState // Maps Addr.String() -> NodeState
+
+	tickerLock sync.Mutex
+	ticker     *time.Ticker
+	stopTick   chan struct{}
 }
 
 func DefaultConfig() *Config {
+	hostname, _ := os.Hostname()
 	return &Config{
+		hostname,
 		"0.0.0.0",
 		7946,
 		7946,
@@ -65,10 +80,9 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Create will start memberlist and create a new gossip pool, but
-// will not connect to an existing node. This should only be used
-// for the first node in the cluster.
-func Create(conf *Config) (*Memberlist, error) {
+// newMemberlist creates the network listeners.
+// Does not schedule exeuction of background maintenence.
+func newMemberlist(conf *Config) (*Memberlist, error) {
 	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.TCPPort)
 	tcpLn, err := net.Listen("tcp", tcpAddr)
 	if err != nil {
@@ -85,9 +99,23 @@ func Create(conf *Config) (*Memberlist, error) {
 	m := &Memberlist{config: conf,
 		udpListener: udpLn.(*net.UDPConn),
 		tcpListener: tcpLn.(*net.TCPListener),
+		nodeMap:     make(map[string]*NodeState),
+		stopTick:    make(chan struct{}),
 	}
 	go m.tcpListen()
 	go m.udpListen()
+	return m, nil
+}
+
+// Create will start memberlist and create a new gossip pool, but
+// will not connect to an existing node. This should only be used
+// for the first node in the cluster.
+func Create(conf *Config) (*Memberlist, error) {
+	m, err := newMemberlist(conf)
+	if err != nil {
+		return nil, err
+	}
+	m.schedule()
 	return m, nil
 }
 
@@ -95,13 +123,15 @@ func Create(conf *Config) (*Memberlist, error) {
 // all the given hosts. If none of the existing hosts could be contacted,
 // the join will fail.
 func Join(conf *Config, existing []string) (*Memberlist, error) {
-	// Try to create first
-	m, err := Create(conf)
+	m, err := newMemberlist(conf)
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO: Attempt to join...
+
+	// Schedule background work
+	m.schedule()
 	return m, nil
 }
 
@@ -179,6 +209,7 @@ func (m *Memberlist) Leave() error {
 // but will not broadcast a leave message prior. If no prior
 // leave was issued, other nodes will detect this as a failure.
 func (m *Memberlist) Shutdown() error {
+	m.deschedule()
 	m.udpListener.Close()
 	m.tcpListener.Close()
 	return nil
