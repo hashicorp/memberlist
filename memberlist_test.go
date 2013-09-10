@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestMemberList_CreateShutdown(t *testing.T) {
+func GetMemberlist(t *testing.T) *Memberlist {
 	c := DefaultConfig()
 
 	var m *Memberlist
@@ -14,12 +14,17 @@ func TestMemberList_CreateShutdown(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		m, err = Create(c)
 		if err == nil {
-			break
+			return m
 		}
+		c.TCPPort++
+		c.UDPPort++
 	}
-	if err != nil {
-		t.Fatalf("failed to start: %v", err)
-	}
+	t.Fatalf("failed to start: %v", err)
+	return nil
+}
+
+func TestMemberList_CreateShutdown(t *testing.T) {
+	m := GetMemberlist(t)
 	if err := m.Shutdown(); err != nil {
 		t.Fatalf("failed to shutdown %v", err)
 	}
