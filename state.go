@@ -246,4 +246,29 @@ func (m *Memberlist) deadNode(d *dead) {
 // mergeState is invoked by the network layer when we get a Push/Pull
 // state transfer
 func (m *Memberlist) mergeState(remote []pushNodeState) {
+	for _, r := range remote {
+		// Look for a matching local node
+		m.nodeLock.RLock()
+		local, ok := m.nodeMap[r.Name]
+		m.nodeLock.RUnlock()
+
+		// Skip if we agree on states
+		if ok && local.State == r.State {
+			continue
+		}
+
+		switch r.State {
+		case StateAlive:
+			a := alive{Incarnation: r.Incarnation, Node: r.Name, Addr: r.Addr}
+			m.aliveNode(&a)
+
+		case StateSuspect:
+			s := suspect{Incarnation: r.Incarnation, Node: r.Name}
+			m.suspectNode(&s)
+
+		case StateDead:
+			d := dead{Incarnation: r.Incarnation, Node: r.Name}
+			m.deadNode(&d)
+		}
+	}
 }
