@@ -2,6 +2,7 @@ package memberlist
 
 import (
 	"testing"
+	"time"
 )
 
 func TestChannelIndex(t *testing.T) {
@@ -76,5 +77,55 @@ func TestRandomOffset(t *testing.T) {
 			t.Fatalf("got collision")
 		}
 		vals[offset] = struct{}{}
+	}
+}
+
+func TestNotifyAll(t *testing.T) {
+	ch1 := make(chan *Node, 1)
+	ch2 := make(chan *Node, 1)
+	ch3 := make(chan *Node, 1)
+
+	// Make sure ch1 is full
+	ch1 <- &Node{Name: "test"}
+
+	// Notify all
+	n := &Node{Name: "Push"}
+	notifyAll([]chan<- *Node{ch1, ch2, ch3}, n)
+
+	v := <-ch1
+	if v.Name != "test" {
+		t.Fatalf("bad name")
+	}
+
+	// Test receive
+	select {
+	case v := <-ch1:
+		t.Fatalf("bad node %v", v)
+	default:
+	}
+
+	select {
+	case v := <-ch2:
+		if v != n {
+			t.Fatalf("bad node %v", v)
+		}
+	default:
+		t.Fatalf("nothing on channel")
+	}
+
+	select {
+	case v := <-ch3:
+		if v != n {
+			t.Fatalf("bad node %v", v)
+		}
+	default:
+		t.Fatalf("nothing on channel")
+	}
+}
+
+func TestSuspicionTimeout(t *testing.T) {
+	timeout := suspicionTimeout(3, 10, time.Second)
+	if timeout != 6*time.Second {
+		t.Fatalf("bad timeout")
 	}
 }

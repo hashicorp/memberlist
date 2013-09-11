@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"math"
 	"math/rand"
+	"time"
 )
 
 // channelIndex returns the index of a channel in a list or
@@ -44,4 +46,20 @@ func encode(msgType int, in interface{}) (*bytes.Buffer, error) {
 // Returns a random offset between 0 and n
 func randomOffset(n int) int {
 	return int(rand.Uint32() % uint32(n))
+}
+
+// Does a non-blocking notify to all listeners
+func notifyAll(chans []chan<- *Node, n *Node) {
+	for _, c := range chans {
+		select {
+		case c <- n:
+		default:
+		}
+	}
+}
+
+func suspicionTimeout(suspicionMult, n int, interval time.Duration) time.Duration {
+	nodeScale := math.Ceil(math.Log10(float64(n + 1)))
+	timeout := time.Duration(suspicionMult) * time.Duration(nodeScale) * interval
+	return timeout
 }
