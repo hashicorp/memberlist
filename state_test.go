@@ -335,3 +335,92 @@ func TestMemberList_DeadNode_OldDead(t *testing.T) {
 		t.Fatalf("Bad state")
 	}
 }
+
+func TestMemberList_MergeState(t *testing.T) {
+	m := GetMemberlist(t)
+	a1 := alive{Node: "test1", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
+	m.aliveNode(&a1)
+	a2 := alive{Node: "test2", Addr: []byte{127, 0, 0, 2}, Incarnation: 1}
+	m.aliveNode(&a2)
+	a3 := alive{Node: "test3", Addr: []byte{127, 0, 0, 3}, Incarnation: 1}
+	m.aliveNode(&a3)
+
+	s := suspect{Node: "test1", Incarnation: 1}
+	m.suspectNode(&s)
+
+	remote := []pushNodeState{
+		pushNodeState{
+			Name:        "test1",
+			Addr:        []byte{127, 0, 0, 1},
+			Incarnation: 2,
+			State:       StateAlive,
+		},
+		pushNodeState{
+			Name:        "test2",
+			Addr:        []byte{127, 0, 0, 2},
+			Incarnation: 1,
+			State:       StateSuspect,
+		},
+		pushNodeState{
+			Name:        "test3",
+			Addr:        []byte{127, 0, 0, 3},
+			Incarnation: 1,
+			State:       StateDead,
+		},
+		pushNodeState{
+			Name:        "test4",
+			Addr:        []byte{127, 0, 0, 4},
+			Incarnation: 2,
+			State:       StateAlive,
+		},
+	}
+
+	// Listen for changes
+	joinCh := make(chan *Node, 1)
+	leaveCh := make(chan *Node, 1)
+	m.NotifyJoin(joinCh)
+	m.NotifyLeave(leaveCh)
+
+	// Merge remote state
+	m.mergeState(remote)
+
+	// Check the states
+	state := m.nodeMap["test1"]
+	if state.State != StateAlive || state.Incarnation != 2 {
+		t.Fatalf("Bad state %v", state)
+	}
+
+	state = m.nodeMap["test2"]
+	if state.State != StateSuspect || state.Incarnation != 1 {
+		t.Fatalf("Bad state %v", state)
+	}
+
+	state = m.nodeMap["test3"]
+	if state.State != StateDead || state.Incarnation != 1 {
+		t.Fatalf("Bad state %v", state)
+	}
+
+	state = m.nodeMap["test4"]
+	if state.State != StateAlive || state.Incarnation != 2 {
+		t.Fatalf("Bad state %v", state)
+	}
+
+	// Check the channels
+	select {
+	case j := <-joinCh:
+		if j.Name != "test4" {
+			t.Fatalf("bad node %v", j)
+		}
+	default:
+		t.Fatalf("Expect join")
+	}
+
+	select {
+	case l := <-leaveCh:
+		if l.Name != "test3" {
+			t.Fatalf("bad node %v", l)
+		}
+	default:
+		t.Fatalf("Expect leave")
+	}
+}
