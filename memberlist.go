@@ -9,7 +9,7 @@ failure detection) and the addition of a state push/pull mechanism.
 A fanout mechanism is used because it allows for changes to be propogated
 more quickly, and also enables us to dynamically increase the amount of
 gossip in response to a surge of events. The fanout rate is provided as a tunable
-parameter, and disabling it ensures that only piggybacking is performed.
+parameter.
 
 A Push/Pull mechanism is also included because it allows new nodes to
 get an almost complete member list upon joining. It also is used as
