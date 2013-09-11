@@ -94,3 +94,37 @@ func moveDeadNodes(nodes []*NodeState) int {
 	}
 	return n - numDead
 }
+
+// kRandomNodes is used to select up to k random nodes, excluding a given
+// node and any non-alive nodes. It is possible that less than k nodes are returned.
+func kRandomNodes(k int, exclude string, nodes []*NodeState) []*NodeState {
+	n := len(nodes)
+	kNodes := make([]*NodeState, 0, k)
+OUTER:
+	for i := 0; i < n && len(kNodes) < k; i++ {
+		// Get random node
+		idx := randomOffset(n)
+		node := nodes[idx]
+
+		// Exclude node if match
+		if node.Name == exclude {
+			continue
+		}
+
+		// Exclude if not alive
+		if node.State != StateAlive {
+			continue
+		}
+
+		// Check if we have this node already
+		for j := 0; j < len(kNodes); j++ {
+			if node == kNodes[j] {
+				continue OUTER
+			}
+		}
+
+		// Append the node
+		kNodes = append(kNodes, node)
+	}
+	return kNodes
+}

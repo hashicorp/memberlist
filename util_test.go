@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -201,6 +202,56 @@ func TestMoveDeadNodes(t *testing.T) {
 	for i := idx; i < len(nodes); i++ {
 		if nodes[i].State != StateDead {
 			t.Fatalf("Bad state %d", i)
+		}
+	}
+}
+
+func TestKRandomNodes(t *testing.T) {
+	nodes := []*NodeState{}
+	for i := 0; i < 30; i++ {
+		// Half the nodes are in a bad state
+		state := StateAlive
+		switch i % 3 {
+		case 0:
+			state = StateAlive
+		case 1:
+			state = StateSuspect
+		case 2:
+			state = StateDead
+		}
+		nodes = append(nodes, &NodeState{
+			Node: Node{
+				Name: fmt.Sprintf("test%d", i),
+			},
+			State: state,
+		})
+	}
+
+	s1 := kRandomNodes(3, "test0", nodes)
+	s2 := kRandomNodes(3, "test0", nodes)
+	s3 := kRandomNodes(3, "test0", nodes)
+
+	if reflect.DeepEqual(s1, s2) {
+		t.Fatalf("unexpected equal")
+	}
+	if reflect.DeepEqual(s1, s3) {
+		t.Fatalf("unexpected equal")
+	}
+	if reflect.DeepEqual(s2, s3) {
+		t.Fatalf("unexpected equal")
+	}
+
+	for _, s := range [][]*NodeState{s1, s2, s3} {
+		if len(s) != 3 {
+			t.Fatalf("bad len")
+		}
+		for _, n := range s {
+			if n.Name == "test0" {
+				t.Fatalf("Bad name")
+			}
+			if n.State != StateAlive {
+				t.Fatalf("Bad state")
+			}
 		}
 	}
 }
