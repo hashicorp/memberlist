@@ -189,12 +189,13 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	// Update the state
 	state.Incarnation = s.Incarnation
 	state.State = StateSuspect
-	state.StateChange = time.Now()
+	changeTime := time.Now()
+	state.StateChange = changeTime
 
 	// Setup a timeout for this
 	timeout := suspicionTimeout(m.config.SuspicionMult, len(m.nodes), m.config.Interval)
 	time.AfterFunc(timeout, func() {
-		if state.Incarnation == s.Incarnation && state.State == StateSuspect {
+		if state.State == StateSuspect && state.StateChange == changeTime {
 			m.suspectTimeout(state)
 		}
 	})
