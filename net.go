@@ -72,7 +72,7 @@ type pushPullHeader struct {
 type pushNodeState struct {
 	Name        string
 	Addr        []byte
-	Incarnation int
+	Incarnation uint32
 	State       int
 	StateChange time.Time
 }
