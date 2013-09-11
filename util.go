@@ -45,6 +45,9 @@ func encode(msgType int, in interface{}) (*bytes.Buffer, error) {
 
 // Returns a random offset between 0 and n
 func randomOffset(n int) int {
+	if n == 0 {
+		return 0
+	}
 	return int(rand.Uint32() % uint32(n))
 }
 
@@ -58,6 +61,8 @@ func notifyAll(chans []chan<- *Node, n *Node) {
 	}
 }
 
+// suspicionTimeout computes the timeout that should be used when
+// a node is suspected
 func suspicionTimeout(suspicionMult, n int, interval time.Duration) time.Duration {
 	nodeScale := math.Ceil(math.Log10(float64(n + 1)))
 	timeout := time.Duration(suspicionMult) * time.Duration(nodeScale) * interval

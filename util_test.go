@@ -80,6 +80,13 @@ func TestRandomOffset(t *testing.T) {
 	}
 }
 
+func TestRandomOffset_Zero(t *testing.T) {
+	offset := randomOffset(0)
+	if offset != 0 {
+		t.Fatalf("bad offset")
+	}
+}
+
 func TestNotifyAll(t *testing.T) {
 	ch1 := make(chan *Node, 1)
 	ch2 := make(chan *Node, 1)
