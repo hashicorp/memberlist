@@ -252,3 +252,70 @@ func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
 		t.Fatalf("Bad state")
 	}
 }
+
+func TestMemberList_DeadNode_NoNode(t *testing.T) {
+	m := GetMemberlist(t)
+	d := dead{Node: "test", Incarnation: 1}
+	m.deadNode(&d)
+	if len(m.nodes) != 0 {
+		t.Fatalf("don't expect nodes")
+	}
+}
+
+func TestMemberList_DeadNode(t *testing.T) {
+	ch := make(chan *Node, 1)
+	m := GetMemberlist(t)
+	m.NotifyLeave(ch)
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
+	m.aliveNode(&a)
+
+	state := m.nodeMap["test"]
+	state.StateChange = state.StateChange.Add(-time.Hour)
+
+	d := dead{Node: "test", Incarnation: 1}
+	m.deadNode(&d)
+
+	if state.State != StateDead {
+		t.Fatalf("Bad state")
+	}
+
+	change := state.StateChange
+	if time.Now().Sub(change) > time.Second {
+		t.Fatalf("bad change delta")
+	}
+
+	select {
+	case leave := <-ch:
+		if leave.Name != "test" {
+			t.Fatalf("bad node name")
+		}
+	default:
+		t.Fatalf("no leave message")
+	}
+}
+
+func TestMemberList_DeadNode_Double(t *testing.T) {
+	ch := make(chan *Node, 1)
+	m := GetMemberlist(t)
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
+	m.aliveNode(&a)
+
+	state := m.nodeMap["test"]
+	state.StateChange = state.StateChange.Add(-time.Hour)
+
+	d := dead{Node: "test", Incarnation: 1}
+	m.deadNode(&d)
+
+	// Notify after the first dead
+	m.NotifyLeave(ch)
+
+	// Should do nothing
+	d.Incarnation = 2
+	m.deadNode(&d)
+
+	select {
+	case <-ch:
+		t.Fatalf("should not get leave")
+	default:
+	}
+}
