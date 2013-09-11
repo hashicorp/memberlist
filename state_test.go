@@ -35,6 +35,22 @@ func TestMemberList_NextSeq(t *testing.T) {
 	}
 }
 
+func TestMemberList_SetAckChannel(t *testing.T) {
+	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
+
+	ch := make(chan struct{}, 1)
+	m.setAckChannel(0, ch, 10*time.Millisecond)
+
+	if _, ok := m.ackHandlers[0]; !ok {
+		t.Fatalf("missing handler")
+	}
+	time.Sleep(11 * time.Millisecond)
+
+	if _, ok := m.ackHandlers[0]; ok {
+		t.Fatalf("non-reaped handler")
+	}
+}
+
 func TestMemberList_SetAckHandler(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
@@ -65,6 +81,29 @@ func TestMemberList_InvokeAckHandler(t *testing.T) {
 	m.invokeAckHandler(0)
 	if !b {
 		t.Fatalf("b not set")
+	}
+
+	if _, ok := m.ackHandlers[0]; ok {
+		t.Fatalf("non-reaped handler")
+	}
+}
+
+func TestMemberList_InvokeAckHandler_Channel(t *testing.T) {
+	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
+
+	// Does nothing
+	m.invokeAckHandler(0)
+
+	ch := make(chan struct{}, 1)
+	m.setAckChannel(0, ch, 10*time.Millisecond)
+
+	// Should send message
+	m.invokeAckHandler(0)
+
+	select {
+	case <-ch:
+	default:
+		t.Fatalf("message not sent")
 	}
 
 	if _, ok := m.ackHandlers[0]; ok {

@@ -97,6 +97,33 @@ func (m *Memberlist) nextSeqNo() uint32 {
 	return atomic.AddUint32(&m.sequenceNum, 1)
 }
 
+// setAckChannel is used to attach a channel to receive a message when
+// an ack with a given sequence number is received. The channel is always
+// closed after the timeout.
+func (m *Memberlist) setAckChannel(seqNo uint32, ch chan struct{}, timeout time.Duration) {
+	// Create a handler function
+	handler := func() {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+
+	// Add the handler
+	ah := &ackHandler{handler, nil}
+	m.ackLock.Lock()
+	m.ackHandlers[seqNo] = ah
+	m.ackLock.Unlock()
+
+	// Setup a reaping routing
+	ah.timer = time.AfterFunc(timeout, func() {
+		m.ackLock.Lock()
+		delete(m.ackHandlers, seqNo)
+		m.ackLock.Unlock()
+		close(ch)
+	})
+}
+
 // setAckHandler is used to attach a handler to be invoked when an
 // ack with a given sequence number is received. If a timeout is reached,
 // the handler is deleted
