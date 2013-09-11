@@ -48,9 +48,9 @@ type Memberlist struct {
 	tcpListener *net.TCPListener
 
 	notifyLock  sync.RWMutex
-	notifyJoin  []chan<- net.Addr // Channels to notify on join
-	notifyLeave []chan<- net.Addr // Channels to notify on leave
-	notifyFail  []chan<- net.Addr // Channels to notify on failure
+	notifyJoin  []chan<- *Node // Channels to notify on join
+	notifyLeave []chan<- *Node // Channels to notify on leave
+	notifyFail  []chan<- *Node // Channels to notify on failure
 
 	sequenceNum uint32 // Local sequence number
 	incarnation uint32 // Local incarnation number
@@ -141,7 +141,7 @@ func Join(conf *Config, existing []string) (*Memberlist, error) {
 }
 
 // NotifyJoin is used to subscribe a channel to join events
-func (m *Memberlist) NotifyJoin(ch chan<- net.Addr) {
+func (m *Memberlist) NotifyJoin(ch chan<- *Node) {
 	m.notifyLock.Lock()
 	defer m.notifyLock.Unlock()
 
@@ -153,7 +153,7 @@ func (m *Memberlist) NotifyJoin(ch chan<- net.Addr) {
 }
 
 // NotifyLeave is used to subscribe a channel to leave events
-func (m *Memberlist) NotifyLeave(ch chan<- net.Addr) {
+func (m *Memberlist) NotifyLeave(ch chan<- *Node) {
 	m.notifyLock.Lock()
 	defer m.notifyLock.Unlock()
 
@@ -166,7 +166,7 @@ func (m *Memberlist) NotifyLeave(ch chan<- net.Addr) {
 
 // NotifyFail is used to subscribe a channel to nodes leaving
 // due to failure
-func (m *Memberlist) NotifyFail(ch chan<- net.Addr) {
+func (m *Memberlist) NotifyFail(ch chan<- *Node) {
 	m.notifyLock.Lock()
 	defer m.notifyLock.Unlock()
 
@@ -178,7 +178,7 @@ func (m *Memberlist) NotifyFail(ch chan<- net.Addr) {
 }
 
 // Stop is used to unsubscribe a channel from any notifications
-func (m *Memberlist) Stop(ch chan<- net.Addr) {
+func (m *Memberlist) Stop(ch chan<- *Node) {
 	m.notifyLock.Lock()
 	defer m.notifyLock.Unlock()
 

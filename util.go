@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
-	"net"
+	"math/rand"
 )
 
 // channelIndex returns the index of a channel in a list or
 // -1 if not found
-func channelIndex(list []chan<- net.Addr, ch chan<- net.Addr) int {
+func channelIndex(list []chan<- *Node, ch chan<- *Node) int {
 	for i := 0; i < len(list); i++ {
 		if list[i] == ch {
 			return i
@@ -19,7 +19,7 @@ func channelIndex(list []chan<- net.Addr, ch chan<- net.Addr) int {
 }
 
 // channelDelete takes an index and removes the element at that index
-func channelDelete(list []chan<- net.Addr, idx int) []chan<- net.Addr {
+func channelDelete(list []chan<- *Node, idx int) []chan<- *Node {
 	n := len(list)
 	list[idx], list[n-1] = list[n-1], nil
 	return list[0 : n-1]
@@ -39,4 +39,9 @@ func encode(msgType int, in interface{}) (*bytes.Buffer, error) {
 	enc := gob.NewEncoder(buf)
 	err := enc.Encode(in)
 	return buf, err
+}
+
+// Returns a random offset between 0 and n
+func randomOffset(n int) int {
+	return int(rand.Uint32() % uint32(n))
 }

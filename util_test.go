@@ -1,15 +1,14 @@
 package memberlist
 
 import (
-	"net"
 	"testing"
 )
 
 func TestChannelIndex(t *testing.T) {
-	ch1 := make(chan net.Addr)
-	ch2 := make(chan net.Addr)
-	ch3 := make(chan net.Addr)
-	list := []chan<- net.Addr{ch1, ch2, ch3}
+	ch1 := make(chan *Node)
+	ch2 := make(chan *Node)
+	ch3 := make(chan *Node)
+	list := []chan<- *Node{ch1, ch2, ch3}
 
 	if channelIndex(list, ch1) != 0 {
 		t.Fatalf("bad index")
@@ -21,24 +20,24 @@ func TestChannelIndex(t *testing.T) {
 		t.Fatalf("bad index")
 	}
 
-	ch4 := make(chan net.Addr)
+	ch4 := make(chan *Node)
 	if channelIndex(list, ch4) != -1 {
 		t.Fatalf("bad index")
 	}
 }
 
 func TestChannelIndex_Empty(t *testing.T) {
-	ch := make(chan net.Addr)
+	ch := make(chan *Node)
 	if channelIndex(nil, ch) != -1 {
 		t.Fatalf("bad index")
 	}
 }
 
 func TestChannelDelete(t *testing.T) {
-	ch1 := make(chan net.Addr)
-	ch2 := make(chan net.Addr)
-	ch3 := make(chan net.Addr)
-	list := []chan<- net.Addr{ch1, ch2, ch3}
+	ch1 := make(chan *Node)
+	ch2 := make(chan *Node)
+	ch3 := make(chan *Node)
+	list := []chan<- *Node{ch1, ch2, ch3}
 
 	// Delete ch2
 	list = channelDelete(list, 1)
@@ -66,5 +65,16 @@ func TestEncodeDecode(t *testing.T) {
 	}
 	if msg.SeqNo != out.SeqNo {
 		t.Fatalf("bad sequence no")
+	}
+}
+
+func TestRandomOffset(t *testing.T) {
+	vals := make(map[int]struct{})
+	for i := 0; i < 100; i++ {
+		offset := randomOffset(2 << 30)
+		if _, ok := vals[offset]; ok {
+			t.Fatalf("got collision")
+		}
+		vals[offset] = struct{}{}
 	}
 }

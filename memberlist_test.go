@@ -1,7 +1,6 @@
 package memberlist
 
 import (
-	"net"
 	"reflect"
 	"testing"
 )
@@ -31,7 +30,7 @@ func TestMemberList_CreateShutdown(t *testing.T) {
 }
 
 func TestMemberList_NotifyJoin(t *testing.T) {
-	ch := make(chan net.Addr)
+	ch := make(chan *Node)
 	m := &Memberlist{}
 	m.NotifyJoin(ch)
 	if len(m.notifyJoin) != 1 || m.notifyJoin[0] != ch {
@@ -46,7 +45,7 @@ func TestMemberList_NotifyJoin(t *testing.T) {
 }
 
 func TestMemberList_NotifyLeave(t *testing.T) {
-	ch := make(chan net.Addr)
+	ch := make(chan *Node)
 	m := &Memberlist{}
 	m.NotifyLeave(ch)
 	if len(m.notifyLeave) != 1 || m.notifyLeave[0] != ch {
@@ -61,7 +60,7 @@ func TestMemberList_NotifyLeave(t *testing.T) {
 }
 
 func TestMemberList_NotifyFail(t *testing.T) {
-	ch := make(chan net.Addr)
+	ch := make(chan *Node)
 	m := &Memberlist{}
 	m.NotifyFail(ch)
 	if len(m.notifyFail) != 1 || m.notifyFail[0] != ch {
@@ -76,7 +75,7 @@ func TestMemberList_NotifyFail(t *testing.T) {
 }
 
 func TestMemberList_Stop(t *testing.T) {
-	ch := make(chan net.Addr)
+	ch := make(chan *Node)
 	m := &Memberlist{}
 	m.NotifyJoin(ch)
 	m.NotifyLeave(ch)
