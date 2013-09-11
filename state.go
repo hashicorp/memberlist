@@ -71,6 +71,27 @@ func (m *Memberlist) tick() {
 
 }
 
+// resetNodes is used when the tick wraps around. It will reap the
+// dead nodes and shuffle the node list.
+func (m *Memberlist) resetNodes() {
+	m.nodeLock.Lock()
+	defer m.nodeLock.Unlock()
+
+	// Move the dead nodes
+	deadIdx := moveDeadNodes(m.nodes)
+
+	// Deregister the dead nodes
+	for i := deadIdx; i < len(m.nodes); i++ {
+		delete(m.nodeMap, m.nodes[i].Name)
+	}
+
+	// Trim the nodes to exclude the dead nodes
+	m.nodes = m.nodes[0:deadIdx]
+
+	// Shuffle live nodes
+	shuffleNodes(m.nodes)
+}
+
 // nextSeqNo returns a usable sequence number in a thread safe way
 func (m *Memberlist) nextSeqNo() uint32 {
 	return atomic.AddUint32(&m.sequenceNum, 1)

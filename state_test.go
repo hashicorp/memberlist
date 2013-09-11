@@ -5,6 +5,26 @@ import (
 	"time"
 )
 
+func TestMemberList_ResetNodes(t *testing.T) {
+	m := GetMemberlist(t)
+	a1 := alive{Node: "test1", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
+	m.aliveNode(&a1)
+	a2 := alive{Node: "test2", Addr: []byte{127, 0, 0, 2}, Incarnation: 1}
+	m.aliveNode(&a2)
+	a3 := alive{Node: "test3", Addr: []byte{127, 0, 0, 3}, Incarnation: 1}
+	m.aliveNode(&a3)
+	d := dead{Node: "test2", Incarnation: 1}
+	m.deadNode(&d)
+
+	m.resetNodes()
+	if len(m.nodes) != 2 {
+		t.Fatalf("Bad length")
+	}
+	if _, ok := m.nodeMap["test2"]; ok {
+		t.Fatalf("test2 should be unmapped")
+	}
+}
+
 func TestMemberList_NextSeq(t *testing.T) {
 	m := &Memberlist{}
 	if m.nextSeqNo() != 1 {
