@@ -3,8 +3,10 @@ package memberlist
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"log"
 	"net"
+	"time"
 )
 
 const (
@@ -59,6 +61,22 @@ type dead struct {
 	Node        string
 }
 
+// pushPullHeader is used to inform the
+// otherside how many states we are transfering
+type pushPullHeader struct {
+	Nodes int
+}
+
+// pushNodeState is used for pushPullReq when we are
+// transfering out node states
+type pushNodeState struct {
+	Name        string
+	Addr        []byte
+	Incarnation int
+	State       int
+	StateChange time.Time
+}
+
 // tcpListen listens for and handles incoming connections
 func (m *Memberlist) tcpListen() {
 	for {
@@ -76,6 +94,73 @@ func (m *Memberlist) tcpListen() {
 
 // handleConn handles a single incoming TCP connection
 func (m *Memberlist) handleConn(conn *net.TCPConn) {
+	defer conn.Close()
+
+	// Read the message type
+	var msgType uint32
+	if err := binary.Read(conn, binary.BigEndian, &msgType); err != nil {
+		log.Printf("[ERR] Failed to read the msg type: %s", err)
+		return
+	}
+
+	// Quit if not push/pull
+	if msgType != pushPullMsg {
+		log.Printf("[ERR] Invalid TCP request type (%d)", msgType)
+		return
+	}
+
+	// Read the push/pull header
+	var header pushPullHeader
+	dec := gob.NewDecoder(conn)
+	if err := dec.Decode(&header); err != nil {
+		log.Printf("[ERR] Failed to decode Push/Pull header: %s", err)
+		return
+	}
+
+	// Allocate space for the transfer
+	remoteNodes := make([]pushNodeState, header.Nodes)
+
+	// Try to decode all the states
+	for i := 0; i < header.Nodes; i++ {
+		if err := dec.Decode(&remoteNodes[i]); err != nil {
+			log.Printf("[ERR] Failed to decode Push/Pull state (idx: %d / %d): %s", i+1, header.Nodes, err)
+			return
+		}
+	}
+
+	// Prepare the local node state
+	m.nodeLock.RLock()
+	localNodes := make([]pushNodeState, len(m.nodes))
+	for idx, n := range m.nodes {
+		localNodes[idx].Name = n.Name
+		localNodes[idx].Addr = n.Addr
+		localNodes[idx].Incarnation = n.Incarnation
+		localNodes[idx].State = n.State
+		localNodes[idx].StateChange = n.StateChange
+	}
+	m.nodeLock.RUnlock()
+
+	// Send our node state
+	header.Nodes = len(localNodes)
+	enc := gob.NewEncoder(conn)
+
+	// Send the push/pull indicator
+	binary.Write(conn, binary.BigEndian, uint32(pushPullMsg))
+
+	if err := enc.Encode(&header); err != nil {
+		log.Printf("[ERR] Failed to send Push/Pull header: %s", err)
+		goto AFTER_SEND
+	}
+	for i := 0; i < header.Nodes; i++ {
+		if err := enc.Encode(&localNodes[i]); err != nil {
+			log.Printf("[ERR] Failed to send Push/Pull state (idx: %d / %d): %s", i+1, header.Nodes, err)
+			goto AFTER_SEND
+		}
+	}
+
+AFTER_SEND:
+	// Allow the local state to be updated
+	m.mergeState(remoteNodes)
 }
 
 // udpListen listens for and handles incoming UDP packets

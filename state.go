@@ -14,8 +14,8 @@ const (
 
 // Node is used to represent a known node
 type Node struct {
-	Name string   // Remote node name
-	Addr net.Addr // Remote address
+	Name string // Remote node name
+	Addr net.IP // Remote address
 }
 
 // NodeState is used to manage our state view of another node
@@ -114,4 +114,9 @@ func (m *Memberlist) suspectNode(s *suspect) {
 // deadNode is invoked by the network layer when we get a message
 // about a dead node
 func (m *Memberlist) deadNode(d *dead) {
+}
+
+// mergeState is invoked by the network layer when we get a Push/Pull
+// state transfer
+func (m *Memberlist) mergeState(remote []pushNodeState) {
 }
