@@ -36,6 +36,7 @@ type Config struct {
 	Fanout         int           // Number of nodes to publish to per round
 	IndirectChecks int           // Number of indirect checks to use
 	Retransmits    int           // Retransmit multiplier for messages
+	SuspicionMult  int           // Suspicion time = SuspcicionMult * log(N+1) * Interval
 	PushPullFreq   float32       // How often we do a Push/Pull update
 	RTT            time.Duration // 99% precentile of round-trip-time
 	Interval       time.Duration // Interval length
@@ -77,6 +78,7 @@ func DefaultConfig() *Config {
 		3,    // Fanout to 3 nodes
 		3,    // Use 3 nodes for the indirect ping
 		4,    // Retransmit a message 4 * log(N+1) nodes
+		5,    // Suspect a node for 5 * log(N+1) * Interval
 		0.05, // 5% frequency for push/pull
 		20 * time.Millisecond, // Reasonable RTT time for LAN
 		1 * time.Second,       // Failure check every second
