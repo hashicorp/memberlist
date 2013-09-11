@@ -62,6 +62,7 @@ func (m *Memberlist) deschedule() {
 
 // Tick is used to perform a single round of failure detection and gossip
 func (m *Memberlist) tick() {
+	m.tickCount++
 
 }
 
