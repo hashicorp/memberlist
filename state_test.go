@@ -162,3 +162,93 @@ func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 	default:
 	}
 }
+
+func TestMemberList_SuspectNode_NoNode(t *testing.T) {
+	m := GetMemberlist(t)
+	s := suspect{Node: "test", Incarnation: 1}
+	m.suspectNode(&s)
+	if len(m.nodes) != 0 {
+		t.Fatalf("don't expect nodes")
+	}
+}
+
+func TestMemberList_SuspectNode(t *testing.T) {
+	m := GetMemberlist(t)
+	m.config.Interval = time.Millisecond
+	m.config.SuspicionMult = 1
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
+	m.aliveNode(&a)
+
+	state := m.nodeMap["test"]
+	state.StateChange = state.StateChange.Add(-time.Hour)
+
+	s := suspect{Node: "test", Incarnation: 1}
+	m.suspectNode(&s)
+
+	if state.State != StateSuspect {
+		t.Fatalf("Bad state")
+	}
+
+	change := state.StateChange
+	if time.Now().Sub(change) > time.Second {
+		t.Fatalf("bad change delta")
+	}
+
+	// Wait for the timeout
+	time.Sleep(10 * time.Millisecond)
+
+	if state.State != StateDead {
+		t.Fatalf("Bad state")
+	}
+
+	if time.Now().Sub(state.StateChange) > time.Second {
+		t.Fatalf("bad change delta")
+	}
+	if !state.StateChange.After(change) {
+		t.Fatalf("should increment time")
+	}
+}
+
+func TestMemberList_SuspectNode_DoubleSuspect(t *testing.T) {
+	m := GetMemberlist(t)
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
+	m.aliveNode(&a)
+
+	state := m.nodeMap["test"]
+	state.StateChange = state.StateChange.Add(-time.Hour)
+
+	s := suspect{Node: "test", Incarnation: 1}
+	m.suspectNode(&s)
+
+	if state.State != StateSuspect {
+		t.Fatalf("Bad state")
+	}
+
+	change := state.StateChange
+	if time.Now().Sub(change) > time.Second {
+		t.Fatalf("bad change delta")
+	}
+
+	// Suspect again
+	m.suspectNode(&s)
+
+	if state.StateChange != change {
+		t.Fatalf("unexpected state change")
+	}
+}
+
+func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
+	m := GetMemberlist(t)
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10}
+	m.aliveNode(&a)
+
+	state := m.nodeMap["test"]
+	state.StateChange = state.StateChange.Add(-time.Hour)
+
+	s := suspect{Node: "test", Incarnation: 1}
+	m.suspectNode(&s)
+
+	if state.State != StateAlive {
+		t.Fatalf("Bad state")
+	}
+}
