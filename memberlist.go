@@ -50,7 +50,6 @@ type Memberlist struct {
 	notifyLock  sync.RWMutex
 	notifyJoin  []chan<- *Node // Channels to notify on join
 	notifyLeave []chan<- *Node // Channels to notify on leave
-	notifyFail  []chan<- *Node // Channels to notify on failure
 
 	sequenceNum uint32 // Local sequence number
 	incarnation uint32 // Local incarnation number
@@ -164,19 +163,6 @@ func (m *Memberlist) NotifyLeave(ch chan<- *Node) {
 	m.notifyLeave = append(m.notifyLeave, ch)
 }
 
-// NotifyFail is used to subscribe a channel to nodes leaving
-// due to failure
-func (m *Memberlist) NotifyFail(ch chan<- *Node) {
-	m.notifyLock.Lock()
-	defer m.notifyLock.Unlock()
-
-	// Bail if the channel is already subscribed
-	if channelIndex(m.notifyFail, ch) >= 0 {
-		return
-	}
-	m.notifyFail = append(m.notifyFail, ch)
-}
-
 // Stop is used to unsubscribe a channel from any notifications
 func (m *Memberlist) Stop(ch chan<- *Node) {
 	m.notifyLock.Lock()
@@ -190,11 +176,6 @@ func (m *Memberlist) Stop(ch chan<- *Node) {
 	idx = channelIndex(m.notifyLeave, ch)
 	if idx >= 0 {
 		m.notifyLeave = channelDelete(m.notifyLeave, idx)
-	}
-
-	idx = channelIndex(m.notifyFail, ch)
-	if idx >= 0 {
-		m.notifyFail = channelDelete(m.notifyFail, idx)
 	}
 }
 

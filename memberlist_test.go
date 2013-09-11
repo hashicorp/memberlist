@@ -59,36 +59,17 @@ func TestMemberList_NotifyLeave(t *testing.T) {
 	}
 }
 
-func TestMemberList_NotifyFail(t *testing.T) {
-	ch := make(chan *Node)
-	m := &Memberlist{}
-	m.NotifyFail(ch)
-	if len(m.notifyFail) != 1 || m.notifyFail[0] != ch {
-		t.Fatalf("did not add")
-	}
-
-	// Should do nothing
-	m.NotifyFail(ch)
-	if len(m.notifyFail) != 1 || m.notifyFail[0] != ch {
-		t.Fatalf("did not add")
-	}
-}
-
 func TestMemberList_Stop(t *testing.T) {
 	ch := make(chan *Node)
 	m := &Memberlist{}
 	m.NotifyJoin(ch)
 	m.NotifyLeave(ch)
-	m.NotifyFail(ch)
 	m.Stop(ch)
 
 	if len(m.notifyJoin) != 0 {
 		t.Fatalf("did not remove")
 	}
 	if len(m.notifyLeave) != 0 {
-		t.Fatalf("did not remove")
-	}
-	if len(m.notifyFail) != 0 {
 		t.Fatalf("did not remove")
 	}
 }
