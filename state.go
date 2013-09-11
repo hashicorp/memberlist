@@ -222,9 +222,9 @@ func (m *Memberlist) deadNode(d *dead) {
 		return
 	}
 
-	// Check for new incarnation
-	if d.Incarnation > state.Incarnation {
-		state.Incarnation = d.Incarnation
+	// Ignore old incarnation numbers
+	if d.Incarnation < state.Incarnation {
+		return
 	}
 
 	// Ignore if node is already dead
@@ -233,6 +233,7 @@ func (m *Memberlist) deadNode(d *dead) {
 	}
 
 	// Update the state
+	state.Incarnation = d.Incarnation
 	state.State = StateDead
 	state.StateChange = time.Now()
 

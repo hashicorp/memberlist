@@ -319,3 +319,19 @@ func TestMemberList_DeadNode_Double(t *testing.T) {
 	default:
 	}
 }
+
+func TestMemberList_DeadNode_OldDead(t *testing.T) {
+	m := GetMemberlist(t)
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10}
+	m.aliveNode(&a)
+
+	state := m.nodeMap["test"]
+	state.StateChange = state.StateChange.Add(-time.Hour)
+
+	d := dead{Node: "test", Incarnation: 1}
+	m.deadNode(&d)
+
+	if state.State != StateAlive {
+		t.Fatalf("Bad state")
+	}
+}
