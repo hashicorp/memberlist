@@ -6,7 +6,6 @@ import (
 	"encoding/gob"
 	"log"
 	"net"
-	"time"
 )
 
 const (
@@ -74,7 +73,6 @@ type pushNodeState struct {
 	Addr        []byte
 	Incarnation uint32
 	State       int
-	StateChange time.Time
 }
 
 // tcpListen listens for and handles incoming connections
@@ -136,7 +134,6 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 		localNodes[idx].Addr = n.Addr
 		localNodes[idx].Incarnation = n.Incarnation
 		localNodes[idx].State = n.State
-		localNodes[idx].StateChange = n.StateChange
 	}
 	m.nodeLock.RUnlock()
 

@@ -149,17 +149,14 @@ func TestTCPPushPull(t *testing.T) {
 	localNodes[0].Addr = []byte{127, 0, 0, 1}
 	localNodes[0].Incarnation = 1
 	localNodes[0].State = StateAlive
-	localNodes[0].StateChange = time.Now()
 	localNodes[1].Name = "Test 1"
 	localNodes[1].Addr = []byte{127, 0, 0, 1}
 	localNodes[1].Incarnation = 1
 	localNodes[1].State = StateAlive
-	localNodes[1].StateChange = time.Now()
 	localNodes[2].Name = "Test 2"
 	localNodes[2].Addr = []byte{127, 0, 0, 1}
 	localNodes[2].Incarnation = 1
 	localNodes[2].State = StateAlive
-	localNodes[2].StateChange = time.Now()
 
 	// Send our node state
 	header := pushPullHeader{Nodes: 3}
@@ -219,8 +216,5 @@ func TestTCPPushPull(t *testing.T) {
 	}
 	if n.State != StateSuspect {
 		t.Fatal("bad state")
-	}
-	if time.Now().Sub(n.StateChange) < time.Second {
-		t.Fatalf("bad delta")
 	}
 }
