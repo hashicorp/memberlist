@@ -68,3 +68,29 @@ func suspicionTimeout(suspicionMult, n int, interval time.Duration) time.Duratio
 	timeout := time.Duration(suspicionMult) * time.Duration(nodeScale) * interval
 	return timeout
 }
+
+// shuffleNodes randomly shuffles the input nodes
+func shuffleNodes(nodes []*NodeState) {
+	for i := range nodes {
+		j := rand.Intn(i + 1)
+		nodes[i], nodes[j] = nodes[j], nodes[i]
+	}
+}
+
+// moveDeadNodes moves all the nodes in the dead state
+// to the end of the slice and returns the index of the first dead node.
+func moveDeadNodes(nodes []*NodeState) int {
+	numDead := 0
+	n := len(nodes)
+	for i := 0; i < n-numDead; i++ {
+		if nodes[i].State != StateDead {
+			continue
+		}
+
+		// Move this node to the end
+		nodes[i], nodes[n-numDead-1] = nodes[n-numDead-1], nodes[i]
+		numDead++
+		i--
+	}
+	return n - numDead
+}

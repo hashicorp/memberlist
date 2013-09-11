@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -134,5 +135,72 @@ func TestSuspicionTimeout(t *testing.T) {
 	timeout := suspicionTimeout(3, 10, time.Second)
 	if timeout != 6*time.Second {
 		t.Fatalf("bad timeout")
+	}
+}
+
+func TestShuffleNodes(t *testing.T) {
+	orig := []*NodeState{
+		&NodeState{
+			State: StateDead,
+		},
+		&NodeState{
+			State: StateAlive,
+		},
+		&NodeState{
+			State: StateAlive,
+		},
+		&NodeState{
+			State: StateDead,
+		},
+		&NodeState{
+			State: StateAlive,
+		},
+	}
+	nodes := make([]*NodeState, 5)
+	copy(nodes, orig)
+
+	if !reflect.DeepEqual(nodes, orig) {
+		t.Fatalf("should match")
+	}
+
+	shuffleNodes(nodes)
+
+	if reflect.DeepEqual(nodes, orig) {
+		t.Fatalf("should not match")
+	}
+}
+
+func TestMoveDeadNodes(t *testing.T) {
+	nodes := []*NodeState{
+		&NodeState{
+			State: StateDead,
+		},
+		&NodeState{
+			State: StateAlive,
+		},
+		&NodeState{
+			State: StateAlive,
+		},
+		&NodeState{
+			State: StateDead,
+		},
+		&NodeState{
+			State: StateAlive,
+		},
+	}
+
+	idx := moveDeadNodes(nodes)
+	if idx != 3 {
+		t.Fatalf("bad index")
+	}
+	for i := 0; i < idx; i++ {
+		if nodes[i].State != StateAlive {
+			t.Fatalf("Bad state %d", i)
+		}
+	}
+	for i := idx; i < len(nodes); i++ {
+		if nodes[i].State != StateDead {
+			t.Fatalf("Bad state %d", i)
+		}
 	}
 }
