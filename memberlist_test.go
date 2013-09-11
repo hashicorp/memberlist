@@ -11,7 +11,7 @@ func GetMemberlist(t *testing.T) *Memberlist {
 	var m *Memberlist
 	var err error
 	for i := 0; i < 100; i++ {
-		m, err = Create(c)
+		m, err = newMemberlist(c)
 		if err == nil {
 			return m
 		}
@@ -24,6 +24,7 @@ func GetMemberlist(t *testing.T) *Memberlist {
 
 func TestMemberList_CreateShutdown(t *testing.T) {
 	m := GetMemberlist(t)
+	m.schedule()
 	if err := m.Shutdown(); err != nil {
 		t.Fatalf("failed to shutdown %v", err)
 	}

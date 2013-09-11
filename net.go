@@ -82,7 +82,7 @@ func (m *Memberlist) tcpListen() {
 	for {
 		conn, err := m.tcpListener.AcceptTCP()
 		if err != nil {
-			if neterr, ok := err.(net.Error); ok && !neterr.Temporary() {
+			if m.shutdown {
 				break
 			}
 			log.Printf("[ERR] Error accepting TCP connection: %s", err)
@@ -177,7 +177,7 @@ func (m *Memberlist) udpListen() {
 		// Read a packet
 		n, addr, err = m.udpListener.ReadFrom(buf)
 		if err != nil {
-			if neterr, ok := err.(net.Error); ok && !neterr.Temporary() {
+			if m.shutdown {
 				break
 			}
 			log.Printf("[ERR] Error reading UDP packet: %s", err)
