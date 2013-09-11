@@ -54,10 +54,15 @@ func (m *Memberlist) schedule() {
 // Deschedule is used to stop the background maintenence
 func (m *Memberlist) deschedule() {
 	m.tickerLock.Lock()
-	m.ticker.Stop()
-	m.ticker = nil
+	if m.ticker != nil {
+		m.ticker.Stop()
+		m.ticker = nil
+	}
 	m.tickerLock.Unlock()
-	m.stopTick <- struct{}{}
+	select {
+	case m.stopTick <- struct{}{}:
+	default:
+	}
 }
 
 // Tick is used to perform a single round of failure detection and gossip
