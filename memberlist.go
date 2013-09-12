@@ -35,7 +35,7 @@ type Config struct {
 	TCPPort        int           // TCP port to listen on
 	Fanout         int           // Number of nodes to publish to per round
 	IndirectChecks int           // Number of indirect checks to use
-	Retransmits    int           // Retransmit multiplier for messages
+	RetransmitMult int           // Retransmits = RetransmitMult * log(N+1)
 	SuspicionMult  int           // Suspicion time = SuspcicionMult * log(N+1) * Interval
 	PushPullFreq   float32       // How often we do a Push/Pull update
 	RTT            time.Duration // 99% precentile of round-trip-time
