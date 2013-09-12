@@ -69,6 +69,13 @@ func suspicionTimeout(suspicionMult, n int, interval time.Duration) time.Duratio
 	return timeout
 }
 
+// retransmitLimit computes the limit of retransmissions
+func retransmitLimit(retransmitMult, n int) int {
+	nodeScale := math.Ceil(math.Log10(float64(n + 1)))
+	limit := retransmitMult * int(nodeScale)
+	return limit
+}
+
 // shuffleNodes randomly shuffles the input nodes
 func shuffleNodes(nodes []*NodeState) {
 	for i := range nodes {

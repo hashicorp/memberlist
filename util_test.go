@@ -139,6 +139,21 @@ func TestSuspicionTimeout(t *testing.T) {
 	}
 }
 
+func TestRetransmitLimit(t *testing.T) {
+	lim := retransmitLimit(3, 0)
+	if lim != 0 {
+		t.Fatalf("bad val %v", lim)
+	}
+	lim = retransmitLimit(3, 1)
+	if lim != 3 {
+		t.Fatalf("bad val %v", lim)
+	}
+	lim = retransmitLimit(3, 99)
+	if lim != 6 {
+		t.Fatalf("bad val %v", lim)
+	}
+}
+
 func TestShuffleNodes(t *testing.T) {
 	orig := []*NodeState{
 		&NodeState{
