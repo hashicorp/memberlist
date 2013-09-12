@@ -47,6 +47,46 @@ func (m *Memberlist) queueBroadcast(node string, msg *bytes.Buffer) {
 	m.bcQueue = append(m.bcQueue, &broadcast{transmits: 0, node: node, msg: msg})
 }
 
+// getBroadcasts is used to return a slice of broadcasts to send up to
+// a maximum byte size, while imposing a per-broadcast overhead. This is used
+// to fill a UDP packet with piggybacked data
+func (m *Memberlist) getBroadcasts(overhead, limit int) []*bytes.Buffer {
+	m.broadcastLock.Lock()
+	defer m.broadcastLock.Unlock()
+
+	transmitLimit := retransmitLimit(m.config.RetransmitMult, len(m.nodes))
+	bytesUsed := 0
+	var toSend []*bytes.Buffer
+
+	for i := len(m.bcQueue) - 1; i >= 0; i-- {
+		// Check if this is within our limits
+		b := m.bcQueue[i]
+		if bytesUsed+overhead+b.msg.Len() > limit {
+			continue
+		}
+
+		// Add to slice to send
+		bytesUsed += overhead + b.msg.Len()
+		toSend = append(toSend, b.msg)
+
+		// Check if we should stop transmission
+		b.transmits++
+		if b.transmits >= transmitLimit {
+			n := len(m.bcQueue)
+			m.bcQueue[i], m.bcQueue[n-1] = m.bcQueue[n-1], nil
+			m.bcQueue = m.bcQueue[:n-1]
+		}
+	}
+
+	// If we are sending anything, we need to re-sort to deal
+	// with adjusted transmit counts
+	if len(toSend) > 0 {
+		m.bcQueue.Sort()
+	}
+
+	return toSend
+}
+
 func (b broadcasts) Len() int {
 	return len(b)
 }

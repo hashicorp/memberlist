@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -37,6 +38,66 @@ func TestMemberlist_Queue(t *testing.T) {
 	}
 	if m.bcQueue[2].node != "test" {
 		t.Fatalf("missing test")
+	}
+}
+
+func TestMemberlist_GetBroadcasts(t *testing.T) {
+	c := DefaultConfig()
+	m := &Memberlist{config: c}
+	m.nodes = make([]*NodeState, 10) // fake some nodes...
+
+	// 18 bytes per message
+	m.queueBroadcast("test", bytes.NewBuffer([]byte("1. this is a test.")))
+	m.queueBroadcast("foo", bytes.NewBuffer([]byte("2. this is a test.")))
+	m.queueBroadcast("bar", bytes.NewBuffer([]byte("3. this is a test.")))
+	m.queueBroadcast("baz", bytes.NewBuffer([]byte("4. this is a test.")))
+
+	// 2 byte overhead per message, should get all 4 messages
+	all := m.getBroadcasts(2, 80)
+	if len(all) != 4 {
+		t.Fatalf("missing messages: %v", all)
+	}
+
+	// 3 byte overhead, should only get 3 messages back
+	partial := m.getBroadcasts(3, 80)
+	if len(partial) != 3 {
+		t.Fatalf("missing messages: %v", partial)
+	}
+}
+
+func TestMemberlist_GetBroadcasts_Limit(t *testing.T) {
+	c := DefaultConfig()
+	c.RetransmitMult = 1
+	m := &Memberlist{config: c}
+	m.nodes = make([]*NodeState, 10) // fake some nodes...
+
+	// 18 bytes per message
+	m.queueBroadcast("test", bytes.NewBuffer([]byte("1. this is a test.")))
+	m.queueBroadcast("foo", bytes.NewBuffer([]byte("2. this is a test.")))
+	m.queueBroadcast("bar", bytes.NewBuffer([]byte("3. this is a test.")))
+	m.queueBroadcast("baz", bytes.NewBuffer([]byte("4. this is a test.")))
+
+	// 3 byte overhead, should only get 3 messages back
+	partial1 := m.getBroadcasts(3, 80)
+	if len(partial1) != 3 {
+		t.Fatalf("missing messages: %v", partial1)
+	}
+
+	partial2 := m.getBroadcasts(3, 80)
+	if len(partial2) != 3 {
+		t.Fatalf("missing messages: %v", partial2)
+	}
+
+	// Only two not expired
+	partial3 := m.getBroadcasts(3, 80)
+	if len(partial3) != 2 {
+		t.Fatalf("missing messages: %v", partial3)
+	}
+
+	// Should get nothing
+	partial5 := m.getBroadcasts(3, 80)
+	if len(partial5) != 0 {
+		t.Fatalf("missing messages: %v", partial5)
 	}
 }
 
