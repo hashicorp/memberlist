@@ -4,6 +4,42 @@ import (
 	"testing"
 )
 
+func TestMemberlist_Queue(t *testing.T) {
+	m := &Memberlist{}
+	m.queueBroadcast("test", nil)
+	m.queueBroadcast("foo", nil)
+	m.queueBroadcast("bar", nil)
+
+	if len(m.bcQueue) != 3 {
+		t.Fatalf("bad len")
+	}
+	if m.bcQueue[0].node != "test" {
+		t.Fatalf("missing test")
+	}
+	if m.bcQueue[1].node != "foo" {
+		t.Fatalf("missing foo")
+	}
+	if m.bcQueue[2].node != "bar" {
+		t.Fatalf("missing bar")
+	}
+
+	// Should invalidate previous message
+	m.queueBroadcast("test", nil)
+
+	if len(m.bcQueue) != 3 {
+		t.Fatalf("bad len")
+	}
+	if m.bcQueue[0].node != "foo" {
+		t.Fatalf("missing foo")
+	}
+	if m.bcQueue[1].node != "bar" {
+		t.Fatalf("missing bar")
+	}
+	if m.bcQueue[2].node != "test" {
+		t.Fatalf("missing test")
+	}
+}
+
 func TestBroadcastSort(t *testing.T) {
 	bc := broadcasts([]*broadcast{
 		&broadcast{

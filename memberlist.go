@@ -67,6 +67,9 @@ type Memberlist struct {
 
 	ackLock     sync.Mutex
 	ackHandlers map[uint32]*ackHandler
+
+	broadcastLock sync.Mutex
+	bcQueue       broadcasts
 }
 
 func DefaultConfig() *Config {

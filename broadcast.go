@@ -13,21 +13,38 @@ then a following {alive M1 inc: 2} will invalidate that message
 */
 
 import (
+	"bytes"
 	"sort"
 )
 
 type broadcast struct {
-	transmits int // Number of times we've transmitted
-	msg       interface{}
+	transmits int           // Number of times we've transmitted
+	node      string        // Which node this is about
+	msg       *bytes.Buffer // Message
 }
 
 type broadcasts []*broadcast
 
 // queueBroadcast is used to start dissemination of a message. It will be
 // sent up to a configured number of times. The message could potentially
-// be invalidated by a future message
-func (m *Memberlist) queueBroadcast() {
+// be invalidated by a future message about the same node
+func (m *Memberlist) queueBroadcast(node string, msg *bytes.Buffer) {
+	m.broadcastLock.Lock()
+	defer m.broadcastLock.Unlock()
 
+	// Check if this message invalidates another
+	n := len(m.bcQueue)
+	for i := 0; i < n; i++ {
+		if m.bcQueue[i].node == node {
+			copy(m.bcQueue[i:], m.bcQueue[i+1:])
+			m.bcQueue[n-1] = nil
+			m.bcQueue = m.bcQueue[:n-1]
+			break
+		}
+	}
+
+	// Append to the queue
+	m.bcQueue = append(m.bcQueue, &broadcast{transmits: 0, node: node, msg: msg})
 }
 
 func (b broadcasts) Len() int {
