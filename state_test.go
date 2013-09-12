@@ -5,6 +5,75 @@ import (
 	"time"
 )
 
+func HostMemberlist(host string, t *testing.T) *Memberlist {
+	c := DefaultConfig()
+	c.Name = host
+	c.BindAddr = host
+	m, err := newMemberlist(c)
+	if err != nil {
+		t.Fatalf("failed to get memberlist: %s", err)
+	}
+	return m
+}
+
+func TestMemberList_ProbeNode_Suspect(t *testing.T) {
+	m1 := HostMemberlist("127.0.0.100", t)
+	m1.config.RTT = time.Millisecond
+	m1.config.Interval = 10 * time.Millisecond
+	m2 := HostMemberlist("127.0.0.101", t)
+	m3 := HostMemberlist("127.0.0.102", t)
+
+	a1 := alive{Node: "127.0.0.100", Addr: []byte{127, 0, 0, 100}, Incarnation: 1}
+	m1.aliveNode(&a1)
+	a2 := alive{Node: "127.0.0.101", Addr: []byte{127, 0, 0, 101}, Incarnation: 1}
+	m1.aliveNode(&a2)
+	a3 := alive{Node: "127.0.0.102", Addr: []byte{127, 0, 0, 102}, Incarnation: 1}
+	m1.aliveNode(&a3)
+	a4 := alive{Node: "127.0.0.103", Addr: []byte{127, 0, 0, 103}, Incarnation: 1}
+	m1.aliveNode(&a4)
+
+	n := m1.nodeMap["127.0.0.103"]
+	m1.probeNode(n)
+
+	// Should be marked suspect
+	if m1.nodeMap["127.0.0.103"].State != StateSuspect {
+		t.Fatalf("Expect node to be suspect")
+	}
+
+	// Should increment seqno
+	if m2.sequenceNum != 1 {
+		t.Fatalf("bad seqno %v", m2.sequenceNum)
+	}
+	if m3.sequenceNum != 1 {
+		t.Fatalf("bad seqno %v", m3.sequenceNum)
+	}
+}
+
+func TestMemberList_ProbeNode(t *testing.T) {
+	m1 := HostMemberlist("127.0.0.200", t)
+	m1.config.RTT = time.Millisecond
+	m1.config.Interval = 10 * time.Millisecond
+	m2 := HostMemberlist("127.0.0.201", t)
+
+	a1 := alive{Node: "127.0.0.200", Addr: []byte{127, 0, 0, 200}, Incarnation: 1}
+	m1.aliveNode(&a1)
+	a2 := alive{Node: "127.0.0.201", Addr: []byte{127, 0, 0, 201}, Incarnation: 1}
+	m1.aliveNode(&a2)
+
+	n := m1.nodeMap["127.0.0.201"]
+	m1.probeNode(n)
+
+	// Should be marked suspect
+	if n.State != StateAlive {
+		t.Fatalf("Expect node to be alive")
+	}
+
+	// Should increment seqno
+	if m1.sequenceNum != 1 {
+		t.Fatalf("bad seqno %v", m2.sequenceNum)
+	}
+}
+
 func TestMemberList_ResetNodes(t *testing.T) {
 	m := GetMemberlist(t)
 	a1 := alive{Node: "test1", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}

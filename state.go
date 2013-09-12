@@ -133,7 +133,8 @@ func (m *Memberlist) probeNode(node *NodeState) {
 
 	// Get some random live nodes
 	m.nodeLock.RLock()
-	kNodes := kRandomNodes(m.config.IndirectChecks, m.config.Name, m.nodes)
+	excludes := []string{m.config.Name, node.Name}
+	kNodes := kRandomNodes(m.config.IndirectChecks, excludes, m.nodes)
 	m.nodeLock.RUnlock()
 
 	// Attempt an indirect ping
