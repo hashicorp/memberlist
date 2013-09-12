@@ -171,6 +171,7 @@ func (m *Memberlist) resetNodes() {
 	// Deregister the dead nodes
 	for i := deadIdx; i < len(m.nodes); i++ {
 		delete(m.nodeMap, m.nodes[i].Name)
+		m.nodes[i] = nil
 	}
 
 	// Trim the nodes to exclude the dead nodes
