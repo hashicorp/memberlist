@@ -63,7 +63,7 @@ type Memberlist struct {
 	tickerLock sync.Mutex
 	ticker     *time.Ticker
 	stopTick   chan struct{}
-	tickCount  uint32
+	tickIndex  int
 
 	ackLock     sync.Mutex
 	ackHandlers map[uint32]*ackHandler

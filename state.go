@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"log"
 	"net"
 	"sync/atomic"
 	"time"
@@ -67,8 +68,94 @@ func (m *Memberlist) deschedule() {
 
 // Tick is used to perform a single round of failure detection and gossip
 func (m *Memberlist) tick() {
-	m.tickCount++
+	// Track the number of indexes we've considered probing
+	numCheck := 0
+START:
+	// Make sure we don't wrap around infinitely
+	if numCheck >= len(m.nodes) {
+		return
+	}
 
+	// Handle the wrap around case
+	if m.tickIndex > len(m.nodes) {
+		m.resetNodes()
+		m.tickIndex = 0
+	}
+
+	// Determine if we should probe this node
+	skip := false
+	var node *NodeState
+	m.nodeLock.RLock()
+
+	node = m.nodes[m.tickIndex]
+	if node.Name == m.config.Name {
+		skip = true
+	} else if node.State == StateDead {
+		skip = true
+	}
+
+	// Potentially skip
+	m.nodeLock.RUnlock()
+	if skip {
+		numCheck++
+		m.tickIndex++
+		goto START
+	}
+
+	// Probe the specific node
+	m.probeNode(node)
+}
+
+// probeNode handles a single round of failure checking on a node
+func (m *Memberlist) probeNode(node *NodeState) {
+	// Send a ping to the node
+	ping := ping{SeqNo: m.nextSeqNo()}
+	destAddr := &net.UDPAddr{IP: node.Addr, Port: m.config.UDPPort}
+
+	// Setup an ack handler
+	ackCh := make(chan bool, m.config.IndirectChecks+1)
+	m.setAckChannel(ping.SeqNo, ackCh, m.config.Interval)
+
+	// Send the ping message
+	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
+		log.Printf("[ERR] Failed to send ping: %s", err)
+		return
+	}
+
+	// Wait for response or round-trip-time
+	select {
+	case v := <-ackCh:
+		if v == true {
+			return
+		}
+	case <-time.After(m.config.RTT):
+	}
+
+	// Get some random live nodes
+	m.nodeLock.RLock()
+	kNodes := kRandomNodes(m.config.IndirectChecks, m.config.Name, m.nodes)
+	m.nodeLock.RUnlock()
+
+	// Attempt an indirect ping
+	ind := indirectPingReq{SeqNo: ping.SeqNo, Target: node.Addr}
+	for _, peer := range kNodes {
+		destAddr := &net.UDPAddr{IP: peer.Addr, Port: m.config.UDPPort}
+		if err := m.encodeAndSendMsg(destAddr, indirectPingMsg, &ind); err != nil {
+			log.Printf("[ERR] Failed to send indirect ping: %s", err)
+		}
+	}
+
+	// Wait for the acks or timeout
+	select {
+	case v := <-ackCh:
+		if v == true {
+			return
+		}
+	}
+
+	// No acks received from target, suspect
+	s := suspect{Incarnation: node.Incarnation, Node: node.Name}
+	m.suspectNode(&s)
 }
 
 // resetNodes is used when the tick wraps around. It will reap the
@@ -98,13 +185,13 @@ func (m *Memberlist) nextSeqNo() uint32 {
 }
 
 // setAckChannel is used to attach a channel to receive a message when
-// an ack with a given sequence number is received. The channel is always
-// closed after the timeout.
-func (m *Memberlist) setAckChannel(seqNo uint32, ch chan struct{}, timeout time.Duration) {
+// an ack with a given sequence number is received. The channel gets sent
+// false on timeout
+func (m *Memberlist) setAckChannel(seqNo uint32, ch chan bool, timeout time.Duration) {
 	// Create a handler function
 	handler := func() {
 		select {
-		case ch <- struct{}{}:
+		case ch <- true:
 		default:
 		}
 	}
@@ -120,7 +207,10 @@ func (m *Memberlist) setAckChannel(seqNo uint32, ch chan struct{}, timeout time.
 		m.ackLock.Lock()
 		delete(m.ackHandlers, seqNo)
 		m.ackLock.Unlock()
-		close(ch)
+		select {
+		case ch <- false:
+		default:
+		}
 	})
 }
 

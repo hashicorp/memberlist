@@ -38,7 +38,7 @@ func TestMemberList_NextSeq(t *testing.T) {
 func TestMemberList_SetAckChannel(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
-	ch := make(chan struct{}, 1)
+	ch := make(chan bool, 1)
 	m.setAckChannel(0, ch, 10*time.Millisecond)
 
 	if _, ok := m.ackHandlers[0]; !ok {
@@ -94,14 +94,17 @@ func TestMemberList_InvokeAckHandler_Channel(t *testing.T) {
 	// Does nothing
 	m.invokeAckHandler(0)
 
-	ch := make(chan struct{}, 1)
+	ch := make(chan bool, 1)
 	m.setAckChannel(0, ch, 10*time.Millisecond)
 
 	// Should send message
 	m.invokeAckHandler(0)
 
 	select {
-	case <-ch:
+	case v := <-ch:
+		if v != true {
+			t.Fatalf("Bad value")
+		}
 	default:
 		t.Fatalf("message not sent")
 	}
