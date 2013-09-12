@@ -16,6 +16,32 @@ func HostMemberlist(host string, t *testing.T) *Memberlist {
 	return m
 }
 
+func TestMemberList_Tick(t *testing.T) {
+	m1 := HostMemberlist("127.0.0.50", t)
+	m1.config.RTT = time.Millisecond
+	m1.config.Interval = 10 * time.Millisecond
+	m2 := HostMemberlist("127.0.0.51", t)
+
+	a1 := alive{Node: "127.0.0.50", Addr: []byte{127, 0, 0, 50}, Incarnation: 1}
+	m1.aliveNode(&a1)
+	a2 := alive{Node: "127.0.0.51", Addr: []byte{127, 0, 0, 51}, Incarnation: 1}
+	m1.aliveNode(&a2)
+
+	// should ping 127.0.0.51
+	m1.tick()
+
+	// Should not be marked suspect
+	n := m1.nodeMap["127.0.0.51"]
+	if n.State != StateAlive {
+		t.Fatalf("Expect node to be alive")
+	}
+
+	// Should increment seqno
+	if m1.sequenceNum != 1 {
+		t.Fatalf("bad seqno %v", m2.sequenceNum)
+	}
+}
+
 func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	m1 := HostMemberlist("127.0.0.100", t)
 	m1.config.RTT = time.Millisecond
