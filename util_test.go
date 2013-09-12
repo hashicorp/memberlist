@@ -227,9 +227,9 @@ func TestKRandomNodes(t *testing.T) {
 		})
 	}
 
-	s1 := kRandomNodes(3, "test0", nodes)
-	s2 := kRandomNodes(3, "test0", nodes)
-	s3 := kRandomNodes(3, "test0", nodes)
+	s1 := kRandomNodes(3, []string{"test0"}, nodes)
+	s2 := kRandomNodes(3, []string{"test0"}, nodes)
+	s3 := kRandomNodes(3, []string{"test0"}, nodes)
 
 	if reflect.DeepEqual(s1, s2) {
 		t.Fatalf("unexpected equal")
