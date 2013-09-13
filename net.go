@@ -16,11 +16,14 @@ const (
 	aliveMsg
 	deadMsg
 	pushPullMsg
+	compoundMsg
 )
 
 const (
-	udpBufSize = 65536
-	udpSendBuf = 1500
+	udpBufSize             = 65536
+	udpSendBuf             = 1400
+	compoundHeaderOverhead = 2 // Assumed header overhead
+	compoundOverhead       = 2 // Assumed overhead per entry in compoundHeader
 )
 
 // ping request sent directly to node
@@ -93,13 +96,14 @@ func (m *Memberlist) tcpListen() {
 // handleConn handles a single incoming TCP connection
 func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	defer conn.Close()
+	buf := []byte{0}
 
 	// Read the message type
-	var msgType uint32
-	if err := binary.Read(conn, binary.BigEndian, &msgType); err != nil {
+	if _, err := conn.Read(buf); err != nil {
 		log.Printf("[ERR] Failed to read the msg type: %s", err)
 		return
 	}
+	msgType := uint8(buf[0])
 
 	// Quit if not push/pull
 	if msgType != pushPullMsg {
@@ -142,7 +146,7 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	enc := gob.NewEncoder(conn)
 
 	// Send the push/pull indicator
-	binary.Write(conn, binary.BigEndian, uint32(pushPullMsg))
+	conn.Write([]byte{pushPullMsg})
 
 	if err := enc.Encode(&header); err != nil {
 		log.Printf("[ERR] Failed to send Push/Pull header: %s", err)
@@ -164,7 +168,6 @@ AFTER_SEND:
 func (m *Memberlist) udpListen() {
 	mainBuf := make([]byte, udpBufSize)
 	var n int
-	var msgType uint32
 	var addr net.Addr
 	var err error
 	for {
@@ -181,37 +184,78 @@ func (m *Memberlist) udpListen() {
 			continue
 		}
 
-		// Trim the buffer size
-		buf = buf[0:n]
-
 		// Check the length
-		if len(buf) < 4 {
+		if n < 1 {
 			log.Printf("[ERR] UDP packet too short (%d bytes). From: %s", len(buf), addr)
 			continue
 		}
 
-		// Decode the message type
-		msgType = binary.BigEndian.Uint32(buf[0:4])
-		buf = buf[4:]
+		// Handle the command
+		m.handleCommand(buf[:n], addr)
+	}
+}
 
-		// Switch on the msgType
-		switch msgType {
-		case pingMsg:
-			m.handlePing(buf, addr)
-		case indirectPingMsg:
-			m.handleIndirectPing(buf, addr)
-		case ackRespMsg:
-			m.handleAck(buf, addr)
-		case suspectMsg:
-			m.handleSuspect(buf, addr)
-		case aliveMsg:
-			m.handleAlive(buf, addr)
-		case deadMsg:
-			m.handleDead(buf, addr)
-		default:
-			log.Printf("[ERR] UDP msg type (%d) not supported. From: %s", msgType, addr)
-			continue
+func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
+	// Decode the message type
+	msgType := uint8(buf[0])
+	buf = buf[1:]
+
+	// Switch on the msgType
+	switch msgType {
+	case compoundMsg:
+		m.handleCompound(buf, from)
+	case pingMsg:
+		m.handlePing(buf, from)
+	case indirectPingMsg:
+		m.handleIndirectPing(buf, from)
+	case ackRespMsg:
+		m.handleAck(buf, from)
+	case suspectMsg:
+		m.handleSuspect(buf, from)
+	case aliveMsg:
+		m.handleAlive(buf, from)
+	case deadMsg:
+		m.handleDead(buf, from)
+	default:
+		log.Printf("[ERR] UDP msg type (%d) not supported. From: %s", msgType, from)
+	}
+}
+
+func (m *Memberlist) handleCompound(buf []byte, from net.Addr) {
+	// Ensure we have at least the length byte
+	if len(buf) < 1 {
+		log.Printf("[ERR] Failed to decode compound request: missing len prefix")
+		return
+	}
+	numParts := uint8(buf[0])
+	buf = buf[1:]
+
+	// Check we have enough bytes
+	if len(buf) < int(numParts*2) {
+		log.Printf("[ERR] Failed to decode compound request: truncated len slice")
+		return
+	}
+
+	// Decode the lengths
+	lengths := make([]uint16, numParts)
+	for i := 0; i < int(numParts); i++ {
+		lengths[i] = binary.BigEndian.Uint16(buf[i*2 : i*2+2])
+	}
+	buf = buf[numParts*2:]
+
+	// Handle each message
+	for _, msgLen := range lengths {
+		if len(buf) < int(msgLen) {
+			log.Printf("[ERR] Failed to decode compound request: truncated message (%d / %d)", len(buf), msgLen)
+			return
 		}
+
+		// Extract the slice, seek past on the buffer
+		slice := buf[:msgLen]
+		buf = buf[msgLen:]
+
+		// Handle the command
+		m.handleCommand(slice, from)
 	}
 }
 
@@ -302,8 +346,45 @@ func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType int, msg interface{})
 	return nil
 }
 
-// sendMsg is used to send a UDP message to another host
+// sendMsg is used to send a UDP message to another host. It will opportunistically
+// create a compoundMsg and piggy back other broadcasts
 func (m *Memberlist) sendMsg(to net.Addr, msg *bytes.Buffer) error {
+	// Check if we can piggy back any messages
+	bytesAvail := udpSendBuf - msg.Len() - compoundHeaderOverhead
+	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
+
+	// If there is no extra, then just use the raw
+	if len(extra) == 0 {
+		return m.rawSendMsg(to, msg)
+	}
+
+	// Create a local buffer
+	var buf bytes.Buffer
+
+	// Write out the type
+	(&buf).WriteByte(uint8(compoundMsg))
+
+	// Write out the number of message
+	(&buf).WriteByte(uint8(1 + len(extra)))
+
+	// Add the message lengths
+	binary.Write(&buf, binary.BigEndian, uint16(msg.Len()))
+	for _, b := range extra {
+		binary.Write(&buf, binary.BigEndian, uint16(b.Len()))
+	}
+
+	// Append the messages
+	buf.Write(msg.Bytes())
+	for _, b := range extra {
+		buf.Write(b.Bytes())
+	}
+
+	// Send the message
+	return m.rawSendMsg(to, msg)
+}
+
+// rawSendMsg is used to send a UDP message to another host without modification
+func (m *Memberlist) rawSendMsg(to net.Addr, msg *bytes.Buffer) error {
 	_, err := m.udpListener.WriteTo(msg.Bytes(), to)
 	return err
 }
