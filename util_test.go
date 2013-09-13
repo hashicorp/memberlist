@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
@@ -268,5 +269,20 @@ func TestKRandomNodes(t *testing.T) {
 				t.Fatalf("Bad state")
 			}
 		}
+	}
+}
+
+func TestMakeCompoundMessage(t *testing.T) {
+	msg := &ping{SeqNo: 100}
+	buf, err := encode(pingMsg, msg)
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+
+	msgs := []*bytes.Buffer{buf, buf, buf}
+	compound := makeCompoundMessage(msgs)
+
+	if compound.Len() != 3*buf.Len()+3*compoundOverhead+compoundHeaderOverhead {
+		t.Fatalf("bad len")
 	}
 }

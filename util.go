@@ -2,6 +2,7 @@ package memberlist
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"math"
 	"math/rand"
@@ -135,4 +136,29 @@ OUTER:
 		kNodes = append(kNodes, node)
 	}
 	return kNodes
+}
+
+// makeCompoundMessage takes a list of messages and generates
+// a single compound message containing all of them
+func makeCompoundMessage(msgs []*bytes.Buffer) *bytes.Buffer {
+	// Create a local buffer
+	buf := bytes.NewBuffer(nil)
+
+	// Write out the type
+	buf.WriteByte(uint8(compoundMsg))
+
+	// Write out the number of message
+	buf.WriteByte(uint8(len(msgs)))
+
+	// Add the message lengths
+	for _, m := range msgs {
+		binary.Write(buf, binary.BigEndian, uint16(m.Len()))
+	}
+
+	// Append the messages
+	for _, m := range msgs {
+		buf.Write(m.Bytes())
+	}
+
+	return buf
 }
