@@ -353,34 +353,21 @@ func (m *Memberlist) sendMsg(to net.Addr, msg *bytes.Buffer) error {
 	bytesAvail := udpSendBuf - msg.Len() - compoundHeaderOverhead
 	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
 
-	// If there is no extra, then just use the raw
+	// Fast path if nothing to piggypack
 	if len(extra) == 0 {
 		return m.rawSendMsg(to, msg)
 	}
 
-	// Create a local buffer
-	var buf bytes.Buffer
+	// Join all the messages
+	msgs := make([]*bytes.Buffer, 0, 1+len(extra))
+	msgs = append(msgs, msg)
+	msgs = append(msgs, extra...)
 
-	// Write out the type
-	(&buf).WriteByte(uint8(compoundMsg))
-
-	// Write out the number of message
-	(&buf).WriteByte(uint8(1 + len(extra)))
-
-	// Add the message lengths
-	binary.Write(&buf, binary.BigEndian, uint16(msg.Len()))
-	for _, b := range extra {
-		binary.Write(&buf, binary.BigEndian, uint16(b.Len()))
-	}
-
-	// Append the messages
-	buf.Write(msg.Bytes())
-	for _, b := range extra {
-		buf.Write(b.Bytes())
-	}
+	// Create a compound message
+	compound := makeCompoundMessage(msgs)
 
 	// Send the message
-	return m.rawSendMsg(to, msg)
+	return m.rawSendMsg(to, compound)
 }
 
 // rawSendMsg is used to send a UDP message to another host without modification
