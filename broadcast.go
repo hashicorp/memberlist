@@ -14,6 +14,7 @@ then a following {alive M1 inc: 2} will invalidate that message
 
 import (
 	"bytes"
+	"log"
 	"sort"
 )
 
@@ -24,6 +25,17 @@ type broadcast struct {
 }
 
 type broadcasts []*broadcast
+
+// encodeAndBroadcast encodes a message and enqueues it for broadcast. Fails
+// silently if there is an encoding error.
+func (m *Memberlist) encodeAndBroadcast(node string, msgType int, msg interface{}) {
+	buf, err := encode(msgType, msg)
+	if err != nil {
+		log.Printf("[ERR] Failed to encode message for broadcast: %s", err)
+	} else {
+		m.queueBroadcast(node, buf)
+	}
+}
 
 // queueBroadcast is used to start dissemination of a message. It will be
 // sent up to a configured number of times. The message could potentially

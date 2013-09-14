@@ -336,12 +336,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 	}
 
 	// Re-Broadcast
-	buf, err := encode(aliveMsg, a)
-	if err != nil {
-		log.Printf("[ERR] Failed to encode alive message: %s", err)
-	} else {
-		m.queueBroadcast(a.Node, buf)
-	}
+	m.encodeAndBroadcast(a.Node, aliveMsg, a)
 
 	// Update the state and incarnation number
 	oldState := state.State
