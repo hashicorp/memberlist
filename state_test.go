@@ -16,7 +16,7 @@ func HostMemberlist(host string, t *testing.T) *Memberlist {
 	return m
 }
 
-func TestMemberList_Tick(t *testing.T) {
+func TestMemberList_Probe(t *testing.T) {
 	m1 := HostMemberlist("127.0.0.50", t)
 	m1.config.RTT = time.Millisecond
 	m1.config.ProbeInterval = 10 * time.Millisecond
