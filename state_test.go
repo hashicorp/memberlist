@@ -17,21 +17,23 @@ func HostMemberlist(host string, t *testing.T) *Memberlist {
 }
 
 func TestMemberList_Probe(t *testing.T) {
-	m1 := HostMemberlist("127.0.0.50", t)
+	addr1, ip1 := GetBindAddr()
+	addr2, ip2 := GetBindAddr()
+	m1 := HostMemberlist(addr1, t)
 	m1.config.RTT = time.Millisecond
 	m1.config.ProbeInterval = 10 * time.Millisecond
-	m2 := HostMemberlist("127.0.0.51", t)
+	m2 := HostMemberlist(addr2, t)
 
-	a1 := alive{Node: "127.0.0.50", Addr: []byte{127, 0, 0, 50}, Incarnation: 1}
+	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: "127.0.0.51", Addr: []byte{127, 0, 0, 51}, Incarnation: 1}
+	a2 := alive{Node: addr2, Addr: ip2, Incarnation: 1}
 	m1.aliveNode(&a2)
 
-	// should ping 127.0.0.51
+	// should ping addr2
 	m1.probe()
 
 	// Should not be marked suspect
-	n := m1.nodeMap["127.0.0.51"]
+	n := m1.nodeMap[addr2]
 	if n.State != StateAlive {
 		t.Fatalf("Expect node to be alive")
 	}
@@ -43,26 +45,31 @@ func TestMemberList_Probe(t *testing.T) {
 }
 
 func TestMemberList_ProbeNode_Suspect(t *testing.T) {
-	m1 := HostMemberlist("127.0.0.100", t)
+	addr1, ip1 := GetBindAddr()
+	addr2, ip2 := GetBindAddr()
+	addr3, ip3 := GetBindAddr()
+	addr4, ip4 := GetBindAddr()
+
+	m1 := HostMemberlist(addr1, t)
 	m1.config.RTT = time.Millisecond
 	m1.config.ProbeInterval = 10 * time.Millisecond
-	m2 := HostMemberlist("127.0.0.101", t)
-	m3 := HostMemberlist("127.0.0.102", t)
+	m2 := HostMemberlist(addr2, t)
+	m3 := HostMemberlist(addr3, t)
 
-	a1 := alive{Node: "127.0.0.100", Addr: []byte{127, 0, 0, 100}, Incarnation: 1}
+	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: "127.0.0.101", Addr: []byte{127, 0, 0, 101}, Incarnation: 1}
+	a2 := alive{Node: addr2, Addr: ip2, Incarnation: 1}
 	m1.aliveNode(&a2)
-	a3 := alive{Node: "127.0.0.102", Addr: []byte{127, 0, 0, 102}, Incarnation: 1}
+	a3 := alive{Node: addr3, Addr: ip3, Incarnation: 1}
 	m1.aliveNode(&a3)
-	a4 := alive{Node: "127.0.0.103", Addr: []byte{127, 0, 0, 103}, Incarnation: 1}
+	a4 := alive{Node: addr4, Addr: ip4, Incarnation: 1}
 	m1.aliveNode(&a4)
 
-	n := m1.nodeMap["127.0.0.103"]
+	n := m1.nodeMap[addr4]
 	m1.probeNode(n)
 
 	// Should be marked suspect
-	if m1.nodeMap["127.0.0.103"].State != StateSuspect {
+	if n.State != StateSuspect {
 		t.Fatalf("Expect node to be suspect")
 	}
 
@@ -76,17 +83,20 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 }
 
 func TestMemberList_ProbeNode(t *testing.T) {
-	m1 := HostMemberlist("127.0.0.200", t)
+	addr1, ip1 := GetBindAddr()
+	addr2, ip2 := GetBindAddr()
+
+	m1 := HostMemberlist(addr1, t)
 	m1.config.RTT = time.Millisecond
 	m1.config.ProbeInterval = 10 * time.Millisecond
-	m2 := HostMemberlist("127.0.0.201", t)
+	m2 := HostMemberlist(addr2, t)
 
-	a1 := alive{Node: "127.0.0.200", Addr: []byte{127, 0, 0, 200}, Incarnation: 1}
+	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: "127.0.0.201", Addr: []byte{127, 0, 0, 201}, Incarnation: 1}
+	a2 := alive{Node: addr2, Addr: ip2, Incarnation: 1}
 	m1.aliveNode(&a2)
 
-	n := m1.nodeMap["127.0.0.201"]
+	n := m1.nodeMap[addr2]
 	m1.probeNode(n)
 
 	// Should be marked suspect

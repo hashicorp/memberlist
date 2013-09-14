@@ -1,8 +1,15 @@
 package memberlist
 
 import (
+	"fmt"
 	"reflect"
+	"sync"
 	"testing"
+)
+
+var bindLock sync.Mutex
+var (
+	bindNum = 10
 )
 
 func GetMemberlist(t *testing.T) *Memberlist {
@@ -20,6 +27,16 @@ func GetMemberlist(t *testing.T) *Memberlist {
 	}
 	t.Fatalf("failed to start: %v", err)
 	return nil
+}
+
+func GetBindAddr() (string, []byte) {
+	bindLock.Lock()
+	defer bindLock.Unlock()
+	addr := bindNum
+	bindNum++
+	s := fmt.Sprintf("127.0.0.%d", addr)
+	b := []byte{127, 0, 0, byte(addr)}
+	return s, b
 }
 
 func TestMemberList_CreateShutdown(t *testing.T) {
