@@ -2,7 +2,6 @@ package memberlist
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/gob"
 	"log"
 	"net"
