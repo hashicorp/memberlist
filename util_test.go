@@ -286,3 +286,30 @@ func TestMakeCompoundMessage(t *testing.T) {
 		t.Fatalf("bad len")
 	}
 }
+
+func TestDecodeCompoundMessage(t *testing.T) {
+	msg := &ping{SeqNo: 100}
+	buf, err := encode(pingMsg, msg)
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+
+	msgs := []*bytes.Buffer{buf, buf, buf}
+	compound := makeCompoundMessage(msgs)
+
+	trunc, parts, err := decodeCompoundMessage(compound.Bytes()[1:])
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+	if trunc != 0 {
+		t.Fatalf("should not truncate")
+	}
+	if len(parts) != 3 {
+		t.Fatalf("bad parts")
+	}
+	for _, p := range parts {
+		if len(p) != buf.Len() {
+			t.Fatalf("bad part len")
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -161,4 +162,43 @@ func makeCompoundMessage(msgs []*bytes.Buffer) *bytes.Buffer {
 	}
 
 	return buf
+}
+
+// decodeCompoundMessage splits a compound message and returns
+// the slices of individual messages. Also returns the number
+// of truncated messages and any potential error
+func decodeCompoundMessage(buf []byte) (trunc int, parts [][]byte, err error) {
+	if len(buf) < 1 {
+		err = fmt.Errorf("missing compound length byte")
+		return
+	}
+	numParts := uint8(buf[0])
+	buf = buf[1:]
+
+	// Check we have enough bytes
+	if len(buf) < int(numParts*2) {
+		err = fmt.Errorf("truncated len slice")
+		return
+	}
+
+	// Decode the lengths
+	lengths := make([]uint16, numParts)
+	for i := 0; i < int(numParts); i++ {
+		lengths[i] = binary.BigEndian.Uint16(buf[i*2 : i*2+2])
+	}
+	buf = buf[numParts*2:]
+
+	// Split each message
+	for idx, msgLen := range lengths {
+		if len(buf) < int(msgLen) {
+			trunc = int(numParts) - idx
+			return
+		}
+
+		// Extract the slice, seek past on the buffer
+		slice := buf[:msgLen]
+		buf = buf[msgLen:]
+		parts = append(parts, slice)
+	}
+	return
 }
