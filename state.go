@@ -230,8 +230,39 @@ func (m *Memberlist) gossip() {
 	}
 }
 
-// pushPull is invoked periodically
+// pushPull is invoked periodically to randomly perform a state
+// exchange. Used to ensure a high level of convergence.
 func (m *Memberlist) pushPull() {
+	// Get a random live node
+	m.nodeLock.RLock()
+	excludes := []string{m.config.Name}
+	nodes := kRandomNodes(1, excludes, m.nodes)
+	m.nodeLock.RUnlock()
+
+	// If no nodes, bail
+	if len(nodes) == 0 {
+		return
+	}
+	node := nodes[0]
+
+	// Attempt a push pull
+	if err := m.pushPullNode(node); err != nil {
+		log.Printf("[ERR] Push/Pull with %s failed: %s", node.Name, err)
+	}
+}
+
+// pushPullNode is invoked to do a state exchange with
+// a given node
+func (m *Memberlist) pushPullNode(node *NodeState) error {
+	// Attempt to send and receive with the node
+	remote, err := m.sendAndReceiveState(node.Addr)
+	if err != nil {
+		return nil
+	}
+
+	// Merge the state
+	m.mergeState(remote)
+	return nil
 }
 
 // nextSeqNo returns a usable sequence number in a thread safe way
