@@ -32,6 +32,7 @@ type Config struct {
 	BindAddr         string        // Binding address
 	UDPPort          int           // UDP port to listen on
 	TCPPort          int           // TCP port to listen on
+	TCPTimeout       time.Duration // TCP timeout
 	IndirectChecks   int           // Number of indirect checks to use
 	RetransmitMult   int           // Retransmits = RetransmitMult * log(N+1)
 	SuspicionMult    int           // Suspicion time = SuspcicionMult * log(N+1) * Interval
@@ -80,6 +81,7 @@ func DefaultConfig() *Config {
 		"0.0.0.0",
 		7946,
 		7946,
+		10 * time.Second,      // Timeout after 10 seconds
 		3,                     // Use 3 nodes for the indirect ping
 		4,                     // Retransmit a message 4 * log(N+1) nodes
 		5,                     // Suspect a node for 5 * log(N+1) * Interval
