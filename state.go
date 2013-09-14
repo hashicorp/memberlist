@@ -246,16 +246,16 @@ func (m *Memberlist) pushPull() {
 	node := nodes[0]
 
 	// Attempt a push pull
-	if err := m.pushPullNode(node); err != nil {
+	if err := m.pushPullNode(node.Addr); err != nil {
 		log.Printf("[ERR] Push/Pull with %s failed: %s", node.Name, err)
 	}
 }
 
 // pushPullNode is invoked to do a state exchange with
 // a given node
-func (m *Memberlist) pushPullNode(node *NodeState) error {
+func (m *Memberlist) pushPullNode(addr []byte) error {
 	// Attempt to send and receive with the node
-	remote, err := m.sendAndReceiveState(node.Addr)
+	remote, err := m.sendAndReceiveState(addr)
 	if err != nil {
 		return nil
 	}
