@@ -3,6 +3,7 @@ package memberlist
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"log"
 	"net"
 )
@@ -95,71 +96,17 @@ func (m *Memberlist) tcpListen() {
 // handleConn handles a single incoming TCP connection
 func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	defer conn.Close()
-	buf := []byte{0}
 
-	// Read the message type
-	if _, err := conn.Read(buf); err != nil {
-		log.Printf("[ERR] Failed to read the msg type: %s", err)
-		return
-	}
-	msgType := uint8(buf[0])
-
-	// Quit if not push/pull
-	if msgType != pushPullMsg {
-		log.Printf("[ERR] Invalid TCP request type (%d)", msgType)
+	remoteNodes, err := readRemoteState(conn)
+	if err != nil {
+		log.Printf("[ERR] Failed to receive remote state: %s", err)
 		return
 	}
 
-	// Read the push/pull header
-	var header pushPullHeader
-	dec := gob.NewDecoder(conn)
-	if err := dec.Decode(&header); err != nil {
-		log.Printf("[ERR] Failed to decode Push/Pull header: %s", err)
-		return
+	if err := m.sendLocalState(conn); err != nil {
+		log.Printf("[ERR] Failed to push local state: %s", err)
 	}
 
-	// Allocate space for the transfer
-	remoteNodes := make([]pushNodeState, header.Nodes)
-
-	// Try to decode all the states
-	for i := 0; i < header.Nodes; i++ {
-		if err := dec.Decode(&remoteNodes[i]); err != nil {
-			log.Printf("[ERR] Failed to decode Push/Pull state (idx: %d / %d): %s", i+1, header.Nodes, err)
-			return
-		}
-	}
-
-	// Prepare the local node state
-	m.nodeLock.RLock()
-	localNodes := make([]pushNodeState, len(m.nodes))
-	for idx, n := range m.nodes {
-		localNodes[idx].Name = n.Name
-		localNodes[idx].Addr = n.Addr
-		localNodes[idx].Incarnation = n.Incarnation
-		localNodes[idx].State = n.State
-	}
-	m.nodeLock.RUnlock()
-
-	// Send our node state
-	header.Nodes = len(localNodes)
-	enc := gob.NewEncoder(conn)
-
-	// Send the push/pull indicator
-	conn.Write([]byte{pushPullMsg})
-
-	if err := enc.Encode(&header); err != nil {
-		log.Printf("[ERR] Failed to send Push/Pull header: %s", err)
-		goto AFTER_SEND
-	}
-	for i := 0; i < header.Nodes; i++ {
-		if err := enc.Encode(&localNodes[i]); err != nil {
-			log.Printf("[ERR] Failed to send Push/Pull state (idx: %d / %d): %s", i+1, header.Nodes, err)
-			goto AFTER_SEND
-		}
-	}
-
-AFTER_SEND:
-	// Allow the local state to be updated
 	m.mergeState(remoteNodes)
 }
 
@@ -354,4 +301,94 @@ func (m *Memberlist) sendMsg(to net.Addr, msg *bytes.Buffer) error {
 func (m *Memberlist) rawSendMsg(to net.Addr, msg *bytes.Buffer) error {
 	_, err := m.udpListener.WriteTo(msg.Bytes(), to)
 	return err
+}
+
+// sendState is used to initiate a push/pull over TCP with a remote node
+func (m *Memberlist) sendAndReceiveState(addr []byte) ([]pushNodeState, error) {
+	// Attempt to connect
+	dialer := net.Dialer{Timeout: m.config.TCPTimeout}
+	dest := net.TCPAddr{IP: addr, Port: m.config.TCPPort}
+	conn, err := dialer.Dial("tcp", dest.String())
+	if err != nil {
+		return nil, err
+	}
+
+	// Send our state
+	if err := m.sendLocalState(conn); err != nil {
+		return nil, err
+	}
+
+	// Read remote state
+	remote, err := readRemoteState(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the remote state
+	return remote, nil
+}
+
+// sendLocalState is invoked to send our local state over a tcp connection
+func (m *Memberlist) sendLocalState(conn net.Conn) error {
+	// Prepare the local node state
+	m.nodeLock.RLock()
+	localNodes := make([]pushNodeState, len(m.nodes))
+	for idx, n := range m.nodes {
+		localNodes[idx].Name = n.Name
+		localNodes[idx].Addr = n.Addr
+		localNodes[idx].Incarnation = n.Incarnation
+		localNodes[idx].State = n.State
+	}
+	m.nodeLock.RUnlock()
+
+	// Send our node state
+	header := pushPullHeader{Nodes: len(localNodes)}
+	enc := gob.NewEncoder(conn)
+
+	// Begin state push
+	conn.Write([]byte{pushPullMsg})
+
+	if err := enc.Encode(&header); err != nil {
+		return err
+	}
+	for i := 0; i < header.Nodes; i++ {
+		if err := enc.Encode(&localNodes[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// recvRemoteState is used to read the remote state from a connection
+func readRemoteState(conn net.Conn) ([]pushNodeState, error) {
+	// Read the message type
+	buf := []byte{0}
+	if _, err := conn.Read(buf); err != nil {
+		return nil, err
+	}
+	msgType := uint8(buf[0])
+
+	// Quit if not push/pull
+	if msgType != pushPullMsg {
+		err := fmt.Errorf("received invalid msgType (%d)", msgType)
+		return nil, err
+	}
+
+	// Read the push/pull header
+	var header pushPullHeader
+	dec := gob.NewDecoder(conn)
+	if err := dec.Decode(&header); err != nil {
+		return nil, err
+	}
+
+	// Allocate space for the transfer
+	remoteNodes := make([]pushNodeState, header.Nodes)
+
+	// Try to decode all the states
+	for i := 0; i < header.Nodes; i++ {
+		if err := dec.Decode(&remoteNodes[i]); err != nil {
+			return remoteNodes, err
+		}
+	}
+	return remoteNodes, nil
 }
