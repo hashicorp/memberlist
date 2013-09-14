@@ -93,3 +93,15 @@ func TestMemberList_Members(t *testing.T) {
 		t.Fatalf("bad members")
 	}
 }
+
+func TestMemberlist_Join(t *testing.T) {
+	// TODO
+}
+
+func TestMemberlist_Leave(t *testing.T) {
+	// TODO
+}
+
+func TestMemberlist_JoinShutdown(t *testing.T) {
+	// TODO
+}

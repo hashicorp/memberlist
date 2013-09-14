@@ -21,6 +21,7 @@ package memberlist
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"sync"
@@ -143,7 +144,30 @@ func Join(conf *Config, existing []string) (*Memberlist, error) {
 		return nil, err
 	}
 
-	// TODO: Attempt to join...
+	// Attempt to join any of them
+	success := false
+	for _, exist := range existing {
+		addr, err := net.ResolveIPAddr("ip", exist)
+		if err != nil {
+			log.Printf("[ERR] Failed to resolve %s: %s", exist, err)
+			continue
+		}
+
+		if err := m.pushPullNode(addr.IP); err != nil {
+			log.Printf("[ERR] Failed to contact %s: %s", exist, err)
+			continue
+		}
+
+		// Mark success, but keep exchanging with other hosts
+		// to get more complete state data
+		success = true
+	}
+
+	// Only continue on success
+	if !success {
+		m.Shutdown()
+		return nil, fmt.Errorf("Failed to contact existing hosts")
+	}
 
 	// Schedule background work
 	m.schedule()
@@ -206,7 +230,8 @@ func (m *Memberlist) Members() []*Node {
 // Leave will broadcast a leave message but will not shutdown
 // the memberlist background maintenence. This should be followed/
 // by a Shutdown().
-func (m *Memberlist) Leave() error {
+func (m *Memberlist) Leave(wait bool) error {
+	// TODO: Send out death message
 	return nil
 }
 
