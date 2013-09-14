@@ -39,35 +39,36 @@ func (m *Memberlist) schedule() {
 	defer m.tickerLock.Unlock()
 
 	// Create a new probeTicker
-	m.probeTicker = time.NewTicker(m.config.ProbeInterval)
-	probeCh := m.probeTicker.C
-	go func() {
-		for {
-			select {
-			case <-probeCh:
-				m.probe()
-			case <-m.stopTick:
-				return
-			}
-		}
-	}()
+	t := time.NewTicker(m.config.ProbeInterval)
+	go m.triggerFunc(t.C, m.probe)
+	m.tickers = append(m.tickers, t)
+
+	// Create a push pull ticker if needed
+	if m.config.PushPullInterval > 0 {
+		t = time.NewTicker(m.config.PushPullInterval)
+		go m.triggerFunc(t.C, m.pushPull)
+		m.tickers = append(m.tickers, t)
+	}
 
 	// Create a gossip ticker if needed
-	if m.config.GossipNodes == 0 {
-		return
+	if m.config.GossipNodes > 0 {
+		t = time.NewTicker(m.config.GossipInterval)
+		go m.triggerFunc(t.C, m.gossip)
+		m.tickers = append(m.tickers, t)
 	}
-	m.gossipTicker = time.NewTicker(m.config.GossipInterval)
-	gossipCh := m.gossipTicker.C
-	go func() {
-		for {
-			select {
-			case <-gossipCh:
-				m.gossip()
-			case <-m.stopTick:
-				return
-			}
+}
+
+// triggerFunc is used to trigger a function call each time a
+// message is received until a stop tick arrives.
+func (m *Memberlist) triggerFunc(C <-chan time.Time, f func()) {
+	for {
+		select {
+		case <-C:
+			f()
+		case <-m.stopTick:
+			return
 		}
-	}()
+	}
 }
 
 // Deschedule is used to stop the background maintenence
@@ -75,16 +76,11 @@ func (m *Memberlist) deschedule() {
 	m.tickerLock.Lock()
 	defer m.tickerLock.Unlock()
 
-	if m.probeTicker != nil {
-		m.probeTicker.Stop()
-		m.probeTicker = nil
+	for _, t := range m.tickers {
+		t.Stop()
 		m.stopTick <- struct{}{}
 	}
-	if m.gossipTicker != nil {
-		m.gossipTicker.Stop()
-		m.gossipTicker = nil
-		m.stopTick <- struct{}{}
-	}
+	m.tickers = nil
 }
 
 // Tick is used to perform a single round of failure detection and gossip
@@ -230,6 +226,10 @@ func (m *Memberlist) gossip() {
 			log.Printf("[ERR] Failed to send gossip to %s: %s", destAddr, err)
 		}
 	}
+}
+
+// pushPull is invoked periodically
+func (m *Memberlist) pushPull() {
 }
 
 // nextSeqNo returns a usable sequence number in a thread safe way

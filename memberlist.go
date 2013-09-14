@@ -28,16 +28,16 @@ import (
 )
 
 type Config struct {
-	Name           string        // Node name (FQDN)
-	BindAddr       string        // Binding address
-	UDPPort        int           // UDP port to listen on
-	TCPPort        int           // TCP port to listen on
-	IndirectChecks int           // Number of indirect checks to use
-	RetransmitMult int           // Retransmits = RetransmitMult * log(N+1)
-	SuspicionMult  int           // Suspicion time = SuspcicionMult * log(N+1) * Interval
-	PushPullFreq   float32       // How often we do a Push/Pull update
-	RTT            time.Duration // 99% precentile of round-trip-time
-	ProbeInterval  time.Duration // Failure probing interval length
+	Name             string        // Node name (FQDN)
+	BindAddr         string        // Binding address
+	UDPPort          int           // UDP port to listen on
+	TCPPort          int           // TCP port to listen on
+	IndirectChecks   int           // Number of indirect checks to use
+	RetransmitMult   int           // Retransmits = RetransmitMult * log(N+1)
+	SuspicionMult    int           // Suspicion time = SuspcicionMult * log(N+1) * Interval
+	PushPullInterval time.Duration // How often we do a Push/Pull update
+	RTT              time.Duration // 99% precentile of round-trip-time
+	ProbeInterval    time.Duration // Failure probing interval length
 
 	GossipNodes    int           // Number of nodes to gossip to per GossipInterval
 	GossipInterval time.Duration // Gossip interval for non-piggyback messages (only if GossipNodes > 0)
@@ -61,11 +61,10 @@ type Memberlist struct {
 	nodes    []*NodeState          // Known nodes
 	nodeMap  map[string]*NodeState // Maps Addr.String() -> NodeState
 
-	tickerLock   sync.Mutex
-	probeTicker  *time.Ticker
-	gossipTicker *time.Ticker
-	stopTick     chan struct{}
-	probeIndex   int
+	tickerLock sync.Mutex
+	tickers    []*time.Ticker
+	stopTick   chan struct{}
+	probeIndex int
 
 	ackLock     sync.Mutex
 	ackHandlers map[uint32]*ackHandler
@@ -81,10 +80,10 @@ func DefaultConfig() *Config {
 		"0.0.0.0",
 		7946,
 		7946,
-		3,    // Use 3 nodes for the indirect ping
-		4,    // Retransmit a message 4 * log(N+1) nodes
-		5,    // Suspect a node for 5 * log(N+1) * Interval
-		0.05, // 5% frequency for push/pull
+		3,                     // Use 3 nodes for the indirect ping
+		4,                     // Retransmit a message 4 * log(N+1) nodes
+		5,                     // Suspect a node for 5 * log(N+1) * Interval
+		30 * time.Second,      // Low frequency
 		20 * time.Millisecond, // Reasonable RTT time for LAN
 		1 * time.Second,       // Failure check every second
 
@@ -113,7 +112,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		udpListener: udpLn.(*net.UDPConn),
 		tcpListener: tcpLn.(*net.TCPListener),
 		nodeMap:     make(map[string]*NodeState),
-		stopTick:    make(chan struct{}, 2),
+		stopTick:    make(chan struct{}, 32),
 		ackHandlers: make(map[uint32]*ackHandler),
 	}
 	go m.tcpListen()
