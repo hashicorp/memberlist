@@ -222,40 +222,21 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 }
 
 func (m *Memberlist) handleCompound(buf []byte, from net.Addr) {
-	// Ensure we have at least the length byte
-	if len(buf) < 1 {
-		log.Printf("[ERR] Failed to decode compound request: missing len prefix")
-		return
-	}
-	numParts := uint8(buf[0])
-	buf = buf[1:]
-
-	// Check we have enough bytes
-	if len(buf) < int(numParts*2) {
-		log.Printf("[ERR] Failed to decode compound request: truncated len slice")
+	// Decode the parts
+	trunc, parts, err := decodeCompoundMessage(buf)
+	if err != nil {
+		log.Printf("[ERR] Failed to decode compound request: %s", err)
 		return
 	}
 
-	// Decode the lengths
-	lengths := make([]uint16, numParts)
-	for i := 0; i < int(numParts); i++ {
-		lengths[i] = binary.BigEndian.Uint16(buf[i*2 : i*2+2])
+	// Log any truncation
+	if trunc > 0 {
+		log.Printf("[WARN] Compound request had %d truncated messages", trunc)
 	}
-	buf = buf[numParts*2:]
 
 	// Handle each message
-	for _, msgLen := range lengths {
-		if len(buf) < int(msgLen) {
-			log.Printf("[ERR] Failed to decode compound request: truncated message (%d / %d)", len(buf), msgLen)
-			return
-		}
-
-		// Extract the slice, seek past on the buffer
-		slice := buf[:msgLen]
-		buf = buf[msgLen:]
-
-		// Handle the command
-		m.handleCommand(slice, from)
+	for _, part := range parts {
+		m.handleCommand(part, from)
 	}
 }
 
