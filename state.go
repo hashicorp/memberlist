@@ -37,7 +37,7 @@ type ackHandler struct {
 func (m *Memberlist) schedule() {
 	// Create a new ticker
 	m.tickerLock.Lock()
-	m.ticker = time.NewTicker(m.config.Interval)
+	m.ticker = time.NewTicker(m.config.ProbeInterval)
 	C := m.ticker.C
 	m.tickerLock.Unlock()
 	go func() {
@@ -114,7 +114,7 @@ func (m *Memberlist) probeNode(node *NodeState) {
 
 	// Setup an ack handler
 	ackCh := make(chan bool, m.config.IndirectChecks+1)
-	m.setAckChannel(ping.SeqNo, ackCh, m.config.Interval)
+	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
 
 	// Send the ping message
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
@@ -333,7 +333,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	state.StateChange = changeTime
 
 	// Setup a timeout for this
-	timeout := suspicionTimeout(m.config.SuspicionMult, len(m.nodes), m.config.Interval)
+	timeout := suspicionTimeout(m.config.SuspicionMult, len(m.nodes), m.config.ProbeInterval)
 	time.AfterFunc(timeout, func() {
 		if state.State == StateSuspect && state.StateChange == changeTime {
 			m.suspectTimeout(state)

@@ -39,7 +39,7 @@ type Config struct {
 	SuspicionMult  int           // Suspicion time = SuspcicionMult * log(N+1) * Interval
 	PushPullFreq   float32       // How often we do a Push/Pull update
 	RTT            time.Duration // 99% precentile of round-trip-time
-	Interval       time.Duration // Interval length
+	ProbeInterval  time.Duration // Failure probing interval length
 }
 
 type Memberlist struct {

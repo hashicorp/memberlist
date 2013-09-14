@@ -19,7 +19,7 @@ func HostMemberlist(host string, t *testing.T) *Memberlist {
 func TestMemberList_Tick(t *testing.T) {
 	m1 := HostMemberlist("127.0.0.50", t)
 	m1.config.RTT = time.Millisecond
-	m1.config.Interval = 10 * time.Millisecond
+	m1.config.ProbeInterval = 10 * time.Millisecond
 	m2 := HostMemberlist("127.0.0.51", t)
 
 	a1 := alive{Node: "127.0.0.50", Addr: []byte{127, 0, 0, 50}, Incarnation: 1}
@@ -45,7 +45,7 @@ func TestMemberList_Tick(t *testing.T) {
 func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	m1 := HostMemberlist("127.0.0.100", t)
 	m1.config.RTT = time.Millisecond
-	m1.config.Interval = 10 * time.Millisecond
+	m1.config.ProbeInterval = 10 * time.Millisecond
 	m2 := HostMemberlist("127.0.0.101", t)
 	m3 := HostMemberlist("127.0.0.102", t)
 
@@ -78,7 +78,7 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 func TestMemberList_ProbeNode(t *testing.T) {
 	m1 := HostMemberlist("127.0.0.200", t)
 	m1.config.RTT = time.Millisecond
-	m1.config.Interval = 10 * time.Millisecond
+	m1.config.ProbeInterval = 10 * time.Millisecond
 	m2 := HostMemberlist("127.0.0.201", t)
 
 	a1 := alive{Node: "127.0.0.200", Addr: []byte{127, 0, 0, 200}, Incarnation: 1}
@@ -331,7 +331,7 @@ func TestMemberList_SuspectNode_NoNode(t *testing.T) {
 
 func TestMemberList_SuspectNode(t *testing.T) {
 	m := GetMemberlist(t)
-	m.config.Interval = time.Millisecond
+	m.config.ProbeInterval = time.Millisecond
 	m.config.SuspicionMult = 1
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a)
