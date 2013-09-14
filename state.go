@@ -471,7 +471,7 @@ func (m *Memberlist) deadNode(d *dead) {
 	}
 
 	// If this is us we need to refute, otherwise re-broadcast
-	if state.Name == m.config.Name {
+	if state.Name == m.config.Name && !m.leave {
 		inc := m.nextIncarnation()
 		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr}
 		m.encodeAndBroadcast(d.Node, aliveMsg, a)

@@ -48,6 +48,7 @@ type Config struct {
 type Memberlist struct {
 	config   *Config
 	shutdown bool
+	leave    bool
 
 	udpListener *net.UDPConn
 	tcpListener *net.TCPListener
@@ -231,7 +232,9 @@ func (m *Memberlist) Members() []*Node {
 // the memberlist background maintenence. This should be followed/
 // by a Shutdown().
 func (m *Memberlist) Leave(wait bool) error {
-	// TODO: Send out death message
+	m.leave = true
+	d := dead{Incarnation: m.incarnation, Node: m.config.Name}
+	m.deadNode(&d)
 	return nil
 }
 
