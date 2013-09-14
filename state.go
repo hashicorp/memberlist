@@ -35,16 +35,16 @@ type ackHandler struct {
 
 // Schedule is used to ensure the Tick is performed periodically
 func (m *Memberlist) schedule() {
-	// Create a new ticker
+	// Create a new probeTicker
 	m.tickerLock.Lock()
-	m.ticker = time.NewTicker(m.config.ProbeInterval)
-	C := m.ticker.C
+	m.probeTicker = time.NewTicker(m.config.ProbeInterval)
+	C := m.probeTicker.C
 	m.tickerLock.Unlock()
 	go func() {
 		for {
 			select {
 			case <-C:
-				m.tick()
+				m.probe()
 			case <-m.stopTick:
 				return
 			}
@@ -55,9 +55,9 @@ func (m *Memberlist) schedule() {
 // Deschedule is used to stop the background maintenence
 func (m *Memberlist) deschedule() {
 	m.tickerLock.Lock()
-	if m.ticker != nil {
-		m.ticker.Stop()
-		m.ticker = nil
+	if m.probeTicker != nil {
+		m.probeTicker.Stop()
+		m.probeTicker = nil
 	}
 	m.tickerLock.Unlock()
 	select {
@@ -67,7 +67,7 @@ func (m *Memberlist) deschedule() {
 }
 
 // Tick is used to perform a single round of failure detection and gossip
-func (m *Memberlist) tick() {
+func (m *Memberlist) probe() {
 	// Track the number of indexes we've considered probing
 	numCheck := 0
 START:
@@ -77,9 +77,9 @@ START:
 	}
 
 	// Handle the wrap around case
-	if m.tickIndex > len(m.nodes) {
+	if m.probeIndex > len(m.nodes) {
 		m.resetNodes()
-		m.tickIndex = 0
+		m.probeIndex = 0
 	}
 
 	// Determine if we should probe this node
@@ -87,7 +87,7 @@ START:
 	var node *NodeState
 	m.nodeLock.RLock()
 
-	node = m.nodes[m.tickIndex]
+	node = m.nodes[m.probeIndex]
 	if node.Name == m.config.Name {
 		skip = true
 	} else if node.State == StateDead {
@@ -98,7 +98,7 @@ START:
 	m.nodeLock.RUnlock()
 	if skip {
 		numCheck++
-		m.tickIndex++
+		m.probeIndex++
 		goto START
 	}
 

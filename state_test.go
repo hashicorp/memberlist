@@ -28,7 +28,7 @@ func TestMemberList_Tick(t *testing.T) {
 	m1.aliveNode(&a2)
 
 	// should ping 127.0.0.51
-	m1.tick()
+	m1.probe()
 
 	// Should not be marked suspect
 	n := m1.nodeMap["127.0.0.51"]

@@ -61,10 +61,11 @@ type Memberlist struct {
 	nodes    []*NodeState          // Known nodes
 	nodeMap  map[string]*NodeState // Maps Addr.String() -> NodeState
 
-	tickerLock sync.Mutex
-	ticker     *time.Ticker
-	stopTick   chan struct{}
-	tickIndex  int
+	tickerLock   sync.Mutex
+	probeTicker  *time.Ticker
+	gossipTicker *time.Ticker
+	stopTick     chan struct{}
+	probeIndex   int
 
 	ackLock     sync.Mutex
 	ackHandlers map[uint32]*ackHandler
