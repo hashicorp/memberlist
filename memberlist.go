@@ -229,9 +229,10 @@ func (m *Memberlist) Members() []*Node {
 }
 
 // Leave will broadcast a leave message but will not shutdown
-// the memberlist background maintenence. This should be followed/
-// by a Shutdown().
-func (m *Memberlist) Leave(wait bool) error {
+// the memberlist background maintenence. This should be followed
+// by a Shutdown(). Note that this just enqueues the message,
+// some time should be allowed for it to propogate.
+func (m *Memberlist) Leave() error {
 	m.leave = true
 	d := dead{Incarnation: m.incarnation, Node: m.config.Name}
 	m.deadNode(&d)
