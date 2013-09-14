@@ -39,20 +39,22 @@ func (m *Memberlist) schedule() {
 	defer m.tickerLock.Unlock()
 
 	// Create a new probeTicker
-	t := time.NewTicker(m.config.ProbeInterval)
-	go m.triggerFunc(t.C, m.probe)
-	m.tickers = append(m.tickers, t)
+	if m.config.ProbeInterval > 0 {
+		t := time.NewTicker(m.config.ProbeInterval)
+		go m.triggerFunc(t.C, m.probe)
+		m.tickers = append(m.tickers, t)
+	}
 
 	// Create a push pull ticker if needed
 	if m.config.PushPullInterval > 0 {
-		t = time.NewTicker(m.config.PushPullInterval)
+		t := time.NewTicker(m.config.PushPullInterval)
 		go m.triggerFunc(t.C, m.pushPull)
 		m.tickers = append(m.tickers, t)
 	}
 
 	// Create a gossip ticker if needed
 	if m.config.GossipNodes > 0 {
-		t = time.NewTicker(m.config.GossipInterval)
+		t := time.NewTicker(m.config.GossipInterval)
 		go m.triggerFunc(t.C, m.gossip)
 		m.tickers = append(m.tickers, t)
 	}
