@@ -3,13 +3,12 @@ The memberlist package is used to provide a lightweight gossip based
 mechanism for node membership and failure detection. It is loosely
 based on the SWIM paper (Scalable Weakly-consistent Infection-style
 process group Membership protocol). There are a few notable differences,
-including the uses of additional fanout (instead of purely piggybacking on
+including the uses of additional gossip (instead of purely piggybacking on
 failure detection) and the addition of a state push/pull mechanism.
 
-A fanout mechanism is used because it allows for changes to be propogated
-more quickly, and also enables us to dynamically increase the amount of
-gossip in response to a surge of events. The fanout rate is provided as a tunable
-parameter.
+An independent gossip mechanism is used because it allows for changes to be propogated
+more quickly, and also enables us to gossip at a different interval that we perform
+failure checks. The gossip rate is tunable, and can be disabled.
 
 A Push/Pull mechanism is also included because it allows new nodes to
 get an almost complete member list upon joining. It also is used as
@@ -33,13 +32,15 @@ type Config struct {
 	BindAddr       string        // Binding address
 	UDPPort        int           // UDP port to listen on
 	TCPPort        int           // TCP port to listen on
-	Fanout         int           // Number of nodes to publish to per round
 	IndirectChecks int           // Number of indirect checks to use
 	RetransmitMult int           // Retransmits = RetransmitMult * log(N+1)
 	SuspicionMult  int           // Suspicion time = SuspcicionMult * log(N+1) * Interval
 	PushPullFreq   float32       // How often we do a Push/Pull update
 	RTT            time.Duration // 99% precentile of round-trip-time
 	ProbeInterval  time.Duration // Failure probing interval length
+
+	GossipNodes    int           // Number of nodes to gossip to per GossipInterval
+	GossipInterval time.Duration // Gossip interval for non-piggyback messages (only if GossipNodes > 0)
 }
 
 type Memberlist struct {
@@ -79,13 +80,15 @@ func DefaultConfig() *Config {
 		"0.0.0.0",
 		7946,
 		7946,
-		3,    // Fanout to 3 nodes
 		3,    // Use 3 nodes for the indirect ping
 		4,    // Retransmit a message 4 * log(N+1) nodes
 		5,    // Suspect a node for 5 * log(N+1) * Interval
 		0.05, // 5% frequency for push/pull
 		20 * time.Millisecond, // Reasonable RTT time for LAN
 		1 * time.Second,       // Failure check every second
+
+		3, // Gossip to 3 nodes
+		200 * time.Millisecond, // Gossip more rapidly
 	}
 }
 
