@@ -14,6 +14,7 @@ var (
 
 func GetMemberlist(t *testing.T) *Memberlist {
 	c := DefaultConfig()
+	c.BindAddr = "127.0.0.1"
 
 	var m *Memberlist
 	var err error
@@ -112,7 +113,27 @@ func TestMemberList_Members(t *testing.T) {
 }
 
 func TestMemberlist_Join(t *testing.T) {
-	// TODO
+	m1 := GetMemberlist(t)
+	m1.setAlive()
+	m1.schedule()
+	defer m1.Shutdown()
+
+	// Create a second node
+	c := DefaultConfig()
+	addr1, _ := GetBindAddr()
+	c.Name = addr1
+	c.BindAddr = addr1
+	c.UDPPort = m1.config.UDPPort
+	c.TCPPort = m1.config.TCPPort
+	m2, err := Join(c, []string{"127.0.0.1"})
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+
+	// Check the hosts
+	if len(m2.Members()) != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
 }
 
 func TestMemberlist_Leave(t *testing.T) {

@@ -132,6 +132,7 @@ func Create(conf *Config) (*Memberlist, error) {
 	if err != nil {
 		return nil, err
 	}
+	m.setAlive()
 	m.schedule()
 	return m, nil
 }
@@ -144,6 +145,7 @@ func Join(conf *Config, existing []string) (*Memberlist, error) {
 	if err != nil {
 		return nil, err
 	}
+	m.setAlive()
 
 	// Attempt to join any of them
 	success := false
@@ -173,6 +175,18 @@ func Join(conf *Config, existing []string) (*Memberlist, error) {
 	// Schedule background work
 	m.schedule()
 	return m, nil
+}
+
+// setAlive is used to mark this node as being alive
+func (m *Memberlist) setAlive() {
+	// TODO: Pick an address somehow?
+	addr := m.tcpListener.Addr().(*net.TCPAddr)
+	a := alive{
+		Incarnation: m.nextIncarnation(),
+		Node:        m.config.Name,
+		Addr:        addr.IP,
+	}
+	m.aliveNode(&a)
 }
 
 // NotifyJoin is used to subscribe a channel to join events
