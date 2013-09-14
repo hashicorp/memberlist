@@ -245,6 +245,11 @@ func TestMemberList_AliveNode_NewNode(t *testing.T) {
 	default:
 		t.Fatalf("no join message")
 	}
+
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 1 {
+		t.Fatalf("expected queued message")
+	}
 }
 
 func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
@@ -285,6 +290,11 @@ func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
 		t.Fatalf("got bad join message")
 	default:
 	}
+
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 1 {
+		t.Fatalf("expected queued message")
+	}
 }
 
 func TestMemberList_AliveNode_Idempotent(t *testing.T) {
@@ -317,6 +327,11 @@ func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 	case <-ch:
 		t.Fatalf("got bad join message")
 	default:
+	}
+
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 1 {
+		t.Fatalf("expected only one queued message")
 	}
 }
 

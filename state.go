@@ -301,8 +301,6 @@ func (m *Memberlist) invokeAckHandler(seqNo uint32) {
 // aliveNode is invoked by the network layer when we get a message
 // about a live node
 func (m *Memberlist) aliveNode(a *alive) {
-	// TODO: Ignore we are alive
-	// TODO: Re-broadcast
 	m.nodeLock.Lock()
 	defer m.nodeLock.Unlock()
 	state, ok := m.nodeMap[a.Node]
@@ -335,6 +333,14 @@ func (m *Memberlist) aliveNode(a *alive) {
 	// Bail if the incarnation number is old
 	if a.Incarnation <= state.Incarnation {
 		return
+	}
+
+	// Re-Broadcast
+	buf, err := encode(aliveMsg, a)
+	if err != nil {
+		log.Printf("[ERR] Failed to encode alive message: %s", err)
+	} else {
+		m.queueBroadcast(a.Node, buf)
 	}
 
 	// Update the state and incarnation number
