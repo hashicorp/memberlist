@@ -280,3 +280,7 @@ func TestTCPPushPull(t *testing.T) {
 		t.Fatal("bad state")
 	}
 }
+
+func TestSendMsg_Piggyback(t *testing.T) {
+	// TODO: test sendMsg will piggy back
+}

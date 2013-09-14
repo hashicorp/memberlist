@@ -651,3 +651,15 @@ func TestMemberList_MergeState(t *testing.T) {
 		t.Fatalf("Expect leave")
 	}
 }
+
+func TestMemberlist_Gossip(t *testing.T) {
+	// TODO
+}
+
+func TestMemberlist_PushPull(t *testing.T) {
+	// TODO
+}
+
+func TestMemberlist_PushPullNode(t *testing.T) {
+	// TODO
+}
