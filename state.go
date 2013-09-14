@@ -35,16 +35,34 @@ type ackHandler struct {
 
 // Schedule is used to ensure the Tick is performed periodically
 func (m *Memberlist) schedule() {
-	// Create a new probeTicker
 	m.tickerLock.Lock()
+	defer m.tickerLock.Unlock()
+
+	// Create a new probeTicker
 	m.probeTicker = time.NewTicker(m.config.ProbeInterval)
-	C := m.probeTicker.C
-	m.tickerLock.Unlock()
+	probeCh := m.probeTicker.C
 	go func() {
 		for {
 			select {
-			case <-C:
+			case <-probeCh:
 				m.probe()
+			case <-m.stopTick:
+				return
+			}
+		}
+	}()
+
+	// Create a gossip ticker if needed
+	if m.config.GossipNodes == 0 {
+		return
+	}
+	m.gossipTicker = time.NewTicker(m.config.GossipInterval)
+	gossipCh := m.gossipTicker.C
+	go func() {
+		for {
+			select {
+			case <-gossipCh:
+				m.gossip()
 			case <-m.stopTick:
 				return
 			}
@@ -55,14 +73,17 @@ func (m *Memberlist) schedule() {
 // Deschedule is used to stop the background maintenence
 func (m *Memberlist) deschedule() {
 	m.tickerLock.Lock()
+	defer m.tickerLock.Unlock()
+
 	if m.probeTicker != nil {
 		m.probeTicker.Stop()
 		m.probeTicker = nil
+		m.stopTick <- struct{}{}
 	}
-	m.tickerLock.Unlock()
-	select {
-	case m.stopTick <- struct{}{}:
-	default:
+	if m.gossipTicker != nil {
+		m.gossipTicker.Stop()
+		m.gossipTicker = nil
+		m.stopTick <- struct{}{}
 	}
 }
 
@@ -179,6 +200,36 @@ func (m *Memberlist) resetNodes() {
 
 	// Shuffle live nodes
 	shuffleNodes(m.nodes)
+}
+
+// gossip is invoked every GossipInterval period to broadcast our gossip
+// messages to a few random nodes.
+func (m *Memberlist) gossip() {
+	// Get some random live nodes
+	m.nodeLock.RLock()
+	excludes := []string{m.config.Name}
+	kNodes := kRandomNodes(m.config.GossipNodes, excludes, m.nodes)
+	m.nodeLock.RUnlock()
+
+	// Compute the bytes available
+	bytesAvail := udpSendBuf - compoundHeaderOverhead
+
+	for _, node := range kNodes {
+		// Get any pending broadcasts
+		msgs := m.getBroadcasts(compoundOverhead, bytesAvail)
+		if len(msgs) == 0 {
+			return
+		}
+
+		// Create a compound message
+		compound := makeCompoundMessage(msgs)
+
+		// Send the compound message
+		destAddr := &net.UDPAddr{IP: node.Addr, Port: m.config.UDPPort}
+		if err := m.rawSendMsg(destAddr, compound); err != nil {
+			log.Printf("[ERR] Failed to send gossip to %s: %s", destAddr, err)
+		}
+	}
 }
 
 // nextSeqNo returns a usable sequence number in a thread safe way

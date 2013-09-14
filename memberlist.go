@@ -113,7 +113,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		udpListener: udpLn.(*net.UDPConn),
 		tcpListener: tcpLn.(*net.TCPListener),
 		nodeMap:     make(map[string]*NodeState),
-		stopTick:    make(chan struct{}, 1),
+		stopTick:    make(chan struct{}, 2),
 		ackHandlers: make(map[uint32]*ackHandler),
 	}
 	go m.tcpListen()
