@@ -237,6 +237,11 @@ func (m *Memberlist) nextSeqNo() uint32 {
 	return atomic.AddUint32(&m.sequenceNum, 1)
 }
 
+// nextIncarnation returns the next incarnation number in a thread safe way
+func (m *Memberlist) nextIncarnation() uint32 {
+	return atomic.AddUint32(&m.incarnation, 1)
+}
+
 // setAckChannel is used to attach a channel to receive a message when
 // an ack with a given sequence number is received. The channel gets sent
 // false on timeout
@@ -357,8 +362,6 @@ func (m *Memberlist) aliveNode(a *alive) {
 // suspectNode is invoked by the network layer when we get a message
 // about a suspect node
 func (m *Memberlist) suspectNode(s *suspect) {
-	// TODO: Refute if _we_ are suspected
-	// TODO: Re-broadcast
 	m.nodeLock.Lock()
 	defer m.nodeLock.Unlock()
 	state, ok := m.nodeMap[s.Node]
@@ -376,6 +379,18 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	// Ignore non-alive nodes
 	if state.State != StateAlive {
 		return
+	}
+
+	// If this is us we need to refute, otherwise re-broadcast
+	if state.Name == m.config.Name {
+		inc := m.nextIncarnation()
+		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr}
+		m.encodeAndBroadcast(s.Node, aliveMsg, a)
+
+		state.Incarnation = inc
+		return // Do not mark ourself suspect
+	} else {
+		m.encodeAndBroadcast(s.Node, suspectMsg, s)
 	}
 
 	// Update the state
@@ -403,8 +418,6 @@ func (m *Memberlist) suspectTimeout(n *NodeState) {
 // deadNode is invoked by the network layer when we get a message
 // about a dead node
 func (m *Memberlist) deadNode(d *dead) {
-	// TODO: Re-broadcast
-	// TODO: Refute if us?
 	m.nodeLock.Lock()
 	defer m.nodeLock.Unlock()
 	state, ok := m.nodeMap[d.Node]
@@ -422,6 +435,18 @@ func (m *Memberlist) deadNode(d *dead) {
 	// Ignore if node is already dead
 	if state.State == StateDead {
 		return
+	}
+
+	// If this is us we need to refute, otherwise re-broadcast
+	if state.Name == m.config.Name {
+		inc := m.nextIncarnation()
+		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr}
+		m.encodeAndBroadcast(d.Node, aliveMsg, a)
+
+		state.Incarnation = inc
+		return // Do not mark ourself dead
+	} else {
+		m.encodeAndBroadcast(d.Node, deadMsg, d)
 	}
 
 	// Update the state

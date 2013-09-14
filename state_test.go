@@ -366,6 +366,16 @@ func TestMemberList_SuspectNode(t *testing.T) {
 		t.Fatalf("bad change delta")
 	}
 
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 1 {
+		t.Fatalf("expected only one queued message")
+	}
+
+	// Check its a suspect message
+	if m.bcQueue[0].msg.Bytes()[0] != suspectMsg {
+		t.Fatalf("expected queued suspect msg")
+	}
+
 	// Wait for the timeout
 	time.Sleep(10 * time.Millisecond)
 
@@ -378,6 +388,16 @@ func TestMemberList_SuspectNode(t *testing.T) {
 	}
 	if !state.StateChange.After(change) {
 		t.Fatalf("should increment time")
+	}
+
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 1 {
+		t.Fatalf("expected only one queued message")
+	}
+
+	// Check its a suspect message
+	if m.bcQueue[0].msg.Bytes()[0] != deadMsg {
+		t.Fatalf("expected queued dead msg")
 	}
 }
 
@@ -401,12 +421,21 @@ func TestMemberList_SuspectNode_DoubleSuspect(t *testing.T) {
 		t.Fatalf("bad change delta")
 	}
 
+	// clear the broadcast queue
+	m.bcQueue = nil
+
 	// Suspect again
 	m.suspectNode(&s)
 
 	if state.StateChange != change {
 		t.Fatalf("unexpected state change")
 	}
+
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 0 {
+		t.Fatalf("expected only one queued message")
+	}
+
 }
 
 func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
@@ -417,11 +446,19 @@ func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
 	state := m.nodeMap["test"]
 	state.StateChange = state.StateChange.Add(-time.Hour)
 
+	// Clear queue
+	m.bcQueue = nil
+
 	s := suspect{Node: "test", Incarnation: 1}
 	m.suspectNode(&s)
 
 	if state.State != StateAlive {
 		t.Fatalf("Bad state")
+	}
+
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 0 {
+		t.Fatalf("expected only one queued message")
 	}
 }
 
@@ -464,6 +501,16 @@ func TestMemberList_DeadNode(t *testing.T) {
 	default:
 		t.Fatalf("no leave message")
 	}
+
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 1 {
+		t.Fatalf("expected only one queued message")
+	}
+
+	// Check its a suspect message
+	if m.bcQueue[0].msg.Bytes()[0] != deadMsg {
+		t.Fatalf("expected queued dead msg")
+	}
 }
 
 func TestMemberList_DeadNode_Double(t *testing.T) {
@@ -478,6 +525,9 @@ func TestMemberList_DeadNode_Double(t *testing.T) {
 	d := dead{Node: "test", Incarnation: 1}
 	m.deadNode(&d)
 
+	// Clear queue
+	m.bcQueue = nil
+
 	// Notify after the first dead
 	m.NotifyLeave(ch)
 
@@ -489,6 +539,11 @@ func TestMemberList_DeadNode_Double(t *testing.T) {
 	case <-ch:
 		t.Fatalf("should not get leave")
 	default:
+	}
+
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 0 {
+		t.Fatalf("expected only one queued message")
 	}
 }
 
