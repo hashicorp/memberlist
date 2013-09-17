@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 )
 
 var bindLock sync.Mutex
@@ -137,9 +138,91 @@ func TestMemberlist_Join(t *testing.T) {
 }
 
 func TestMemberlist_Leave(t *testing.T) {
-	// TODO
+	m1 := GetMemberlist(t)
+	m1.setAlive()
+	m1.schedule()
+	defer m1.Shutdown()
+
+	// Create a second node
+	c := DefaultConfig()
+	addr1, _ := GetBindAddr()
+	c.Name = addr1
+	c.BindAddr = addr1
+	c.UDPPort = m1.config.UDPPort
+	c.TCPPort = m1.config.TCPPort
+	c.GossipInterval = time.Millisecond
+	m2, err := Join(c, []string{"127.0.0.1"})
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+
+	// Check the hosts
+	if len(m2.Members()) != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+	if len(m1.Members()) != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+
+	ch := make(chan *Node)
+	m1.NotifyLeave(ch)
+
+	// Leave
+	m2.Leave()
+
+	// Wait for leave
+	select {
+	case <-ch:
+	case <-time.After(10 * time.Millisecond):
+		t.Fatalf("timeout on leave")
+	}
+
+	// m1 should think dead
+	if len(m1.Members()) != 1 {
+		t.Fatalf("should have 1 node")
+	}
+	if len(m2.Members()) != 1 {
+		t.Fatalf("should have 1 node")
+	}
 }
 
 func TestMemberlist_JoinShutdown(t *testing.T) {
-	// TODO
+	m1 := GetMemberlist(t)
+	m1.setAlive()
+	m1.schedule()
+
+	// Create a second node
+	c := DefaultConfig()
+	addr1, _ := GetBindAddr()
+	c.Name = addr1
+	c.BindAddr = addr1
+	c.UDPPort = m1.config.UDPPort
+	c.TCPPort = m1.config.TCPPort
+	c.ProbeInterval = time.Millisecond
+	c.RTT = 100 * time.Microsecond
+	m2, err := Join(c, []string{"127.0.0.1"})
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+
+	// Check the hosts
+	if len(m2.Members()) != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+
+	ch := make(chan *Node)
+	m2.NotifyLeave(ch)
+
+	m1.Shutdown()
+
+	// Wait for leave
+	select {
+	case <-ch:
+	case <-time.After(10 * time.Millisecond):
+		t.Fatalf("timeout on leave")
+	}
+
+	if len(m2.Members()) != 1 {
+		t.Fatalf("should have 1 nodes! %v", m2.Members())
+	}
 }
