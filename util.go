@@ -7,8 +7,42 @@ import (
 	"github.com/ugorji/go/codec"
 	"math"
 	"math/rand"
+	"net"
 	"time"
 )
+
+/*
+ * Contains an entry for each private block:
+ * 10.0.0.0/8
+ * 172.16.0.0/12
+ * 192.168/16
+ */
+var privateBlocks []*net.IPNet
+
+func init() {
+	// Seed the random number generator
+	rand.Seed(time.Now().UnixNano())
+
+	// Add each private block
+	privateBlocks = make([]*net.IPNet, 3)
+	_, block, err := net.ParseCIDR("10.0.0.0/8")
+	if err != nil {
+		panic(fmt.Sprintf("Bad cidr. Got %v", err))
+	}
+	privateBlocks[0] = block
+
+	_, block, err = net.ParseCIDR("172.16.0.0/12")
+	if err != nil {
+		panic(fmt.Sprintf("Bad cidr. Got %v", err))
+	}
+	privateBlocks[1] = block
+
+	_, block, err = net.ParseCIDR("192.168.0.0/16")
+	if err != nil {
+		panic(fmt.Sprintf("Bad cidr. Got %v", err))
+	}
+	privateBlocks[2] = block
+}
 
 // channelIndex returns the index of a channel in a list or
 // -1 if not found
@@ -206,4 +240,15 @@ func decodeCompoundMessage(buf []byte) (trunc int, parts [][]byte, err error) {
 		parts = append(parts, slice)
 	}
 	return
+}
+
+// Returns if the given IP is in a private block
+func isPrivateIP(ip_str string) bool {
+	ip := net.ParseIP(ip_str)
+	for _, priv := range privateBlocks {
+		if priv.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }

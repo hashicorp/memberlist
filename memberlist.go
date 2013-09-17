@@ -132,7 +132,10 @@ func Create(conf *Config) (*Memberlist, error) {
 	if err != nil {
 		return nil, err
 	}
-	m.setAlive()
+	if err := m.setAlive(); err != nil {
+		m.Shutdown()
+		return nil, err
+	}
 	m.schedule()
 	return m, nil
 }
@@ -145,7 +148,10 @@ func Join(conf *Config, existing []string) (*Memberlist, error) {
 	if err != nil {
 		return nil, err
 	}
-	m.setAlive()
+	if err := m.setAlive(); err != nil {
+		m.Shutdown()
+		return nil, err
+	}
 
 	// Attempt to join any of them
 	success := false
@@ -178,15 +184,48 @@ func Join(conf *Config, existing []string) (*Memberlist, error) {
 }
 
 // setAlive is used to mark this node as being alive
-func (m *Memberlist) setAlive() {
-	// TODO: Pick an address somehow?
-	addr := m.tcpListener.Addr().(*net.TCPAddr)
+func (m *Memberlist) setAlive() error {
+	// Pick a private IP address
+	var ipAddr []byte
+	if m.config.BindAddr == "0.0.0.0" {
+		// Get the interfaces
+		addresses, err := net.InterfaceAddrs()
+		if err != nil {
+			return fmt.Errorf("Failed to get interface addresses! Err: %vn", err)
+		}
+
+		// Find private IPv4 address
+		for _, addr := range addresses {
+			ip, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			if ip.IP.To4() == nil {
+				continue
+			}
+			if !isPrivateIP(ip.IP.String()) {
+				continue
+			}
+			ipAddr = ip.IP
+			break
+		}
+
+		// Failed to find private IP, use loopback
+		if ipAddr == nil {
+			ipAddr = []byte{127, 0, 0, 1}
+		}
+
+	} else {
+		addr := m.tcpListener.Addr().(*net.TCPAddr)
+		ipAddr = addr.IP
+	}
 	a := alive{
 		Incarnation: m.nextIncarnation(),
 		Node:        m.config.Name,
-		Addr:        addr.IP,
+		Addr:        ipAddr,
 	}
 	m.aliveNode(&a)
+	return nil
 }
 
 // NotifyJoin is used to subscribe a channel to join events
