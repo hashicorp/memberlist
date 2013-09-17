@@ -72,6 +72,7 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	if n.State != StateSuspect {
 		t.Fatalf("Expect node to be suspect")
 	}
+	time.Sleep(5 * time.Millisecond)
 
 	// Should increment seqno
 	if m2.sequenceNum != 1 {
@@ -472,6 +473,33 @@ func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
 	}
 }
 
+func TestMemberList_SuspectNode_Refute(t *testing.T) {
+	m := GetMemberlist(t)
+	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
+	m.aliveNode(&a)
+
+	// Clear queue
+	m.bcQueue = nil
+
+	s := suspect{Node: m.config.Name, Incarnation: 1}
+	m.suspectNode(&s)
+
+	state := m.nodeMap[m.config.Name]
+	if state.State != StateAlive {
+		t.Fatalf("should still be alive")
+	}
+
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 1 {
+		t.Fatalf("expected only one queued message")
+	}
+
+	// Should be alive mesg
+	if m.bcQueue[0].msg.Bytes()[0] != aliveMsg {
+		t.Fatalf("expected queued alive msg")
+	}
+}
+
 func TestMemberList_DeadNode_NoNode(t *testing.T) {
 	m := GetMemberlist(t)
 	d := dead{Node: "test", Incarnation: 1}
@@ -570,6 +598,33 @@ func TestMemberList_DeadNode_OldDead(t *testing.T) {
 
 	if state.State != StateAlive {
 		t.Fatalf("Bad state")
+	}
+}
+
+func TestMemberList_DeadNode_Refute(t *testing.T) {
+	m := GetMemberlist(t)
+	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
+	m.aliveNode(&a)
+
+	// Clear queue
+	m.bcQueue = nil
+
+	d := dead{Node: m.config.Name, Incarnation: 1}
+	m.deadNode(&d)
+
+	state := m.nodeMap[m.config.Name]
+	if state.State != StateAlive {
+		t.Fatalf("should still be alive")
+	}
+
+	// Check a broad cast is queued
+	if len(m.bcQueue) != 1 {
+		t.Fatalf("expected only one queued message")
+	}
+
+	// Should be alive mesg
+	if m.bcQueue[0].msg.Bytes()[0] != aliveMsg {
+		t.Fatalf("expected queued alive msg")
 	}
 }
 
@@ -710,13 +765,11 @@ func TestMemberlist_PushPull(t *testing.T) {
 	m1.aliveNode(&a1)
 	a2 := alive{Node: addr2, Addr: ip2, Incarnation: 1}
 	m1.aliveNode(&a2)
-	a3 := alive{Node: "172.0.0.1", Addr: []byte{172, 0, 0, 1}, Incarnation: 1}
-	m1.aliveNode(&a3)
 
 	// Gossip should send all this to m2
 	m1.pushPull()
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 2; i++ {
 		select {
 		case <-ch:
 		case <-time.After(10 * time.Millisecond):
