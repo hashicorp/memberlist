@@ -4,4 +4,8 @@ test: subnet
 subnet:
 	./test/setup_subnet.sh
 
-.PNONY: test
+cov:
+	gocov test github.com/hashicorp/memberlist | gocov-html > /tmp/coverage.html
+	open /tmp/coverage.html
+
+.PNONY: test cov
