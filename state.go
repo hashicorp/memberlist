@@ -96,9 +96,11 @@ START:
 	}
 
 	// Handle the wrap around case
-	if m.probeIndex > len(m.nodes) {
+	if m.probeIndex >= len(m.nodes) {
 		m.resetNodes()
 		m.probeIndex = 0
+		numCheck++
+		goto START
 	}
 
 	// Determine if we should probe this node
