@@ -694,9 +694,33 @@ func TestMemberlist_Gossip(t *testing.T) {
 }
 
 func TestMemberlist_PushPull(t *testing.T) {
-	// TODO
-}
+	addr1, ip1 := GetBindAddr()
+	addr2, ip2 := GetBindAddr()
 
-func TestMemberlist_PushPullNode(t *testing.T) {
-	// TODO
+	m1 := HostMemberlist(addr1, t)
+	m1.config.GossipInterval = 10 * time.Second
+	m1.config.PushPullInterval = time.Millisecond
+	m2 := HostMemberlist(addr2, t)
+	m2.config.GossipInterval = 10 * time.Second
+
+	ch := make(chan *Node, 3)
+	m2.NotifyJoin(ch)
+
+	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
+	m1.aliveNode(&a1)
+	a2 := alive{Node: addr2, Addr: ip2, Incarnation: 1}
+	m1.aliveNode(&a2)
+	a3 := alive{Node: "172.0.0.1", Addr: []byte{172, 0, 0, 1}, Incarnation: 1}
+	m1.aliveNode(&a3)
+
+	// Gossip should send all this to m2
+	m1.pushPull()
+
+	for i := 0; i < 3; i++ {
+		select {
+		case <-ch:
+		case <-time.After(10 * time.Millisecond):
+			t.Fatalf("timeout")
+		}
+	}
 }
