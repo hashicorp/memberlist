@@ -2,8 +2,8 @@ package memberlist
 
 import (
 	"bytes"
-	"encoding/gob"
 	"fmt"
+	"github.com/ugorji/go/codec"
 	"log"
 	"net"
 )
@@ -343,7 +343,8 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 
 	// Send our node state
 	header := pushPullHeader{Nodes: len(localNodes)}
-	enc := gob.NewEncoder(conn)
+	hd := codec.MsgpackHandle{}
+	enc := codec.NewEncoder(conn, &hd)
 
 	// Begin state push
 	conn.Write([]byte{pushPullMsg})
@@ -376,7 +377,8 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, error) {
 
 	// Read the push/pull header
 	var header pushPullHeader
-	dec := gob.NewDecoder(conn)
+	hd := codec.MsgpackHandle{}
+	dec := codec.NewDecoder(conn, &hd)
 	if err := dec.Decode(&header); err != nil {
 		return nil, err
 	}

@@ -3,8 +3,8 @@ package memberlist
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"fmt"
+	"github.com/ugorji/go/codec"
 	"net"
 	"testing"
 	"time"
@@ -222,7 +222,8 @@ func TestTCPPushPull(t *testing.T) {
 
 	// Send our node state
 	header := pushPullHeader{Nodes: 3}
-	enc := gob.NewEncoder(conn)
+	hd := codec.MsgpackHandle{}
+	enc := codec.NewEncoder(conn, &hd)
 
 	// Send the push/pull indicator
 	conn.Write([]byte{pushPullMsg})
@@ -247,7 +248,8 @@ func TestTCPPushPull(t *testing.T) {
 		t.Fatalf("bad message type")
 	}
 
-	dec := gob.NewDecoder(conn)
+	msghd := codec.MsgpackHandle{}
+	dec := codec.NewDecoder(conn, &msghd)
 	if err := dec.Decode(&header); err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}

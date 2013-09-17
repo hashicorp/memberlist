@@ -3,8 +3,8 @@ package memberlist
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"fmt"
+	"github.com/ugorji/go/codec"
 	"math"
 	"math/rand"
 	"time"
@@ -31,7 +31,8 @@ func channelDelete(list []chan<- *Node, idx int) []chan<- *Node {
 // Decode uses a GOB decoder on a byte slice
 func decode(buf []byte, out interface{}) error {
 	r := bytes.NewBuffer(buf)
-	dec := gob.NewDecoder(r)
+	hd := codec.MsgpackHandle{}
+	dec := codec.NewDecoder(r, &hd)
 	return dec.Decode(out)
 }
 
@@ -39,7 +40,8 @@ func decode(buf []byte, out interface{}) error {
 func encode(msgType int, in interface{}) (*bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
 	buf.WriteByte(uint8(msgType))
-	enc := gob.NewEncoder(buf)
+	hd := codec.MsgpackHandle{}
+	enc := codec.NewEncoder(buf, &hd)
 	err := enc.Encode(in)
 	return buf, err
 }
