@@ -42,6 +42,14 @@ type Delegate interface {
 	// It can return a list of buffers to send. Each buffer should assume an
 	// overhead as provided with a limit on the total byte size allowed.
 	GetBroadcasts(overhead, limit int) [][]byte
+
+	// LocalState is used for a TCP Push/Pull. This is sent to
+	// the remote side as well as membership information
+	LocalState() []byte
+
+	// MergeRemoteState is invoked after a TCP Push/Pull. This is the
+	// state received from the remote side.
+	MergeRemoteState([]byte)
 }
 
 type Config struct {

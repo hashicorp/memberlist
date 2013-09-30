@@ -14,9 +14,11 @@ var (
 )
 
 type MockDelegate struct {
-	meta       []byte
-	msgs       [][]byte
-	broadcasts [][]byte
+	meta        []byte
+	msgs        [][]byte
+	broadcasts  [][]byte
+	state       []byte
+	remoteState []byte
 }
 
 func (m *MockDelegate) NodeMeta(limit int) []byte {
@@ -31,6 +33,14 @@ func (m *MockDelegate) GetBroadcasts(overhead, limit int) [][]byte {
 	b := m.broadcasts
 	m.broadcasts = nil
 	return b
+}
+
+func (m *MockDelegate) LocalState() []byte {
+	return m.state
+}
+
+func (m *MockDelegate) MergeRemoteState(s []byte) {
+	m.remoteState = s
 }
 
 func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
@@ -245,6 +255,7 @@ func TestMemberlist_DelegateMeta(t *testing.T) {
 
 func TestMemberlist_UserData(t *testing.T) {
 	m1, d1 := GetMemberlistDelegate(t)
+	d1.state = []byte("something")
 	m1.setAlive()
 	m1.schedule()
 	defer m1.Shutdown()
@@ -255,6 +266,7 @@ func TestMemberlist_UserData(t *testing.T) {
 		[]byte("test"),
 		[]byte("foobar"),
 	}
+	d2.state = []byte("my state")
 
 	// Create a second node
 	c := DefaultConfig()
@@ -264,6 +276,7 @@ func TestMemberlist_UserData(t *testing.T) {
 	c.UDPPort = m1.config.UDPPort
 	c.TCPPort = m1.config.TCPPort
 	c.GossipInterval = time.Millisecond
+	c.PushPullInterval = time.Millisecond
 	c.UserDelegate = d2
 	m2, err := Join(c, []string{"127.0.0.1"})
 	if err != nil {
@@ -288,5 +301,13 @@ func TestMemberlist_UserData(t *testing.T) {
 	}
 	if !reflect.DeepEqual(d1.msgs[1], []byte("foobar")) {
 		t.Fatalf("bad msg %v", d1.msgs[1])
+	}
+
+	// Check the push/pull state
+	if !reflect.DeepEqual(d1.remoteState, []byte("my state")) {
+		t.Fatalf("bad state %s", d1.remoteState)
+	}
+	if !reflect.DeepEqual(d2.remoteState, []byte("something")) {
+		t.Fatalf("bad state %s", d2.remoteState)
 	}
 }

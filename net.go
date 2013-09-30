@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ugorji/go/codec"
+	"io"
 	"log"
 	"net"
 )
@@ -70,7 +71,8 @@ type dead struct {
 // pushPullHeader is used to inform the
 // otherside how many states we are transfering
 type pushPullHeader struct {
-	Nodes int
+	Nodes        int
+	UserStateLen int // Encodes the byte lengh of user state
 }
 
 // pushNodeState is used for pushPullReq when we are
@@ -102,7 +104,7 @@ func (m *Memberlist) tcpListen() {
 func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	defer conn.Close()
 
-	remoteNodes, err := readRemoteState(conn)
+	remoteNodes, userState, err := readRemoteState(conn)
 	if err != nil {
 		log.Printf("[ERR] Failed to receive remote state: %s", err)
 		return
@@ -112,7 +114,13 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 		log.Printf("[ERR] Failed to push local state: %s", err)
 	}
 
+	// Merge the membership state
 	m.mergeState(remoteNodes)
+
+	// Invoke the delegate for user state
+	if m.config.UserDelegate != nil {
+		m.config.UserDelegate.MergeRemoteState(userState)
+	}
 }
 
 // udpListen listens for and handles incoming UDP packets
@@ -319,28 +327,28 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg *bytes.Buffer) error {
 }
 
 // sendState is used to initiate a push/pull over TCP with a remote node
-func (m *Memberlist) sendAndReceiveState(addr []byte) ([]pushNodeState, error) {
+func (m *Memberlist) sendAndReceiveState(addr []byte) ([]pushNodeState, []byte, error) {
 	// Attempt to connect
 	dialer := net.Dialer{Timeout: m.config.TCPTimeout}
 	dest := net.TCPAddr{IP: addr, Port: m.config.TCPPort}
 	conn, err := dialer.Dial("tcp", dest.String())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Send our state
 	if err := m.sendLocalState(conn); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Read remote state
-	remote, err := readRemoteState(conn)
+	remote, userState, err := readRemoteState(conn)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Return the remote state
-	return remote, nil
+	return remote, userState, nil
 }
 
 // sendLocalState is invoked to send our local state over a tcp connection
@@ -356,8 +364,14 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 	}
 	m.nodeLock.RUnlock()
 
+	// Get the delegate state
+	var userData []byte
+	if m.config.UserDelegate != nil {
+		userData = m.config.UserDelegate.LocalState()
+	}
+
 	// Send our node state
-	header := pushPullHeader{Nodes: len(localNodes)}
+	header := pushPullHeader{Nodes: len(localNodes), UserStateLen: len(userData)}
 	hd := codec.MsgpackHandle{}
 	enc := codec.NewEncoder(conn, &hd)
 
@@ -372,22 +386,25 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 			return err
 		}
 	}
+
+	// Write the user state as well
+	conn.Write(userData)
 	return nil
 }
 
 // recvRemoteState is used to read the remote state from a connection
-func readRemoteState(conn net.Conn) ([]pushNodeState, error) {
+func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	// Read the message type
 	buf := []byte{0}
 	if _, err := conn.Read(buf); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	msgType := uint8(buf[0])
 
 	// Quit if not push/pull
 	if msgType != pushPullMsg {
 		err := fmt.Errorf("received invalid msgType (%d)", msgType)
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Read the push/pull header
@@ -395,7 +412,7 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, error) {
 	hd := codec.MsgpackHandle{}
 	dec := codec.NewDecoder(conn, &hd)
 	if err := dec.Decode(&header); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Allocate space for the transfer
@@ -404,8 +421,16 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, error) {
 	// Try to decode all the states
 	for i := 0; i < header.Nodes; i++ {
 		if err := dec.Decode(&remoteNodes[i]); err != nil {
-			return remoteNodes, err
+			return remoteNodes, nil, err
 		}
 	}
-	return remoteNodes, nil
+
+	// Read the remote user state into a buffer
+	userBuf := &bytes.Buffer{}
+	_, err := io.CopyN(userBuf, conn, int64(header.UserStateLen))
+	if err != nil {
+		return remoteNodes, nil, err
+	}
+
+	return remoteNodes, userBuf.Bytes(), nil
 }

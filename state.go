@@ -258,13 +258,18 @@ func (m *Memberlist) pushPull() {
 // a given node
 func (m *Memberlist) pushPullNode(addr []byte) error {
 	// Attempt to send and receive with the node
-	remote, err := m.sendAndReceiveState(addr)
+	remote, userState, err := m.sendAndReceiveState(addr)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// Merge the state
 	m.mergeState(remote)
+
+	// Invoke the delegate
+	if m.config.UserDelegate != nil {
+		m.config.UserDelegate.MergeRemoteState(userState)
+	}
 	return nil
 }
 
