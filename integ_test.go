@@ -23,10 +23,10 @@ func IsInteg() bool {
 func TestMemberlist_Integ(t *testing.T) {
 	CheckInteg(t)
 
-	num := 16
+	num := 32
 	var members []*Memberlist
 
-	ch := make(chan *Node, num)
+	joinCh := make(chan *Node, num)
 	leaveCh := make(chan *Node, num)
 
 	for i := 0; i < num; i++ {
@@ -34,10 +34,10 @@ func TestMemberlist_Integ(t *testing.T) {
 		c := DefaultConfig()
 		c.Name = addr
 		c.BindAddr = addr
-		c.RTT = 100 * time.Microsecond
+		c.RTT = 200 * time.Microsecond
 		c.ProbeInterval = 5 * time.Millisecond
-		c.GossipInterval = 3 * time.Millisecond
-		c.PushPullInterval = 20 * time.Millisecond
+		c.GossipInterval = 5 * time.Millisecond
+		c.PushPullInterval = 100 * time.Millisecond
 
 		if i == 0 {
 			m, err := Create(c)
@@ -46,7 +46,7 @@ func TestMemberlist_Integ(t *testing.T) {
 			}
 			members = append(members, m)
 			defer m.Shutdown()
-			m.config.JoinCh = ch
+			m.config.JoinCh = joinCh
 			m.config.LeaveCh = leaveCh
 		} else {
 			last := members[i-1]
@@ -60,19 +60,10 @@ func TestMemberlist_Integ(t *testing.T) {
 	}
 
 	// Wait for node 1 to see all the others
-	for i := 1; i < num; i++ {
-		select {
-		case <-ch:
-		case l := <-leaveCh:
-			t.Fatalf("unexpected leave %s", l)
-		case <-time.After(10 * time.Millisecond):
-			t.Fatalf("timeout")
-		}
-	}
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 
 	for idx, m := range members {
-		if len(m.Members()) != num {
+		if m.NumMembers() != num {
 			t.Fatalf("bad num %d at idx %d", len(m.Members()), idx)
 		}
 	}
