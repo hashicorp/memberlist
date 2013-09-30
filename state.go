@@ -17,6 +17,7 @@ const (
 type Node struct {
 	Name string // Remote node name
 	Addr net.IP // Remote address
+	Meta []byte // Node meta data
 }
 
 // NodeState is used to manage our state view of another node
@@ -351,6 +352,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 			Node: Node{
 				Name: a.Node,
 				Addr: a.Addr,
+				Meta: a.Meta,
 			},
 			State: StateDead,
 		}
@@ -417,7 +419,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	// If this is us we need to refute, otherwise re-broadcast
 	if state.Name == m.config.Name {
 		inc := m.nextIncarnation()
-		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr}
+		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr, Meta: state.Meta}
 		m.encodeAndBroadcast(s.Node, aliveMsg, a)
 
 		state.Incarnation = inc
@@ -473,7 +475,7 @@ func (m *Memberlist) deadNode(d *dead) {
 	// If this is us we need to refute, otherwise re-broadcast
 	if state.Name == m.config.Name && !m.leave {
 		inc := m.nextIncarnation()
-		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr}
+		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr, Meta: state.Meta}
 		m.encodeAndBroadcast(d.Node, aliveMsg, a)
 
 		state.Incarnation = inc
@@ -507,7 +509,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 
 		switch r.State {
 		case StateAlive:
-			a := alive{Incarnation: r.Incarnation, Node: r.Name, Addr: r.Addr}
+			a := alive{Incarnation: r.Incarnation, Node: r.Name, Addr: r.Addr, Meta: r.Meta}
 			m.aliveNode(&a)
 
 		case StateSuspect:

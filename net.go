@@ -26,6 +26,7 @@ const (
 	compoundHeaderOverhead = 2 // Assumed header overhead
 	compoundOverhead       = 2 // Assumed overhead per entry in compoundHeader
 	userMsgOverhead        = 1
+	metaMaxSize            = 128 // Maximum size for nod emeta data
 )
 
 // ping request sent directly to node
@@ -56,6 +57,7 @@ type alive struct {
 	Incarnation uint32
 	Node        string
 	Addr        []byte
+	Meta        []byte
 }
 
 // dead is broadcast when we confirm a node is dead
@@ -76,6 +78,7 @@ type pushPullHeader struct {
 type pushNodeState struct {
 	Name        string
 	Addr        []byte
+	Meta        []byte
 	Incarnation uint32
 	State       int
 }

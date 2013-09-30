@@ -29,6 +29,11 @@ import (
 )
 
 type Delegate interface {
+	// NodeMeta is used to retrieve meta-data about the current node
+	// when broadcasting an alive message. It's length is limited to
+	// the given byte size.
+	NodeMeta(limit int) []byte
+
 	// NotifyMsg is called when a user-data message is received.
 	// This should not block
 	NotifyMsg([]byte)
@@ -234,10 +239,21 @@ func (m *Memberlist) setAlive() error {
 		addr := m.tcpListener.Addr().(*net.TCPAddr)
 		ipAddr = addr.IP
 	}
+
+	// Get the node meta data
+	var meta []byte
+	if m.config.UserDelegate != nil {
+		meta = m.config.UserDelegate.NodeMeta(metaMaxSize)
+		if len(meta) > metaMaxSize {
+			meta = meta[:metaMaxSize]
+		}
+	}
+
 	a := alive{
 		Incarnation: m.nextIncarnation(),
 		Node:        m.config.Name,
 		Addr:        ipAddr,
+		Meta:        meta,
 	}
 	m.aliveNode(&a)
 	return nil
