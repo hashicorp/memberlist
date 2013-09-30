@@ -174,7 +174,7 @@ func TestShuffleNodes(t *testing.T) {
 		},
 	}
 	nodes := make([]*NodeState, 5)
-	copy(nodes, orig)
+	copy(nodes[:], orig[:])
 
 	if !reflect.DeepEqual(nodes, orig) {
 		t.Fatalf("should match")
