@@ -8,55 +8,6 @@ import (
 	"time"
 )
 
-func TestChannelIndex(t *testing.T) {
-	ch1 := make(chan *Node)
-	ch2 := make(chan *Node)
-	ch3 := make(chan *Node)
-	list := []chan<- *Node{ch1, ch2, ch3}
-
-	if channelIndex(list, ch1) != 0 {
-		t.Fatalf("bad index")
-	}
-	if channelIndex(list, ch2) != 1 {
-		t.Fatalf("bad index")
-	}
-	if channelIndex(list, ch3) != 2 {
-		t.Fatalf("bad index")
-	}
-
-	ch4 := make(chan *Node)
-	if channelIndex(list, ch4) != -1 {
-		t.Fatalf("bad index")
-	}
-}
-
-func TestChannelIndex_Empty(t *testing.T) {
-	ch := make(chan *Node)
-	if channelIndex(nil, ch) != -1 {
-		t.Fatalf("bad index")
-	}
-}
-
-func TestChannelDelete(t *testing.T) {
-	ch1 := make(chan *Node)
-	ch2 := make(chan *Node)
-	ch3 := make(chan *Node)
-	list := []chan<- *Node{ch1, ch2, ch3}
-
-	// Delete ch2
-	list = channelDelete(list, 1)
-
-	if len(list) != 2 {
-		t.Fatalf("bad len")
-	}
-	if channelIndex(list, ch1) != 0 {
-		t.Fatalf("bad index")
-	}
-	if channelIndex(list, ch3) != 1 {
-		t.Fatalf("bad index")
-	}
-}
-
 func TestEncodeDecode(t *testing.T) {
 	msg := &ping{SeqNo: 100}
 	buf, err := encode(pingMsg, msg)
@@ -90,17 +41,16 @@ func TestRandomOffset_Zero(t *testing.T) {
 	}
 }
 
-func TestNotifyAll(t *testing.T) {
+func TestNotify(t *testing.T) {
 	ch1 := make(chan *Node, 1)
 	ch2 := make(chan *Node, 1)
-	ch3 := make(chan *Node, 1)
 
 	// Make sure ch1 is full
 	ch1 <- &Node{Name: "test"}
 
-	// Notify all
+	// Notify ch1
 	n := &Node{Name: "Push"}
-	notifyAll([]chan<- *Node{ch1, ch2, ch3}, n)
+	notify(ch1, n)
 
 	v := <-ch1
 	if v.Name != "test" {
@@ -114,17 +64,10 @@ func TestNotifyAll(t *testing.T) {
 	default:
 	}
 
+	// Test ch2
+	notify(ch2, n)
 	select {
 	case v := <-ch2:
-		if v != n {
-			t.Fatalf("bad node %v", v)
-		}
-	default:
-		t.Fatalf("nothing on channel")
-	}
-
-	select {
-	case v := <-ch3:
 		if v != n {
 			t.Fatalf("bad node %v", v)
 		}
@@ -172,8 +115,17 @@ func TestShuffleNodes(t *testing.T) {
 		&NodeState{
 			State: StateAlive,
 		},
+		&NodeState{
+			State: StateAlive,
+		},
+		&NodeState{
+			State: StateDead,
+		},
+		&NodeState{
+			State: StateAlive,
+		},
 	}
-	nodes := make([]*NodeState, 5)
+	nodes := make([]*NodeState, len(orig))
 	copy(nodes[:], orig[:])
 
 	if !reflect.DeepEqual(nodes, orig) {

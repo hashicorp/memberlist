@@ -43,6 +43,9 @@ type Config struct {
 
 	GossipNodes    int           // Number of nodes to gossip to per GossipInterval
 	GossipInterval time.Duration // Gossip interval for non-piggyback messages (only if GossipNodes > 0)
+
+	JoinCh       chan<- *Node
+	LeaveCh      chan<- *Node
 }
 
 type Memberlist struct {
@@ -52,10 +55,6 @@ type Memberlist struct {
 
 	udpListener *net.UDPConn
 	tcpListener *net.TCPListener
-
-	notifyLock  sync.RWMutex
-	notifyJoin  []chan<- *Node // Channels to notify on join
-	notifyLeave []chan<- *Node // Channels to notify on leave
 
 	sequenceNum uint32 // Local sequence number
 	incarnation uint32 // Local incarnation number
@@ -93,6 +92,9 @@ func DefaultConfig() *Config {
 
 		3, // Gossip to 3 nodes
 		200 * time.Millisecond, // Gossip more rapidly
+
+		nil,
+		nil,
 	}
 }
 
@@ -226,46 +228,6 @@ func (m *Memberlist) setAlive() error {
 	}
 	m.aliveNode(&a)
 	return nil
-}
-
-// NotifyJoin is used to subscribe a channel to join events
-func (m *Memberlist) NotifyJoin(ch chan<- *Node) {
-	m.notifyLock.Lock()
-	defer m.notifyLock.Unlock()
-
-	// Bail if the channel is already subscribed
-	if channelIndex(m.notifyJoin, ch) >= 0 {
-		return
-	}
-	m.notifyJoin = append(m.notifyJoin, ch)
-}
-
-// NotifyLeave is used to subscribe a channel to leave events
-func (m *Memberlist) NotifyLeave(ch chan<- *Node) {
-	m.notifyLock.Lock()
-	defer m.notifyLock.Unlock()
-
-	// Bail if the channel is already subscribed
-	if channelIndex(m.notifyLeave, ch) >= 0 {
-		return
-	}
-	m.notifyLeave = append(m.notifyLeave, ch)
-}
-
-// Stop is used to unsubscribe a channel from any notifications
-func (m *Memberlist) Stop(ch chan<- *Node) {
-	m.notifyLock.Lock()
-	defer m.notifyLock.Unlock()
-
-	idx := channelIndex(m.notifyJoin, ch)
-	if idx >= 0 {
-		m.notifyJoin = channelDelete(m.notifyJoin, idx)
-	}
-
-	idx = channelIndex(m.notifyLeave, ch)
-	if idx >= 0 {
-		m.notifyLeave = channelDelete(m.notifyLeave, idx)
-	}
 }
 
 // Members is used to return a list of all known live nodes

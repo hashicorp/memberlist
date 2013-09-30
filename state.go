@@ -388,9 +388,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 
 	// if Dead -> Alive, notify of join
 	if oldState == StateDead {
-		m.notifyLock.RLock()
-		defer m.notifyLock.RUnlock()
-		notifyAll(m.notifyJoin, &state.Node)
+		notify(m.config.JoinCh, &state.Node)
 	}
 }
 
@@ -490,9 +488,7 @@ func (m *Memberlist) deadNode(d *dead) {
 	state.StateChange = time.Now()
 
 	// Notify of death
-	m.notifyLock.RLock()
-	defer m.notifyLock.RUnlock()
-	notifyAll(m.notifyLeave, &state.Node)
+	notify(m.config.LeaveCh, &state.Node)
 }
 
 // mergeState is invoked by the network layer when we get a Push/Pull

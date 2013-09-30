@@ -49,51 +49,6 @@ func TestMemberList_CreateShutdown(t *testing.T) {
 	}
 }
 
-func TestMemberList_NotifyJoin(t *testing.T) {
-	ch := make(chan *Node)
-	m := &Memberlist{}
-	m.NotifyJoin(ch)
-	if len(m.notifyJoin) != 1 || m.notifyJoin[0] != ch {
-		t.Fatalf("did not add")
-	}
-
-	// Should do nothing
-	m.NotifyJoin(ch)
-	if len(m.notifyJoin) != 1 || m.notifyJoin[0] != ch {
-		t.Fatalf("did not add")
-	}
-}
-
-func TestMemberList_NotifyLeave(t *testing.T) {
-	ch := make(chan *Node)
-	m := &Memberlist{}
-	m.NotifyLeave(ch)
-	if len(m.notifyLeave) != 1 || m.notifyLeave[0] != ch {
-		t.Fatalf("did not add")
-	}
-
-	// Should do nothing
-	m.NotifyLeave(ch)
-	if len(m.notifyLeave) != 1 || m.notifyLeave[0] != ch {
-		t.Fatalf("did not add")
-	}
-}
-
-func TestMemberList_Stop(t *testing.T) {
-	ch := make(chan *Node)
-	m := &Memberlist{}
-	m.NotifyJoin(ch)
-	m.NotifyLeave(ch)
-	m.Stop(ch)
-
-	if len(m.notifyJoin) != 0 {
-		t.Fatalf("did not remove")
-	}
-	if len(m.notifyLeave) != 0 {
-		t.Fatalf("did not remove")
-	}
-}
-
 func TestMemberList_Members(t *testing.T) {
 	n1 := &Node{Name: "test"}
 	n2 := &Node{Name: "test2"}
@@ -165,7 +120,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	}
 
 	ch := make(chan *Node)
-	m1.NotifyLeave(ch)
+	m1.config.LeaveCh = ch
 
 	// Leave
 	m2.Leave()
@@ -211,7 +166,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	}
 
 	ch := make(chan *Node)
-	m2.NotifyLeave(ch)
+	m2.config.LeaveCh = ch
 
 	m1.Shutdown()
 

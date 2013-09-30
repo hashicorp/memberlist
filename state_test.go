@@ -223,7 +223,7 @@ func TestMemberList_InvokeAckHandler_Channel(t *testing.T) {
 func TestMemberList_AliveNode_NewNode(t *testing.T) {
 	ch := make(chan *Node, 1)
 	m := GetMemberlist(t)
-	m.NotifyJoin(ch)
+	m.config.JoinCh = ch
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a)
@@ -271,7 +271,7 @@ func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
 	m.aliveNode(&a)
 
 	// Listen only after first join
-	m.NotifyJoin(ch)
+	m.config.JoinCh = ch
 
 	// Make suspect
 	state := m.nodeMap["test"]
@@ -316,7 +316,7 @@ func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 	m.aliveNode(&a)
 
 	// Listen only after first join
-	m.NotifyJoin(ch)
+	m.config.JoinCh = ch
 
 	// Make suspect
 	state := m.nodeMap["test"]
@@ -512,7 +512,7 @@ func TestMemberList_DeadNode_NoNode(t *testing.T) {
 func TestMemberList_DeadNode(t *testing.T) {
 	ch := make(chan *Node, 1)
 	m := GetMemberlist(t)
-	m.NotifyLeave(ch)
+	m.config.LeaveCh = ch
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a)
 
@@ -567,7 +567,7 @@ func TestMemberList_DeadNode_Double(t *testing.T) {
 	m.bcQueue = nil
 
 	// Notify after the first dead
-	m.NotifyLeave(ch)
+	m.config.LeaveCh = ch
 
 	// Should do nothing
 	d.Incarnation = 2
@@ -670,8 +670,8 @@ func TestMemberList_MergeState(t *testing.T) {
 	// Listen for changes
 	joinCh := make(chan *Node, 1)
 	leaveCh := make(chan *Node, 1)
-	m.NotifyJoin(joinCh)
-	m.NotifyLeave(leaveCh)
+	m.config.JoinCh = joinCh
+	m.config.LeaveCh = leaveCh
 
 	// Merge remote state
 	m.mergeState(remote)
@@ -727,7 +727,7 @@ func TestMemberlist_Gossip(t *testing.T) {
 	m2.config.GossipInterval = time.Millisecond
 
 	ch := make(chan *Node, 3)
-	m2.NotifyJoin(ch)
+	m2.config.JoinCh = ch
 
 	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
@@ -759,7 +759,7 @@ func TestMemberlist_PushPull(t *testing.T) {
 	m2.config.GossipInterval = 10 * time.Second
 
 	ch := make(chan *Node, 3)
-	m2.NotifyJoin(ch)
+	m2.config.JoinCh = ch
 
 	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)

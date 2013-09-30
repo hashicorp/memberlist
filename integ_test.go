@@ -46,8 +46,8 @@ func TestMemberlist_Integ(t *testing.T) {
 			}
 			members = append(members, m)
 			defer m.Shutdown()
-			m.NotifyJoin(ch)
-			m.NotifyLeave(leaveCh)
+			m.config.JoinCh = ch
+			m.config.LeaveCh = leaveCh
 		} else {
 			last := members[i-1]
 			m, err := Join(c, []string{last.config.Name})
