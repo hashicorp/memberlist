@@ -96,6 +96,23 @@ func (m *Memberlist) getBroadcasts(overhead, limit int) []*bytes.Buffer {
 		m.bcQueue.Sort()
 	}
 
+	// Check if the user has anything to broadcast
+	d := m.config.UserDelegate
+	if d != nil {
+		avail := limit - bytesUsed
+		if avail > overhead+userMsgOverhead {
+			userMsgs := d.GetBroadcasts(overhead+userMsgOverhead, avail)
+
+			// Frame each user message
+			for _, msg := range userMsgs {
+				buf := bytes.NewBuffer(nil)
+				buf.WriteByte(byte(userMsg))
+				buf.Write(msg)
+				toSend = append(toSend, buf)
+			}
+		}
+	}
+
 	return toSend
 }
 

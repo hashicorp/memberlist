@@ -28,6 +28,17 @@ import (
 	"time"
 )
 
+type Delegate interface {
+	// NotifyMsg is called when a user-data message is received.
+	// This should not block
+	NotifyMsg([]byte)
+
+	// GetBroadcasts is called when user data messages can be broadcast.
+	// It can return a list of buffers to send. Each buffer should assume an
+	// overhead as provided with a limit on the total byte size allowed.
+	GetBroadcasts(overhead, limit int) [][]byte
+}
+
 type Config struct {
 	Name             string        // Node name (FQDN)
 	BindAddr         string        // Binding address
@@ -46,6 +57,7 @@ type Config struct {
 
 	JoinCh       chan<- *Node
 	LeaveCh      chan<- *Node
+	UserDelegate Delegate // Delegate for user data
 }
 
 type Memberlist struct {
@@ -93,6 +105,7 @@ func DefaultConfig() *Config {
 		3, // Gossip to 3 nodes
 		200 * time.Millisecond, // Gossip more rapidly
 
+		nil,
 		nil,
 		nil,
 	}

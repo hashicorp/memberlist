@@ -17,6 +17,7 @@ const (
 	deadMsg
 	pushPullMsg
 	compoundMsg
+	userMsg // User mesg, not handled by us
 )
 
 const (
@@ -24,6 +25,7 @@ const (
 	udpSendBuf             = 1400
 	compoundHeaderOverhead = 2 // Assumed header overhead
 	compoundOverhead       = 2 // Assumed overhead per entry in compoundHeader
+	userMsgOverhead        = 1
 )
 
 // ping request sent directly to node
@@ -162,6 +164,8 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 		m.handleAlive(buf, from)
 	case deadMsg:
 		m.handleDead(buf, from)
+	case userMsg:
+		m.handleUser(buf, from)
 	default:
 		log.Printf("[ERR] UDP msg type (%d) not supported. From: %s", msgType, from)
 	}
@@ -259,6 +263,14 @@ func (m *Memberlist) handleDead(buf []byte, from net.Addr) {
 		return
 	}
 	m.deadNode(&d)
+}
+
+// handleUser is used to notify channels of incoming user data
+func (m *Memberlist) handleUser(buf []byte, from net.Addr) {
+	d := m.config.UserDelegate
+	if d != nil {
+		d.NotifyMsg(buf)
+	}
 }
 
 // encodeAndSendMsg is used to combine the encoding and sending steps
