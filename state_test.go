@@ -687,8 +687,8 @@ func TestMemberList_MergeState(t *testing.T) {
 		t.Fatalf("Bad state %v", state)
 	}
 
-	state = m.nodeMap["test3"]
-	if state.State != StateDead || state.Incarnation != 1 {
+	state, alive := m.nodeMap["test3"]
+	if state != nil || alive {
 		t.Fatalf("Bad state %v", state)
 	}
 

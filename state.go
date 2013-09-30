@@ -192,7 +192,6 @@ func (m *Memberlist) resetNodes() {
 
 	// Deregister the dead nodes
 	for i := deadIdx; i < len(m.nodes); i++ {
-		delete(m.nodeMap, m.nodes[i].Name)
 		m.nodes[i] = nil
 	}
 
@@ -493,6 +492,9 @@ func (m *Memberlist) deadNode(d *dead) {
 	state.Incarnation = d.Incarnation
 	state.State = StateDead
 	state.StateChange = time.Now()
+
+	// Remove from the node map
+	delete(m.nodeMap, state.Name)
 
 	// Notify of death
 	notify(m.config.LeaveCh, &state.Node)
