@@ -281,6 +281,19 @@ func (m *Memberlist) Members() []*Node {
 	return nodes
 }
 
+// NumMembers provides an efficient way to determine
+// the number of alive members
+func (m *Memberlist) NumMembers() (alive int) {
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	for _, n := range m.nodes {
+		if n.State != StateDead {
+			alive++
+		}
+	}
+	return
+}
+
 // Leave will broadcast a leave message but will not shutdown
 // the memberlist background maintenence. This should be followed
 // by a Shutdown(). Note that this just enqueues the message,
