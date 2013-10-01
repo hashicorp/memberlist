@@ -118,9 +118,9 @@ START:
 
 	// Potentially skip
 	m.nodeLock.RUnlock()
+	m.probeIndex++
 	if skip {
 		numCheck++
-		m.probeIndex++
 		goto START
 	}
 
