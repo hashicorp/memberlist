@@ -96,8 +96,7 @@ type Memberlist struct {
 	ackLock     sync.Mutex
 	ackHandlers map[uint32]*ackHandler
 
-	broadcastLock sync.Mutex
-	bcQueue       broadcasts
+	broadcasts *TransmitLimitedQueue
 }
 
 func DefaultConfig() *Config {
@@ -146,7 +145,9 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		nodeMap:     make(map[string]*NodeState),
 		stopTick:    make(chan struct{}, 32),
 		ackHandlers: make(map[uint32]*ackHandler),
+		broadcasts:  &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
 	}
+	m.broadcasts.NumNodes = func() int { return len(m.nodes) }
 	go m.tcpListen()
 	go m.udpListen()
 	return m, nil
