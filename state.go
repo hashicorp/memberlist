@@ -391,7 +391,6 @@ func (m *Memberlist) aliveNode(a *alive) {
 		state.State = StateAlive
 		state.StateChange = time.Now()
 	}
-	log.Printf("[WARN] Alive: %v", *a)
 
 	// if Dead -> Alive, notify of join
 	if oldState == StateDead {
@@ -441,13 +440,11 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	state.State = StateSuspect
 	changeTime := time.Now()
 	state.StateChange = changeTime
-	log.Printf("[WARN] suspect: %v", *s)
 
 	// Setup a timeout for this
 	timeout := suspicionTimeout(m.config.SuspicionMult, len(m.nodes), m.config.ProbeInterval)
 	time.AfterFunc(timeout, func() {
 		if state.State == StateSuspect && state.StateChange == changeTime {
-			log.Printf("[WARN] suspect timeout: %v", *s)
 			m.suspectTimeout(state)
 		}
 	})
@@ -507,7 +504,6 @@ func (m *Memberlist) deadNode(d *dead) {
 	delete(m.nodeMap, state.Name)
 
 	// Notify of death
-	log.Printf("[WARN] Death: %v", *d)
 	notify(m.config.LeaveCh, &state.Node)
 }
 
