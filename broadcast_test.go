@@ -1,7 +1,6 @@
 package memberlist
 
 import (
-	"bytes"
 	"reflect"
 	"testing"
 )
@@ -20,8 +19,7 @@ func TestMemberlistBroadcast_Invalidates(t *testing.T) {
 }
 
 func TestMemberlistBroadcast_Message(t *testing.T) {
-	b := bytes.NewBuffer([]byte("test"))
-	m1 := &memberlistBroadcast{"test", b}
+	m1 := &memberlistBroadcast{"test", []byte("test")}
 	msg := m1.Message()
 	if !reflect.DeepEqual(msg, []byte("test")) {
 		t.Fatalf("messages do not match")

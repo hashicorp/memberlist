@@ -18,8 +18,8 @@ import (
 )
 
 type memberlistBroadcast struct {
-	node string        // Which node this is about
-	msg  *bytes.Buffer // Message
+	node string
+	msg  []byte
 }
 
 func (b *memberlistBroadcast) Invalidates(other Broadcast) bool {
@@ -34,7 +34,7 @@ func (b *memberlistBroadcast) Invalidates(other Broadcast) bool {
 }
 
 func (b *memberlistBroadcast) Message() []byte {
-	return b.msg.Bytes()
+	return b.msg
 }
 
 // encodeAndBroadcast encodes a message and enqueues it for broadcast. Fails
@@ -44,14 +44,14 @@ func (m *Memberlist) encodeAndBroadcast(node string, msgType int, msg interface{
 	if err != nil {
 		log.Printf("[ERR] Failed to encode message for broadcast: %s", err)
 	} else {
-		m.queueBroadcast(node, buf)
+		m.queueBroadcast(node, buf.Bytes())
 	}
 }
 
 // queueBroadcast is used to start dissemination of a message. It will be
 // sent up to a configured number of times. The message could potentially
 // be invalidated by a future message about the same node
-func (m *Memberlist) queueBroadcast(node string, msg *bytes.Buffer) {
+func (m *Memberlist) queueBroadcast(node string, msg []byte) {
 	b := &memberlistBroadcast{node, msg}
 	m.broadcasts.QueueBroadcast(b)
 }
