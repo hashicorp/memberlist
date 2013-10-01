@@ -257,7 +257,7 @@ func (m *Memberlist) setAlive() error {
 	if m.config.UserDelegate != nil {
 		meta = m.config.UserDelegate.NodeMeta(metaMaxSize)
 		if len(meta) > metaMaxSize {
-			meta = meta[:metaMaxSize]
+			panic("Node meta data provided is longer than the limit")
 		}
 	}
 
