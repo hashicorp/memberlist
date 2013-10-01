@@ -444,7 +444,11 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	// Setup a timeout for this
 	timeout := suspicionTimeout(m.config.SuspicionMult, len(m.nodes), m.config.ProbeInterval)
 	time.AfterFunc(timeout, func() {
-		if state.State == StateSuspect && state.StateChange == changeTime {
+		m.nodeLock.Lock()
+		state, ok := m.nodeMap[s.Node]
+		m.nodeLock.Unlock()
+
+		if ok && state.State == StateSuspect && state.StateChange == changeTime {
 			m.suspectTimeout(state)
 		}
 	})
