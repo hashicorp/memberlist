@@ -15,16 +15,27 @@ then a following {alive M1 inc: 2} will invalidate that message
 import (
 	"bytes"
 	"log"
-	"sort"
 )
 
-type broadcast struct {
-	transmits int           // Number of times we've transmitted
-	node      string        // Which node this is about
-	msg       *bytes.Buffer // Message
+type memberlistBroadcast struct {
+	node string        // Which node this is about
+	msg  *bytes.Buffer // Message
 }
 
-type broadcasts []*broadcast
+func (b *memberlistBroadcast) Invalidates(other Broadcast) bool {
+	// Check if that broadcast is a memberlist type
+	mb, ok := other.(*memberlistBroadcast)
+	if !ok {
+		return false
+	}
+
+	// Invalidates any message about the same node
+	return b.node == mb.node
+}
+
+func (b *memberlistBroadcast) Message() []byte {
+	return b.msg.Bytes()
+}
 
 // encodeAndBroadcast encodes a message and enqueues it for broadcast. Fails
 // silently if there is an encoding error.
@@ -41,64 +52,27 @@ func (m *Memberlist) encodeAndBroadcast(node string, msgType int, msg interface{
 // sent up to a configured number of times. The message could potentially
 // be invalidated by a future message about the same node
 func (m *Memberlist) queueBroadcast(node string, msg *bytes.Buffer) {
-	m.broadcastLock.Lock()
-	defer m.broadcastLock.Unlock()
-
-	// Check if this message invalidates another
-	n := len(m.bcQueue)
-	for i := 0; i < n; i++ {
-		if m.bcQueue[i].node == node {
-			copy(m.bcQueue[i:], m.bcQueue[i+1:])
-			m.bcQueue[n-1] = nil
-			m.bcQueue = m.bcQueue[:n-1]
-			break
-		}
-	}
-
-	// Append to the queue
-	m.bcQueue = append(m.bcQueue, &broadcast{transmits: 0, node: node, msg: msg})
+	b := &memberlistBroadcast{node, msg}
+	m.broadcasts.QueueBroadcast(b)
 }
 
 // getBroadcasts is used to return a slice of broadcasts to send up to
 // a maximum byte size, while imposing a per-broadcast overhead. This is used
 // to fill a UDP packet with piggybacked data
-func (m *Memberlist) getBroadcasts(overhead, limit int) []*bytes.Buffer {
-	m.broadcastLock.Lock()
-	defer m.broadcastLock.Unlock()
-
-	transmitLimit := retransmitLimit(m.config.RetransmitMult, len(m.nodes))
-	bytesUsed := 0
-	var toSend []*bytes.Buffer
-
-	for i := len(m.bcQueue) - 1; i >= 0; i-- {
-		// Check if this is within our limits
-		b := m.bcQueue[i]
-		if bytesUsed+overhead+b.msg.Len() > limit {
-			continue
-		}
-
-		// Add to slice to send
-		bytesUsed += overhead + b.msg.Len()
-		toSend = append(toSend, b.msg)
-
-		// Check if we should stop transmission
-		b.transmits++
-		if b.transmits >= transmitLimit {
-			n := len(m.bcQueue)
-			m.bcQueue[i], m.bcQueue[n-1] = m.bcQueue[n-1], nil
-			m.bcQueue = m.bcQueue[:n-1]
-		}
-	}
-
-	// If we are sending anything, we need to re-sort to deal
-	// with adjusted transmit counts
-	if len(toSend) > 0 {
-		m.bcQueue.Sort()
-	}
+func (m *Memberlist) getBroadcasts(overhead, limit int) [][]byte {
+	// Get memberlist messages first
+	toSend := m.broadcasts.GetBroadcasts(overhead, limit)
 
 	// Check if the user has anything to broadcast
 	d := m.config.UserDelegate
 	if d != nil {
+		// Determine the bytes used already
+		bytesUsed := 0
+		for _, msg := range toSend {
+			bytesUsed += len(msg) + overhead
+		}
+
+		// Check space remaining for user messages
 		avail := limit - bytesUsed
 		if avail > overhead+userMsgOverhead {
 			userMsgs := d.GetBroadcasts(overhead+userMsgOverhead, avail)
@@ -108,27 +82,9 @@ func (m *Memberlist) getBroadcasts(overhead, limit int) []*bytes.Buffer {
 				buf := bytes.NewBuffer(nil)
 				buf.WriteByte(byte(userMsg))
 				buf.Write(msg)
-				toSend = append(toSend, buf)
+				toSend = append(toSend, buf.Bytes())
 			}
 		}
 	}
-
 	return toSend
-}
-
-func (b broadcasts) Len() int {
-	return len(b)
-}
-
-func (b broadcasts) Less(i, j int) bool {
-	return b[i].transmits < b[j].transmits
-}
-
-func (b broadcasts) Swap(i, j int) {
-	b[i], b[j] = b[j], b[i]
-}
-
-// Sort will order the broadcasts from most transmits to least
-func (b broadcasts) Sort() {
-	sort.Sort(sort.Reverse(b))
 }
