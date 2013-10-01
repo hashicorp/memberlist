@@ -98,33 +98,33 @@ func TestRetransmitLimit(t *testing.T) {
 }
 
 func TestShuffleNodes(t *testing.T) {
-	orig := []*NodeState{
-		&NodeState{
+	orig := []*nodeState{
+		&nodeState{
 			State: stateDead,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateAlive,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateAlive,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateDead,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateAlive,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateAlive,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateDead,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateAlive,
 		},
 	}
-	nodes := make([]*NodeState, len(orig))
+	nodes := make([]*nodeState, len(orig))
 	copy(nodes[:], orig[:])
 
 	if !reflect.DeepEqual(nodes, orig) {
@@ -139,20 +139,20 @@ func TestShuffleNodes(t *testing.T) {
 }
 
 func TestMoveDeadNodes(t *testing.T) {
-	nodes := []*NodeState{
-		&NodeState{
+	nodes := []*nodeState{
+		&nodeState{
 			State: stateDead,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateAlive,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateAlive,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateDead,
 		},
-		&NodeState{
+		&nodeState{
 			State: stateAlive,
 		},
 	}
@@ -174,7 +174,7 @@ func TestMoveDeadNodes(t *testing.T) {
 }
 
 func TestKRandomNodes(t *testing.T) {
-	nodes := []*NodeState{}
+	nodes := []*nodeState{}
 	for i := 0; i < 30; i++ {
 		// Half the nodes are in a bad state
 		state := stateAlive
@@ -186,7 +186,7 @@ func TestKRandomNodes(t *testing.T) {
 		case 2:
 			state = stateDead
 		}
-		nodes = append(nodes, &NodeState{
+		nodes = append(nodes, &nodeState{
 			Node: Node{
 				Name: fmt.Sprintf("test%d", i),
 			},
@@ -208,7 +208,7 @@ func TestKRandomNodes(t *testing.T) {
 		t.Fatalf("unexpected equal")
 	}
 
-	for _, s := range [][]*NodeState{s1, s2, s3} {
+	for _, s := range [][]*nodeState{s1, s2, s3} {
 		if len(s) != 3 {
 			t.Fatalf("bad len")
 		}

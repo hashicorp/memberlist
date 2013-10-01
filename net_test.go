@@ -189,7 +189,7 @@ func TestHandleIndirectPing(t *testing.T) {
 func TestTCPPushPull(t *testing.T) {
 	m := GetMemberlist(t)
 	defer m.Shutdown()
-	m.nodes = append(m.nodes, &NodeState{
+	m.nodes = append(m.nodes, &nodeState{
 		Node: Node{
 			Name: "Test 0",
 			Addr: []byte{127, 0, 0, 1},

@@ -97,7 +97,7 @@ func retransmitLimit(retransmitMult, n int) int {
 }
 
 // shuffleNodes randomly shuffles the input nodes
-func shuffleNodes(nodes []*NodeState) {
+func shuffleNodes(nodes []*nodeState) {
 	for i := range nodes {
 		j := rand.Intn(i + 1)
 		nodes[i], nodes[j] = nodes[j], nodes[i]
@@ -106,7 +106,7 @@ func shuffleNodes(nodes []*NodeState) {
 
 // moveDeadNodes moves all the nodes in the dead state
 // to the end of the slice and returns the index of the first dead node.
-func moveDeadNodes(nodes []*NodeState) int {
+func moveDeadNodes(nodes []*nodeState) int {
 	numDead := 0
 	n := len(nodes)
 	for i := 0; i < n-numDead; i++ {
@@ -124,9 +124,9 @@ func moveDeadNodes(nodes []*NodeState) int {
 
 // kRandomNodes is used to select up to k random nodes, excluding a given
 // node and any non-alive nodes. It is possible that less than k nodes are returned.
-func kRandomNodes(k int, excludes []string, nodes []*NodeState) []*NodeState {
+func kRandomNodes(k int, excludes []string, nodes []*nodeState) []*nodeState {
 	n := len(nodes)
-	kNodes := make([]*NodeState, 0, k)
+	kNodes := make([]*nodeState, 0, k)
 OUTER:
 	// Probe up to 3*n times, with large n this is not necessary
 	// since k << n, but with small n we want search to be

@@ -85,8 +85,8 @@ type Memberlist struct {
 	incarnation uint32 // Local incarnation number
 
 	nodeLock sync.RWMutex
-	nodes    []*NodeState          // Known nodes
-	nodeMap  map[string]*NodeState // Maps Addr.String() -> NodeState
+	nodes    []*nodeState          // Known nodes
+	nodeMap  map[string]*nodeState // Maps Addr.String() -> NodeState
 
 	tickerLock sync.Mutex
 	tickers    []*time.Ticker
@@ -145,7 +145,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	m := &Memberlist{config: conf,
 		udpListener: udpLn.(*net.UDPConn),
 		tcpListener: tcpLn.(*net.TCPListener),
-		nodeMap:     make(map[string]*NodeState),
+		nodeMap:     make(map[string]*nodeState),
 		stopTick:    make(chan struct{}, 32),
 		ackHandlers: make(map[uint32]*ackHandler),
 		broadcasts:  &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},

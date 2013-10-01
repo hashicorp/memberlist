@@ -21,7 +21,7 @@ type Node struct {
 }
 
 // NodeState is used to manage our state view of another node
-type NodeState struct {
+type nodeState struct {
 	Node
 	Incarnation uint32    // Last known incarnation number
 	State       int       // Current state
@@ -106,7 +106,7 @@ START:
 
 	// Determine if we should probe this node
 	skip := false
-	var node *NodeState
+	var node *nodeState
 	m.nodeLock.RLock()
 
 	node = m.nodes[m.probeIndex]
@@ -129,7 +129,7 @@ START:
 }
 
 // probeNode handles a single round of failure checking on a node
-func (m *Memberlist) probeNode(node *NodeState) {
+func (m *Memberlist) probeNode(node *nodeState) {
 	// Send a ping to the node
 	ping := ping{SeqNo: m.nextSeqNo()}
 	destAddr := &net.UDPAddr{IP: node.Addr, Port: m.config.UDPPort}
@@ -352,7 +352,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 
 	// Check if we've never seen this node before
 	if !ok {
-		state = &NodeState{
+		state = &nodeState{
 			Node: Node{
 				Name: a.Node,
 				Addr: a.Addr,
@@ -455,7 +455,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 }
 
 // suspectTimeout is invoked when a suspect timeout has occurred
-func (m *Memberlist) suspectTimeout(n *NodeState) {
+func (m *Memberlist) suspectTimeout(n *nodeState) {
 	// Construct a dead message
 	d := dead{Incarnation: n.Incarnation, Node: n.Name}
 	m.deadNode(&d)
