@@ -13,7 +13,6 @@ then a following {alive M1 inc: 2} will invalidate that message
 */
 
 import (
-	"bytes"
 	"log"
 )
 
@@ -79,10 +78,10 @@ func (m *Memberlist) getBroadcasts(overhead, limit int) [][]byte {
 
 			// Frame each user message
 			for _, msg := range userMsgs {
-				buf := bytes.NewBuffer(nil)
-				buf.WriteByte(byte(userMsg))
-				buf.Write(msg)
-				toSend = append(toSend, buf.Bytes())
+				buf := make([]byte, 1, len(msg)+1)
+				buf[0] = byte(userMsg)
+				buf = append(buf, msg...)
+				toSend = append(toSend, buf)
 			}
 		}
 	}
