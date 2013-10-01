@@ -1,10 +1,8 @@
 package memberlist
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/ugorji/go/codec"
-	"io"
 	"log"
 	"net"
 )
@@ -438,11 +436,17 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	}
 
 	// Read the remote user state into a buffer
-	userBuf := &bytes.Buffer{}
-	_, err := io.CopyN(userBuf, conn, int64(header.UserStateLen))
-	if err != nil {
-		return remoteNodes, nil, err
+	var userBuf []byte
+	if header.UserStateLen > 0 {
+		userBuf = make([]byte, header.UserStateLen)
+		bytes, err := conn.Read(userBuf)
+		if err == nil && bytes != header.UserStateLen {
+			err = fmt.Errorf("Failed to read full user state (%d / %d)", bytes, header.UserStateLen)
+		}
+		if err != nil {
+			return remoteNodes, nil, err
+		}
 	}
 
-	return remoteNodes, userBuf.Bytes(), nil
+	return remoteNodes, userBuf, nil
 }
