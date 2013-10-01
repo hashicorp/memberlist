@@ -231,7 +231,7 @@ func TestMakeCompoundMessage(t *testing.T) {
 		t.Fatalf("unexpected err: %s", err)
 	}
 
-	msgs := []*bytes.Buffer{buf, buf, buf}
+	msgs := [][]byte{buf.Bytes(), buf.Bytes(), buf.Bytes()}
 	compound := makeCompoundMessage(msgs)
 
 	if compound.Len() != 3*buf.Len()+3*compoundOverhead+compoundHeaderOverhead {

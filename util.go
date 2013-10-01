@@ -163,7 +163,7 @@ OUTER:
 
 // makeCompoundMessage takes a list of messages and generates
 // a single compound message containing all of them
-func makeCompoundMessage(msgs []*bytes.Buffer) *bytes.Buffer {
+func makeCompoundMessage(msgs [][]byte) *bytes.Buffer {
 	// Create a local buffer
 	buf := bytes.NewBuffer(nil)
 
@@ -175,12 +175,12 @@ func makeCompoundMessage(msgs []*bytes.Buffer) *bytes.Buffer {
 
 	// Add the message lengths
 	for _, m := range msgs {
-		binary.Write(buf, binary.BigEndian, uint16(m.Len()))
+		binary.Write(buf, binary.BigEndian, uint16(len(m)))
 	}
 
 	// Append the messages
 	for _, m := range msgs {
-		buf.Write(m.Bytes())
+		buf.Write(m)
 	}
 
 	return buf
