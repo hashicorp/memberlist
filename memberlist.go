@@ -99,6 +99,9 @@ type Memberlist struct {
 	broadcasts *TransmitLimitedQueue
 }
 
+// DefaultConfig is used to return a default sane set of configurations for
+// Memberlist. It uses the hostname as the node name, and otherwise sets conservative
+// values that are sane for most LAN environments.
 func DefaultConfig() *Config {
 	hostname, _ := os.Hostname()
 	return &Config{
