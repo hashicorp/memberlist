@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ func IsInteg() bool {
 func TestMemberlist_Integ(t *testing.T) {
 	CheckInteg(t)
 
-	num := 32
+	num := 16
 	var members []*Memberlist
 
 	joinCh := make(chan *Node, num)
@@ -34,8 +35,8 @@ func TestMemberlist_Integ(t *testing.T) {
 		c := DefaultConfig()
 		c.Name = addr
 		c.BindAddr = addr
-		c.RTT = 200 * time.Microsecond
-		c.ProbeInterval = 5 * time.Millisecond
+		c.RTT = 500 * time.Microsecond
+		c.ProbeInterval = 10 * time.Millisecond
 		c.GossipInterval = 5 * time.Millisecond
 		c.PushPullInterval = 100 * time.Millisecond
 
@@ -59,8 +60,19 @@ func TestMemberlist_Integ(t *testing.T) {
 		}
 	}
 
-	// Wait for node 1 to see all the others
-	time.Sleep(250 * time.Millisecond)
+	// Wait and print debug info
+	breakTimer := time.After(250 * time.Millisecond)
+WAIT:
+	for {
+		select {
+		case j := <-joinCh:
+			log.Printf("[DEBUG] Node join: %v (%d)", *j, members[0].NumMembers())
+		case l := <-leaveCh:
+			log.Printf("[DEBUG] Node leave: %v (%d)", *l, members[0].NumMembers())
+		case <-breakTimer:
+			break WAIT
+		}
+	}
 
 	for idx, m := range members {
 		if m.NumMembers() != num {
