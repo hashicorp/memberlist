@@ -290,7 +290,7 @@ func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType int, msg interface{})
 	if err != nil {
 		return err
 	}
-	if err := m.sendMsg(to, out); err != nil {
+	if err := m.sendMsg(to, out.Bytes()); err != nil {
 		return err
 	}
 	return nil
@@ -298,9 +298,9 @@ func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType int, msg interface{})
 
 // sendMsg is used to send a UDP message to another host. It will opportunistically
 // create a compoundMsg and piggy back other broadcasts
-func (m *Memberlist) sendMsg(to net.Addr, msg *bytes.Buffer) error {
+func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	// Check if we can piggy back any messages
-	bytesAvail := udpSendBuf - msg.Len() - compoundHeaderOverhead
+	bytesAvail := udpSendBuf - len(msg) - compoundHeaderOverhead
 	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
 
 	// Fast path if nothing to piggypack
@@ -309,7 +309,7 @@ func (m *Memberlist) sendMsg(to net.Addr, msg *bytes.Buffer) error {
 	}
 
 	// Join all the messages
-	msgs := make([]*bytes.Buffer, 0, 1+len(extra))
+	msgs := make([][]byte, 0, 1+len(extra))
 	msgs = append(msgs, msg)
 	msgs = append(msgs, extra...)
 
@@ -317,12 +317,12 @@ func (m *Memberlist) sendMsg(to net.Addr, msg *bytes.Buffer) error {
 	compound := makeCompoundMessage(msgs)
 
 	// Send the message
-	return m.rawSendMsg(to, compound)
+	return m.rawSendMsg(to, compound.Bytes())
 }
 
 // rawSendMsg is used to send a UDP message to another host without modification
-func (m *Memberlist) rawSendMsg(to net.Addr, msg *bytes.Buffer) error {
-	_, err := m.udpListener.WriteTo(msg.Bytes(), to)
+func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
+	_, err := m.udpListener.WriteTo(msg, to)
 	return err
 }
 

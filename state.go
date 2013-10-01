@@ -226,7 +226,7 @@ func (m *Memberlist) gossip() {
 
 		// Send the compound message
 		destAddr := &net.UDPAddr{IP: node.Addr, Port: m.config.UDPPort}
-		if err := m.rawSendMsg(destAddr, compound); err != nil {
+		if err := m.rawSendMsg(destAddr, compound.Bytes()); err != nil {
 			log.Printf("[ERR] Failed to send gossip to %s: %s", destAddr, err)
 		}
 	}

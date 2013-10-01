@@ -36,7 +36,7 @@ func TestHandleCompoundPing(t *testing.T) {
 	}
 
 	// Make a compound message
-	compound := makeCompoundMessage([]*bytes.Buffer{buf, buf, buf})
+	compound := makeCompoundMessage([][]byte{buf.Bytes(), buf.Bytes(), buf.Bytes()})
 
 	// Send compound version
 	addr := &net.UDPAddr{IP: []byte{127, 0, 0, 1}, Port: m.config.UDPPort}
