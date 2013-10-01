@@ -1,7 +1,6 @@
 package memberlist
 
 import (
-	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
@@ -246,7 +245,7 @@ func TestDecodeCompoundMessage(t *testing.T) {
 		t.Fatalf("unexpected err: %s", err)
 	}
 
-	msgs := []*bytes.Buffer{buf, buf, buf}
+	msgs := [][]byte{buf.Bytes(), buf.Bytes(), buf.Bytes()}
 	compound := makeCompoundMessage(msgs)
 
 	trunc, parts, err := decodeCompoundMessage(compound.Bytes()[1:])
@@ -273,7 +272,7 @@ func TestDecodeCompoundMessage_Trunc(t *testing.T) {
 		t.Fatalf("unexpected err: %s", err)
 	}
 
-	msgs := []*bytes.Buffer{buf, buf, buf}
+	msgs := [][]byte{buf.Bytes(), buf.Bytes(), buf.Bytes()}
 	compound := makeCompoundMessage(msgs)
 
 	trunc, parts, err := decodeCompoundMessage(compound.Bytes()[1:30])
