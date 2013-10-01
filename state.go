@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	StateAlive = iota
-	StateSuspect
-	StateDead
+	stateAlive = iota
+	stateSuspect
+	stateDead
 )
 
 // Node is used to represent a known node
@@ -112,7 +112,7 @@ START:
 	node = m.nodes[m.probeIndex]
 	if node.Name == m.config.Name {
 		skip = true
-	} else if node.State == StateDead {
+	} else if node.State == stateDead {
 		skip = true
 	}
 
@@ -358,7 +358,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 				Addr: a.Addr,
 				Meta: a.Meta,
 			},
-			State: StateDead,
+			State: stateDead,
 		}
 
 		// Add to map
@@ -387,13 +387,13 @@ func (m *Memberlist) aliveNode(a *alive) {
 	// Update the state and incarnation number
 	oldState := state.State
 	state.Incarnation = a.Incarnation
-	if state.State != StateAlive {
-		state.State = StateAlive
+	if state.State != stateAlive {
+		state.State = stateAlive
 		state.StateChange = time.Now()
 	}
 
 	// if Dead -> Alive, notify of join
-	if oldState == StateDead {
+	if oldState == stateDead {
 		notify(m.config.JoinCh, &state.Node)
 	}
 }
@@ -416,7 +416,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	}
 
 	// Ignore non-alive nodes
-	if state.State != StateAlive {
+	if state.State != stateAlive {
 		return
 	}
 
@@ -437,7 +437,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 
 	// Update the state
 	state.Incarnation = s.Incarnation
-	state.State = StateSuspect
+	state.State = stateSuspect
 	changeTime := time.Now()
 	state.StateChange = changeTime
 
@@ -448,7 +448,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		state, ok := m.nodeMap[s.Node]
 		m.nodeLock.Unlock()
 
-		if ok && state.State == StateSuspect && state.StateChange == changeTime {
+		if ok && state.State == stateSuspect && state.StateChange == changeTime {
 			m.suspectTimeout(state)
 		}
 	})
@@ -479,7 +479,7 @@ func (m *Memberlist) deadNode(d *dead) {
 	}
 
 	// Ignore if node is already dead
-	if state.State == StateDead {
+	if state.State == stateDead {
 		return
 	}
 
@@ -501,7 +501,7 @@ func (m *Memberlist) deadNode(d *dead) {
 
 	// Update the state
 	state.Incarnation = d.Incarnation
-	state.State = StateDead
+	state.State = stateDead
 	state.StateChange = time.Now()
 
 	// Remove from the node map
@@ -526,15 +526,15 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 		}
 
 		switch r.State {
-		case StateAlive:
+		case stateAlive:
 			a := alive{Incarnation: r.Incarnation, Node: r.Name, Addr: r.Addr, Meta: r.Meta}
 			m.aliveNode(&a)
 
-		case StateDead:
+		case stateDead:
 			// If the remote node belives a node is dead, we prefer to
 			// suspect that node instead of declaring it dead instantly
 			fallthrough
-		case StateSuspect:
+		case stateSuspect:
 			s := suspect{Incarnation: r.Incarnation, Node: r.Name}
 			m.suspectNode(&s)
 		}

@@ -195,7 +195,7 @@ func TestTCPPushPull(t *testing.T) {
 			Addr: []byte{127, 0, 0, 1},
 		},
 		Incarnation: 0,
-		State:       StateSuspect,
+		State:       stateSuspect,
 		StateChange: time.Now().Add(-1 * time.Second),
 	})
 
@@ -210,15 +210,15 @@ func TestTCPPushPull(t *testing.T) {
 	localNodes[0].Name = "Test 0"
 	localNodes[0].Addr = []byte{127, 0, 0, 1}
 	localNodes[0].Incarnation = 1
-	localNodes[0].State = StateAlive
+	localNodes[0].State = stateAlive
 	localNodes[1].Name = "Test 1"
 	localNodes[1].Addr = []byte{127, 0, 0, 1}
 	localNodes[1].Incarnation = 1
-	localNodes[1].State = StateAlive
+	localNodes[1].State = stateAlive
 	localNodes[2].Name = "Test 2"
 	localNodes[2].Addr = []byte{127, 0, 0, 1}
 	localNodes[2].Incarnation = 1
-	localNodes[2].State = StateAlive
+	localNodes[2].State = stateAlive
 
 	// Send our node state
 	header := pushPullHeader{Nodes: 3}
@@ -278,7 +278,7 @@ func TestTCPPushPull(t *testing.T) {
 	if n.Incarnation != 0 {
 		t.Fatal("bad incarnation")
 	}
-	if n.State != StateSuspect {
+	if n.State != stateSuspect {
 		t.Fatal("bad state")
 	}
 }

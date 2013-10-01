@@ -277,7 +277,7 @@ func (m *Memberlist) Members() []*Node {
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
 	for _, n := range m.nodes {
-		if n.State != StateDead {
+		if n.State != stateDead {
 			nodes = append(nodes, &n.Node)
 		}
 	}
@@ -290,7 +290,7 @@ func (m *Memberlist) NumMembers() (alive int) {
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
 	for _, n := range m.nodes {
-		if n.State != StateDead {
+		if n.State != stateDead {
 			alive++
 		}
 	}

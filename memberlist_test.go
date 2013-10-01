@@ -107,9 +107,9 @@ func TestMemberList_Members(t *testing.T) {
 
 	m := &Memberlist{}
 	nodes := []*NodeState{
-		&NodeState{Node: *n1, State: StateAlive},
-		&NodeState{Node: *n2, State: StateDead},
-		&NodeState{Node: *n3, State: StateSuspect},
+		&NodeState{Node: *n1, State: stateAlive},
+		&NodeState{Node: *n2, State: stateDead},
+		&NodeState{Node: *n3, State: stateSuspect},
 	}
 	m.nodes = nodes
 

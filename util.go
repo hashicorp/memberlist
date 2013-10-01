@@ -110,7 +110,7 @@ func moveDeadNodes(nodes []*NodeState) int {
 	numDead := 0
 	n := len(nodes)
 	for i := 0; i < n-numDead; i++ {
-		if nodes[i].State != StateDead {
+		if nodes[i].State != stateDead {
 			continue
 		}
 
@@ -144,7 +144,7 @@ OUTER:
 		}
 
 		// Exclude if not alive
-		if node.State != StateAlive {
+		if node.State != stateAlive {
 			continue
 		}
 

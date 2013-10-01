@@ -100,28 +100,28 @@ func TestRetransmitLimit(t *testing.T) {
 func TestShuffleNodes(t *testing.T) {
 	orig := []*NodeState{
 		&NodeState{
-			State: StateDead,
+			State: stateDead,
 		},
 		&NodeState{
-			State: StateAlive,
+			State: stateAlive,
 		},
 		&NodeState{
-			State: StateAlive,
+			State: stateAlive,
 		},
 		&NodeState{
-			State: StateDead,
+			State: stateDead,
 		},
 		&NodeState{
-			State: StateAlive,
+			State: stateAlive,
 		},
 		&NodeState{
-			State: StateAlive,
+			State: stateAlive,
 		},
 		&NodeState{
-			State: StateDead,
+			State: stateDead,
 		},
 		&NodeState{
-			State: StateAlive,
+			State: stateAlive,
 		},
 	}
 	nodes := make([]*NodeState, len(orig))
@@ -141,19 +141,19 @@ func TestShuffleNodes(t *testing.T) {
 func TestMoveDeadNodes(t *testing.T) {
 	nodes := []*NodeState{
 		&NodeState{
-			State: StateDead,
+			State: stateDead,
 		},
 		&NodeState{
-			State: StateAlive,
+			State: stateAlive,
 		},
 		&NodeState{
-			State: StateAlive,
+			State: stateAlive,
 		},
 		&NodeState{
-			State: StateDead,
+			State: stateDead,
 		},
 		&NodeState{
-			State: StateAlive,
+			State: stateAlive,
 		},
 	}
 
@@ -162,12 +162,12 @@ func TestMoveDeadNodes(t *testing.T) {
 		t.Fatalf("bad index")
 	}
 	for i := 0; i < idx; i++ {
-		if nodes[i].State != StateAlive {
+		if nodes[i].State != stateAlive {
 			t.Fatalf("Bad state %d", i)
 		}
 	}
 	for i := idx; i < len(nodes); i++ {
-		if nodes[i].State != StateDead {
+		if nodes[i].State != stateDead {
 			t.Fatalf("Bad state %d", i)
 		}
 	}
@@ -177,14 +177,14 @@ func TestKRandomNodes(t *testing.T) {
 	nodes := []*NodeState{}
 	for i := 0; i < 30; i++ {
 		// Half the nodes are in a bad state
-		state := StateAlive
+		state := stateAlive
 		switch i % 3 {
 		case 0:
-			state = StateAlive
+			state = stateAlive
 		case 1:
-			state = StateSuspect
+			state = stateSuspect
 		case 2:
-			state = StateDead
+			state = stateDead
 		}
 		nodes = append(nodes, &NodeState{
 			Node: Node{
@@ -216,7 +216,7 @@ func TestKRandomNodes(t *testing.T) {
 			if n.Name == "test0" {
 				t.Fatalf("Bad name")
 			}
-			if n.State != StateAlive {
+			if n.State != stateAlive {
 				t.Fatalf("Bad state")
 			}
 		}
