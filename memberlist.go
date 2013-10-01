@@ -139,6 +139,9 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		return nil, fmt.Errorf("Failed to start UDP listener. Err: %s", err)
 	}
 
+	// Set the UDP receive window size
+	setUDPRecvBuf(udpLn.(*net.UDPConn))
+
 	m := &Memberlist{config: conf,
 		udpListener: udpLn.(*net.UDPConn),
 		tcpListener: tcpLn.(*net.TCPListener),

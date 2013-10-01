@@ -22,6 +22,7 @@ const (
 )
 
 const (
+	udpRecvBuf             = 2 * 1024 * 1024
 	udpBufSize             = 65536
 	udpSendBuf             = 1400
 	compoundHeaderOverhead = 2 // Assumed header overhead
@@ -83,6 +84,17 @@ type pushNodeState struct {
 	Meta        []byte
 	Incarnation uint32
 	State       int
+}
+
+// setUDPRecvBuf is used to resize the UDP receive window
+func setUDPRecvBuf(c *net.UDPConn) {
+	size := udpRecvBuf
+	for {
+		if err := c.SetReadBuffer(size); err == nil {
+			break
+		}
+		size = size / 2
+	}
 }
 
 // tcpListen listens for and handles incoming connections
