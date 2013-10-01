@@ -391,6 +391,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 		state.State = StateAlive
 		state.StateChange = time.Now()
 	}
+	log.Printf("[WARN] Alive: %v", *a)
 
 	// if Dead -> Alive, notify of join
 	if oldState == StateDead {
@@ -423,6 +424,9 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	// If this is us we need to refute, otherwise re-broadcast
 	if state.Name == m.config.Name {
 		inc := m.nextIncarnation()
+		for s.Incarnation >= inc {
+			inc = m.nextIncarnation()
+		}
 		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr, Meta: state.Meta}
 		m.encodeAndBroadcast(s.Node, aliveMsg, a)
 
@@ -437,11 +441,13 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	state.State = StateSuspect
 	changeTime := time.Now()
 	state.StateChange = changeTime
+	log.Printf("[WARN] suspect: %v", *s)
 
 	// Setup a timeout for this
 	timeout := suspicionTimeout(m.config.SuspicionMult, len(m.nodes), m.config.ProbeInterval)
 	time.AfterFunc(timeout, func() {
 		if state.State == StateSuspect && state.StateChange == changeTime {
+			log.Printf("[WARN] suspect timeout: %v", *s)
 			m.suspectTimeout(state)
 		}
 	})
@@ -479,6 +485,10 @@ func (m *Memberlist) deadNode(d *dead) {
 	// If this is us we need to refute, otherwise re-broadcast
 	if state.Name == m.config.Name && !m.leave {
 		inc := m.nextIncarnation()
+		for d.Incarnation >= inc {
+			inc = m.nextIncarnation()
+		}
+
 		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr, Meta: state.Meta}
 		m.encodeAndBroadcast(d.Node, aliveMsg, a)
 
@@ -497,6 +507,7 @@ func (m *Memberlist) deadNode(d *dead) {
 	delete(m.nodeMap, state.Name)
 
 	// Notify of death
+	log.Printf("[WARN] Death: %v", *d)
 	notify(m.config.LeaveCh, &state.Node)
 }
 
@@ -519,13 +530,13 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 			a := alive{Incarnation: r.Incarnation, Node: r.Name, Addr: r.Addr, Meta: r.Meta}
 			m.aliveNode(&a)
 
+		case StateDead:
+			// If the remote node belives a node is dead, we prefer to
+			// suspect that node instead of declaring it dead instantly
+			fallthrough
 		case StateSuspect:
 			s := suspect{Incarnation: r.Incarnation, Node: r.Name}
 			m.suspectNode(&s)
-
-		case StateDead:
-			d := dead{Incarnation: r.Incarnation, Node: r.Name}
-			m.deadNode(&d)
 		}
 	}
 }
