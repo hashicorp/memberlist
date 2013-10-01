@@ -3,6 +3,7 @@ package memberlist
 import (
 	"log"
 	"net"
+	"reflect"
 	"sync/atomic"
 	"time"
 )
@@ -376,6 +377,13 @@ func (m *Memberlist) aliveNode(a *alive) {
 		m.nodes[offset], m.nodes[n] = m.nodes[n], m.nodes[offset]
 	}
 
+	// Check if this address is different than the existing node
+	if !reflect.DeepEqual([]byte(state.Addr), a.Addr) {
+		log.Printf("[WARN] Conflicting address for %s. Addresses: %v %v",
+			state.Name, state.Addr, net.IP(a.Addr))
+		return
+	}
+
 	// Bail if the incarnation number is old
 	if a.Incarnation <= state.Incarnation {
 		return
@@ -521,7 +529,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 		m.nodeLock.RUnlock()
 
 		// Skip if we agree on states
-		if ok && local.State == r.State {
+		if ok && local.State == r.State && r.Name != m.config.Name {
 			continue
 		}
 
