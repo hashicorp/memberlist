@@ -345,6 +345,7 @@ func (m *Memberlist) sendAndReceiveState(addr []byte) ([]pushNodeState, []byte, 
 	if err != nil {
 		return nil, nil, err
 	}
+	defer conn.Close()
 
 	// Send our state
 	if err := m.sendLocalState(conn); err != nil {
