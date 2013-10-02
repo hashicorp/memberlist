@@ -491,18 +491,24 @@ func (m *Memberlist) deadNode(d *dead) {
 		return
 	}
 
-	// If this is us we need to refute, otherwise re-broadcast
-	if state.Name == m.config.Name && !m.leave {
-		inc := m.nextIncarnation()
-		for d.Incarnation >= inc {
-			inc = m.nextIncarnation()
+	// Check if this is us
+	if state.Name == m.config.Name {
+		// If we are not leaving we need to refute
+		if !m.leave {
+			inc := m.nextIncarnation()
+			for d.Incarnation >= inc {
+				inc = m.nextIncarnation()
+			}
+
+			a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr, Meta: state.Meta}
+			m.encodeAndBroadcast(d.Node, aliveMsg, a)
+
+			state.Incarnation = inc
+			return // Do not mark ourself dead
 		}
 
-		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr, Meta: state.Meta}
-		m.encodeAndBroadcast(d.Node, aliveMsg, a)
-
-		state.Incarnation = inc
-		return // Do not mark ourself dead
+		// If we are leaving, we broadcast and wait
+		m.encodeBroadcastNotify(d.Node, deadMsg, d, m.leaveBroadcast)
 	} else {
 		m.encodeAndBroadcast(d.Node, deadMsg, d)
 	}

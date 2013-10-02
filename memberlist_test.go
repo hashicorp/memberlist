@@ -170,7 +170,7 @@ func TestMemberlist_Leave(t *testing.T) {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
 	}
 
-	ch := make(chan *Node)
+	ch := make(chan *Node, 1)
 	m1.config.LeaveCh = ch
 
 	// Leave

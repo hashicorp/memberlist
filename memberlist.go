@@ -74,9 +74,10 @@ type Config struct {
 }
 
 type Memberlist struct {
-	config   *Config
-	shutdown bool
-	leave    bool
+	config         *Config
+	shutdown       bool
+	leave          bool
+	leaveBroadcast chan struct{}
 
 	udpListener *net.UDPConn
 	tcpListener *net.TCPListener
@@ -146,12 +147,13 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	setUDPRecvBuf(udpLn.(*net.UDPConn))
 
 	m := &Memberlist{config: conf,
-		udpListener: udpLn.(*net.UDPConn),
-		tcpListener: tcpLn.(*net.TCPListener),
-		nodeMap:     make(map[string]*nodeState),
-		stopTick:    make(chan struct{}, 32),
-		ackHandlers: make(map[uint32]*ackHandler),
-		broadcasts:  &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
+		leaveBroadcast: make(chan struct{}, 1),
+		udpListener:    udpLn.(*net.UDPConn),
+		tcpListener:    tcpLn.(*net.TCPListener),
+		nodeMap:        make(map[string]*nodeState),
+		stopTick:       make(chan struct{}, 32),
+		ackHandlers:    make(map[uint32]*ackHandler),
+		broadcasts:     &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
 	}
 	m.broadcasts.NumNodes = func() int { return len(m.nodes) }
 	go m.tcpListen()
@@ -302,12 +304,17 @@ func (m *Memberlist) NumMembers() (alive int) {
 
 // Leave will broadcast a leave message but will not shutdown
 // the memberlist background maintenence. This should be followed
-// by a Shutdown(). Note that this just enqueues the message,
-// some time should be allowed for it to propogate.
+// by a Shutdown(). This will block until the death message has
+// finished gossiping out.
 func (m *Memberlist) Leave() error {
 	m.leave = true
 	d := dead{Incarnation: m.incarnation, Node: m.config.Name}
 	m.deadNode(&d)
+
+	// Block until the broadcast goes out
+	if len(m.nodes) > 1 {
+		<-m.leaveBroadcast
+	}
 	return nil
 }
 
