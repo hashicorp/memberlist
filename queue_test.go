@@ -6,9 +6,9 @@ import (
 
 func TestTransmitLimited_Queue(t *testing.T) {
 	q := &TransmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 1 }}
-	q.QueueBroadcast(&memberlistBroadcast{"test", nil})
-	q.QueueBroadcast(&memberlistBroadcast{"foo", nil})
-	q.QueueBroadcast(&memberlistBroadcast{"bar", nil})
+	q.QueueBroadcast(&memberlistBroadcast{"test", nil, nil})
+	q.QueueBroadcast(&memberlistBroadcast{"foo", nil, nil})
+	q.QueueBroadcast(&memberlistBroadcast{"bar", nil, nil})
 
 	if len(q.bcQueue) != 3 {
 		t.Fatalf("bad len")
@@ -24,7 +24,7 @@ func TestTransmitLimited_Queue(t *testing.T) {
 	}
 
 	// Should invalidate previous message
-	q.QueueBroadcast(&memberlistBroadcast{"test", nil})
+	q.QueueBroadcast(&memberlistBroadcast{"test", nil, nil})
 
 	if len(q.bcQueue) != 3 {
 		t.Fatalf("bad len")
@@ -44,10 +44,10 @@ func TestTransmitLimited_GetBroadcasts(t *testing.T) {
 	q := &TransmitLimitedQueue{RetransmitMult: 3, NumNodes: func() int { return 10 }}
 
 	// 18 bytes per message
-	q.QueueBroadcast(&memberlistBroadcast{"test", []byte("1. this is a test.")})
-	q.QueueBroadcast(&memberlistBroadcast{"foo", []byte("2. this is a test.")})
-	q.QueueBroadcast(&memberlistBroadcast{"bar", []byte("3. this is a test.")})
-	q.QueueBroadcast(&memberlistBroadcast{"baz", []byte("4. this is a test.")})
+	q.QueueBroadcast(&memberlistBroadcast{"test", []byte("1. this is a test."), nil})
+	q.QueueBroadcast(&memberlistBroadcast{"foo", []byte("2. this is a test."), nil})
+	q.QueueBroadcast(&memberlistBroadcast{"bar", []byte("3. this is a test."), nil})
+	q.QueueBroadcast(&memberlistBroadcast{"baz", []byte("4. this is a test."), nil})
 
 	// 2 byte overhead per message, should get all 4 messages
 	all := q.GetBroadcasts(2, 80)
@@ -66,10 +66,10 @@ func TestTransmitLimited_GetBroadcasts_Limit(t *testing.T) {
 	q := &TransmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 10 }}
 
 	// 18 bytes per message
-	q.QueueBroadcast(&memberlistBroadcast{"test", []byte("1. this is a test.")})
-	q.QueueBroadcast(&memberlistBroadcast{"foo", []byte("2. this is a test.")})
-	q.QueueBroadcast(&memberlistBroadcast{"bar", []byte("3. this is a test.")})
-	q.QueueBroadcast(&memberlistBroadcast{"baz", []byte("4. this is a test.")})
+	q.QueueBroadcast(&memberlistBroadcast{"test", []byte("1. this is a test."), nil})
+	q.QueueBroadcast(&memberlistBroadcast{"foo", []byte("2. this is a test."), nil})
+	q.QueueBroadcast(&memberlistBroadcast{"bar", []byte("3. this is a test."), nil})
+	q.QueueBroadcast(&memberlistBroadcast{"baz", []byte("4. this is a test."), nil})
 
 	// 3 byte overhead, should only get 3 messages back
 	partial1 := q.GetBroadcasts(3, 80)
