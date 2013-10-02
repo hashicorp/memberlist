@@ -44,7 +44,7 @@ func init() {
 	privateBlocks[2] = block
 }
 
-// Decode uses a GOB decoder on a byte slice
+// Decode reverses the encode operation on a byte slice input
 func decode(buf []byte, out interface{}) error {
 	r := bytes.NewBuffer(buf)
 	hd := codec.MsgpackHandle{}
@@ -52,7 +52,7 @@ func decode(buf []byte, out interface{}) error {
 	return dec.Decode(out)
 }
 
-// Encode writes a GOB encoded object to a new bytes buffer
+// Encode writes an encoded object to a new bytes buffer
 func encode(msgType int, in interface{}) (*bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
 	buf.WriteByte(uint8(msgType))
