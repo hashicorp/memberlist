@@ -64,6 +64,11 @@ func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 	q.Lock()
 	defer q.Unlock()
 
+	// Fast path the default case
+	if len(q.bcQueue) == 0 {
+		return nil
+	}
+
 	transmitLimit := retransmitLimit(q.RetransmitMult, q.NumNodes())
 	bytesUsed := 0
 	var toSend [][]byte
