@@ -109,6 +109,9 @@ func (q *TransmitLimitedQueue) NumQueued() int {
 func (q *TransmitLimitedQueue) Reset() {
 	q.Lock()
 	defer q.Unlock()
+	for _, b := range q.bcQueue {
+		b.b.Finished()
+	}
 	q.bcQueue = nil
 }
 
