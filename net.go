@@ -399,7 +399,9 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 	}
 
 	// Write the user state as well
-	conn.Write(userData)
+	if userData != nil {
+		conn.Write(userData)
+	}
 	return nil
 }
 
