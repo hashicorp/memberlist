@@ -30,6 +30,11 @@ type Broadcast interface {
 
 	// Returns a byte form of the message
 	Message() []byte
+
+	// Finished is invoked when the message will no longer
+	// be broadcast, either due to invalidation or to the
+	// transmit limit being reached
+	Finished()
 }
 
 // QueueBroadcast is used to enqueue a broadcast
@@ -41,6 +46,7 @@ func (q *TransmitLimitedQueue) QueueBroadcast(b Broadcast) {
 	n := len(q.bcQueue)
 	for i := 0; i < n; i++ {
 		if b.Invalidates(q.bcQueue[i].b) {
+			q.bcQueue[i].b.Finished()
 			copy(q.bcQueue[i:], q.bcQueue[i+1:])
 			q.bcQueue[n-1] = nil
 			q.bcQueue = q.bcQueue[:n-1]
@@ -77,6 +83,7 @@ func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 		// Check if we should stop transmission
 		b.transmits++
 		if b.transmits >= transmitLimit {
+			b.b.Finished()
 			n := len(q.bcQueue)
 			q.bcQueue[i], q.bcQueue[n-1] = q.bcQueue[n-1], nil
 			q.bcQueue = q.bcQueue[:n-1]

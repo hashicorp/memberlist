@@ -36,6 +36,8 @@ func (b *memberlistBroadcast) Message() []byte {
 	return b.msg
 }
 
+func (b *memberlistBroadcast) Finished() {}
+
 // encodeAndBroadcast encodes a message and enqueues it for broadcast. Fails
 // silently if there is an encoding error.
 func (m *Memberlist) encodeAndBroadcast(node string, msgType int, msg interface{}) {
