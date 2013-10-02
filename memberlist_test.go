@@ -132,7 +132,15 @@ func TestMemberlist_Join(t *testing.T) {
 	c.BindAddr = addr1
 	c.UDPPort = m1.config.UDPPort
 	c.TCPPort = m1.config.TCPPort
-	m2, err := Join(c, []string{"127.0.0.1"})
+
+	m2, err := Create(c)
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+	num, err := m2.Join([]string{"127.0.0.1"})
+	if num != 1 {
+		t.Fatal("unexpected 1: %d", num)
+	}
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
@@ -157,7 +165,15 @@ func TestMemberlist_Leave(t *testing.T) {
 	c.UDPPort = m1.config.UDPPort
 	c.TCPPort = m1.config.TCPPort
 	c.GossipInterval = time.Millisecond
-	m2, err := Join(c, []string{"127.0.0.1"})
+
+	m2, err := Create(c)
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+	num, err := m2.Join([]string{"127.0.0.1"})
+	if num != 1 {
+		t.Fatal("unexpected 1: %d", num)
+	}
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
@@ -206,7 +222,15 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	c.TCPPort = m1.config.TCPPort
 	c.ProbeInterval = time.Millisecond
 	c.RTT = 100 * time.Microsecond
-	m2, err := Join(c, []string{"127.0.0.1"})
+
+	m2, err := Create(c)
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+	num, err := m2.Join([]string{"127.0.0.1"})
+	if num != 1 {
+		t.Fatal("unexpected 1: %d", num)
+	}
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
@@ -278,7 +302,15 @@ func TestMemberlist_UserData(t *testing.T) {
 	c.GossipInterval = time.Millisecond
 	c.PushPullInterval = time.Millisecond
 	c.UserDelegate = d2
-	m2, err := Join(c, []string{"127.0.0.1"})
+
+	m2, err := Create(c)
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+	num, err := m2.Join([]string{"127.0.0.1"})
+	if num != 1 {
+		t.Fatal("unexpected 1: %d", num)
+	}
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}

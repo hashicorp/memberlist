@@ -21,7 +21,6 @@ package memberlist
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"sync"
@@ -161,9 +160,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	return m, nil
 }
 
-// Create will start memberlist and create a new gossip pool, but
-// will not connect to an existing node. This should only be used
-// for the first node in the cluster.
+// Create will start memberlist but does not connect to any other node
 func Create(conf *Config) (*Memberlist, error) {
 	m, err := newMemberlist(conf)
 	if err != nil {
@@ -177,47 +174,32 @@ func Create(conf *Config) (*Memberlist, error) {
 	return m, nil
 }
 
-// Join will start memberlist and perform an initial push/pull with
-// all the given hosts. If none of the existing hosts could be contacted,
-// the join will fail.
-func Join(conf *Config, existing []string) (*Memberlist, error) {
-	m, err := newMemberlist(conf)
-	if err != nil {
-		return nil, err
-	}
-	if err := m.setAlive(); err != nil {
-		m.Shutdown()
-		return nil, err
-	}
-
+// Join is used to take an existing Memberlist and attempt to join
+// a cluster by contacting all the given hosts. Returns the number successfully,
+// contacted and an error if none could be reached.
+func (m *Memberlist) Join(existing []string) (int, error) {
 	// Attempt to join any of them
-	success := false
+	numSuccess := 0
+	var retErr error
 	for _, exist := range existing {
 		addr, err := net.ResolveIPAddr("ip", exist)
 		if err != nil {
-			log.Printf("[ERR] Failed to resolve %s: %s", exist, err)
+			retErr = err
 			continue
 		}
 
 		if err := m.pushPullNode(addr.IP); err != nil {
-			log.Printf("[ERR] Failed to contact %s: %s", exist, err)
+			retErr = err
 			continue
 		}
 
-		// Mark success, but keep exchanging with other hosts
-		// to get more complete state data
-		success = true
+		numSuccess++
 	}
 
-	// Only continue on success
-	if !success {
-		m.Shutdown()
-		return nil, fmt.Errorf("Failed to contact existing hosts")
+	if numSuccess > 0 {
+		retErr = nil
 	}
-
-	// Schedule background work
-	m.schedule()
-	return m, nil
+	return numSuccess, retErr
 }
 
 // setAlive is used to mark this node as being alive

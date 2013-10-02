@@ -40,23 +40,22 @@ func TestMemberlist_Integ(t *testing.T) {
 		c.GossipInterval = 5 * time.Millisecond
 		c.PushPullInterval = 100 * time.Millisecond
 
+		m, err := Create(c)
+		if err != nil {
+			t.Fatalf("unexpected err: %s", err)
+		}
+		members = append(members, m)
+		defer m.Shutdown()
+
 		if i == 0 {
-			m, err := Create(c)
-			if err != nil {
-				t.Fatalf("unexpected err: %s", err)
-			}
-			members = append(members, m)
-			defer m.Shutdown()
 			m.config.JoinCh = joinCh
 			m.config.LeaveCh = leaveCh
 		} else {
 			last := members[i-1]
-			m, err := Join(c, []string{last.config.Name})
-			if err != nil {
+			num, err := m.Join([]string{last.config.Name})
+			if num == 0 || err != nil {
 				t.Fatalf("unexpected err: %s", err)
 			}
-			members = append(members, m)
-			defer m.Shutdown()
 		}
 	}
 
