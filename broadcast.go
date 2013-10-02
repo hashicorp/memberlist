@@ -40,7 +40,6 @@ func (b *memberlistBroadcast) Message() []byte {
 func (b *memberlistBroadcast) Finished() {
 	select {
 	case b.notify <- struct{}{}:
-		log.Printf("[DEBUG] Notified")
 	default:
 	}
 }
