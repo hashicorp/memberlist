@@ -105,24 +105,24 @@ type Memberlist struct {
 func DefaultConfig() *Config {
 	hostname, _ := os.Hostname()
 	return &Config{
-		hostname,
-		"0.0.0.0",
-		7946,
-		7946,
-		10 * time.Second,      // Timeout after 10 seconds
-		3,                     // Use 3 nodes for the indirect ping
-		4,                     // Retransmit a message 4 * log(N+1) nodes
-		5,                     // Suspect a node for 5 * log(N+1) * Interval
-		30 * time.Second,      // Low frequency
-		20 * time.Millisecond, // Reasonable RTT time for LAN
-		1 * time.Second,       // Failure check every second
+		Name:             hostname,
+		BindAddr:         "0.0.0.0",
+		UDPPort:          7946,
+		TCPPort:          7946,
+		TCPTimeout:       10 * time.Second,      // Timeout after 10 seconds
+		IndirectChecks:   3,                     // Use 3 nodes for the indirect ping
+		RetransmitMult:   4,                     // Retransmit a message 4 * log(N+1) nodes
+		SuspicionMult:    5,                     // Suspect a node for 5 * log(N+1) * Interval
+		PushPullInterval: 30 * time.Second,      // Low frequency
+		RTT:              20 * time.Millisecond, // Reasonable RTT time for LAN
+		ProbeInterval:    1 * time.Second,       // Failure check every second
 
-		3, // Gossip to 3 nodes
-		200 * time.Millisecond, // Gossip more rapidly
+		GossipNodes:    3,                      // Gossip to 3 nodes
+		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly
 
-		nil,
-		nil,
-		nil,
+		JoinCh:       nil,
+		LeaveCh:      nil,
+		UserDelegate: nil,
 	}
 }
 
