@@ -35,7 +35,7 @@ func TestMemberlist_Integ(t *testing.T) {
 		c := DefaultConfig()
 		c.Name = addr
 		c.BindAddr = addr
-		c.RTT = 500 * time.Microsecond
+		c.RTT = 100 * time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 		c.GossipInterval = 5 * time.Millisecond
 		c.PushPullInterval = 100 * time.Millisecond
