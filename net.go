@@ -7,8 +7,10 @@ import (
 	"net"
 )
 
+type messageType uint8
+
 const (
-	pingMsg = iota
+	pingMsg messageType = iota
 	indirectPingMsg
 	ackRespMsg
 	suspectMsg
@@ -168,7 +170,7 @@ func (m *Memberlist) udpListen() {
 
 func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 	// Decode the message type
-	msgType := uint8(buf[0])
+	msgType := messageType(buf[0])
 	buf = buf[1:]
 
 	// Switch on the msgType
@@ -297,7 +299,7 @@ func (m *Memberlist) handleUser(buf []byte, from net.Addr) {
 }
 
 // encodeAndSendMsg is used to combine the encoding and sending steps
-func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType int, msg interface{}) error {
+func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType messageType, msg interface{}) error {
 	out, err := encode(msgType, msg)
 	if err != nil {
 		return err
@@ -389,7 +391,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 	enc := codec.NewEncoder(conn, &hd)
 
 	// Begin state push
-	conn.Write([]byte{pushPullMsg})
+	conn.Write([]byte{byte(pushPullMsg)})
 
 	if err := enc.Encode(&header); err != nil {
 		return err
@@ -414,7 +416,7 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	if _, err := conn.Read(buf[:]); err != nil {
 		return nil, nil, err
 	}
-	msgType := uint8(buf[0])
+	msgType := messageType(buf[0])
 
 	// Quit if not push/pull
 	if msgType != pushPullMsg {

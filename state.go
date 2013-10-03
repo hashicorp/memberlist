@@ -264,8 +264,10 @@ func (m *Memberlist) gossip() {
 	}
 }
 
-// pushPull is invoked periodically to randomly perform a state
-// exchange. Used to ensure a high level of convergence.
+// pushPull is invoked periodically to randomly perform a complete state
+// exchange. Used to ensure a high level of convergence, but is also
+// reasonably expensive as the entire state of this node is exchanged
+// with the other node.
 func (m *Memberlist) pushPull() {
 	// Get a random live node
 	m.nodeLock.RLock()
@@ -285,8 +287,7 @@ func (m *Memberlist) pushPull() {
 	}
 }
 
-// pushPullNode is invoked to do a state exchange with
-// a given node
+// pushPullNode does a complete state exchange with a specific node.
 func (m *Memberlist) pushPullNode(addr []byte) error {
 	// Attempt to send and receive with the node
 	remote, userState, err := m.sendAndReceiveState(addr)
@@ -375,14 +376,15 @@ func (m *Memberlist) invokeAckHandler(seqNo uint32) {
 	ah.handler()
 }
 
-// aliveNode is invoked by the network layer when we get a message
-// about a live node
+// aliveNode is invoked by the network layer when we get a message about a
+// live node.
 func (m *Memberlist) aliveNode(a *alive) {
 	m.nodeLock.Lock()
 	defer m.nodeLock.Unlock()
 	state, ok := m.nodeMap[a.Node]
 
-	// Check if we've never seen this node before
+	// Check if we've never seen this node before, and if not, then
+	// store this node in our node map.
 	if !ok {
 		state = &nodeState{
 			Node: Node{

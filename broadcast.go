@@ -46,13 +46,13 @@ func (b *memberlistBroadcast) Finished() {
 
 // encodeAndBroadcast encodes a message and enqueues it for broadcast. Fails
 // silently if there is an encoding error.
-func (m *Memberlist) encodeAndBroadcast(node string, msgType int, msg interface{}) {
+func (m *Memberlist) encodeAndBroadcast(node string, msgType messageType, msg interface{}) {
 	m.encodeBroadcastNotify(node, msgType, msg, nil)
 }
 
 // encodeBroadcastNotify encodes a message and enqueues it for broadcast and notifies
 // the given channel when transmission is finished. Fails silently if there is an encoding error.
-func (m *Memberlist) encodeBroadcastNotify(node string, msgType int, msg interface{}, notify chan struct{}) {
+func (m *Memberlist) encodeBroadcastNotify(node string, msgType messageType, msg interface{}, notify chan struct{}) {
 	buf, err := encode(msgType, msg)
 	if err != nil {
 		log.Printf("[ERR] Failed to encode message for broadcast: %s", err)

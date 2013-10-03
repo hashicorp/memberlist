@@ -56,7 +56,7 @@ func TestHandleCompoundPing(t *testing.T) {
 		}
 		in = in[0:n]
 
-		msgType := uint8(in[0])
+		msgType := messageType(in[0])
 		if msgType != ackRespMsg {
 			t.Fatalf("bad response %v", in)
 		}
@@ -114,7 +114,7 @@ func TestHandlePing(t *testing.T) {
 	}
 	in = in[0:n]
 
-	msgType := uint8(in[0])
+	msgType := messageType(in[0])
 	if msgType != ackRespMsg {
 		t.Fatalf("bad response %v", in)
 	}
@@ -171,7 +171,7 @@ func TestHandleIndirectPing(t *testing.T) {
 	}
 	in = in[0:n]
 
-	msgType := uint8(in[0])
+	msgType := messageType(in[0])
 	if msgType != ackRespMsg {
 		t.Fatalf("bad response %v", in)
 	}
@@ -226,7 +226,7 @@ func TestTCPPushPull(t *testing.T) {
 	enc := codec.NewEncoder(conn, &hd)
 
 	// Send the push/pull indicator
-	conn.Write([]byte{pushPullMsg})
+	conn.Write([]byte{byte(pushPullMsg)})
 
 	if err := enc.Encode(&header); err != nil {
 		t.Fatalf("unexpected err %s", err)
@@ -238,7 +238,7 @@ func TestTCPPushPull(t *testing.T) {
 	}
 
 	// Read the message type
-	var msgType uint8
+	var msgType messageType
 	if err := binary.Read(conn, binary.BigEndian, &msgType); err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -325,7 +325,7 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	}
 	in = in[0:n]
 
-	msgType := uint8(in[0])
+	msgType := messageType(in[0])
 	if msgType != compoundMsg {
 		t.Fatalf("bad response %v", in)
 	}
