@@ -469,10 +469,16 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		for s.Incarnation >= inc {
 			inc = m.nextIncarnation()
 		}
-		a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr, Meta: state.Meta}
+		state.Incarnation = inc
+
+		a := alive{
+			Incarnation: inc,
+			Node: state.Name,
+			Addr: state.Addr,
+			Meta: state.Meta,
+		}
 		m.encodeAndBroadcast(s.Node, aliveMsg, a)
 
-		state.Incarnation = inc
 		return // Do not mark ourself suspect
 	} else {
 		m.encodeAndBroadcast(s.Node, suspectMsg, s)
