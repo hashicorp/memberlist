@@ -410,8 +410,8 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 // recvRemoteState is used to read the remote state from a connection
 func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	// Read the message type
-	buf := []byte{0}
-	if _, err := conn.Read(buf); err != nil {
+	buf := [1]byte{0}
+	if _, err := conn.Read(buf[:]); err != nil {
 		return nil, nil, err
 	}
 	msgType := uint8(buf[0])
