@@ -27,6 +27,9 @@ import (
 	"time"
 )
 
+// Delegate is the interface that clients must implement if they want to hook
+// into the gossip layer of Memberlist. All the methods must be thread-safe,
+// as they will be called concurrently.
 type Delegate interface {
 	// NodeMeta is used to retrieve meta-data about the current node
 	// when broadcasting an alive message. It's length is limited to
