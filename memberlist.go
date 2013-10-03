@@ -261,9 +261,9 @@ func (m *Memberlist) setAlive() error {
 
 // Members is used to return a list of all known live nodes
 func (m *Memberlist) Members() []*Node {
-	nodes := make([]*Node, 0, len(m.nodes))
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
+	nodes := make([]*Node, 0, len(m.nodes))
 	for _, n := range m.nodes {
 		if n.State != stateDead {
 			nodes = append(nodes, &n.Node)
