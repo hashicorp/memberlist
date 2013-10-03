@@ -78,7 +78,7 @@ WAIT:
 	for idx, m := range members {
 		got := m.NumMembers()
 		if got != num {
-			t.Fatalf("bad num members at idx %d. Expected %d. Got %d.",
+			t.Errorf("bad num members at idx %d. Expected %d. Got %d.",
 				idx, num, got)
 		}
 	}
