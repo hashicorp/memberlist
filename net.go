@@ -7,8 +7,11 @@ import (
 	"net"
 )
 
+// messageType is an integer ID of a type of message that can be received
+// on network channels from other members.
 type messageType uint8
 
+// The list of available message types.
 const (
 	pingMsg messageType = iota
 	indirectPingMsg
@@ -22,13 +25,13 @@ const (
 )
 
 const (
-	udpRecvBuf             = 2 * 1024 * 1024
-	udpBufSize             = 65536
-	udpSendBuf             = 1400
 	compoundHeaderOverhead = 2 // Assumed header overhead
 	compoundOverhead       = 2 // Assumed overhead per entry in compoundHeader
-	userMsgOverhead        = 1
 	metaMaxSize            = 128 // Maximum size for nod emeta data
+	udpBufSize             = 65536
+	udpRecvBuf             = 2 * 1024 * 1024
+	udpSendBuf             = 1400
+	userMsgOverhead        = 1
 )
 
 // ping request sent directly to node
