@@ -576,7 +576,12 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 
 		switch r.State {
 		case stateAlive:
-			a := alive{Incarnation: r.Incarnation, Node: r.Name, Addr: r.Addr, Meta: r.Meta}
+			a := alive{
+				Incarnation: r.Incarnation,
+				Node:        r.Name,
+				Addr:        r.Addr,
+				Meta:        r.Meta,
+			}
 			m.aliveNode(&a)
 
 		case stateDead:
