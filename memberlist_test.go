@@ -223,6 +223,9 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	c.ProbeInterval = time.Millisecond
 	c.RTT = 100 * time.Microsecond
 
+	ch := make(chan *Node)
+	c.LeaveCh = ch
+
 	m2, err := Create(c)
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
@@ -239,9 +242,6 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	if len(m2.Members()) != 2 {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
 	}
-
-	ch := make(chan *Node)
-	m2.config.LeaveCh = ch
 
 	m1.Shutdown()
 
