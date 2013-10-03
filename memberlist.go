@@ -127,7 +127,7 @@ func DefaultConfig() *Config {
 }
 
 // newMemberlist creates the network listeners.
-// Does not schedule exeuction of background maintenence.
+// Does not schedule execution of background maintenence.
 func newMemberlist(conf *Config) (*Memberlist, error) {
 	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.TCPPort)
 	tcpLn, err := net.Listen("tcp", tcpAddr)
