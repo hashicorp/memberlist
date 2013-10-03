@@ -1,7 +1,7 @@
 package memberlist
 
 /*
-The broadcast mechanism works by maintain a sorted list of messages to be
+The broadcast mechanism works by maintaining a sorted list of messages to be
 sent out. When a message is to be broadcast, the retransmit count
 is set to zero and appended to the queue. The retransmit count serves
 as the "priority", ensuring that newer messages get sent first. Once
@@ -50,8 +50,9 @@ func (m *Memberlist) encodeAndBroadcast(node string, msgType messageType, msg in
 	m.encodeBroadcastNotify(node, msgType, msg, nil)
 }
 
-// encodeBroadcastNotify encodes a message and enqueues it for broadcast and notifies
-// the given channel when transmission is finished. Fails silently if there is an encoding error.
+// encodeBroadcastNotify encodes a message and enqueues it for broadcast
+// and notifies the given channel when transmission is finished. Fails
+// silently if there is an encoding error.
 func (m *Memberlist) encodeBroadcastNotify(node string, msgType messageType, msg interface{}, notify chan struct{}) {
 	buf, err := encode(msgType, msg)
 	if err != nil {

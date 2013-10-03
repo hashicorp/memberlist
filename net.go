@@ -25,8 +25,8 @@ const (
 )
 
 const (
-	compoundHeaderOverhead = 2 // Assumed header overhead
-	compoundOverhead       = 2 // Assumed overhead per entry in compoundHeader
+	compoundHeaderOverhead = 2   // Assumed header overhead
+	compoundOverhead       = 2   // Assumed overhead per entry in compoundHeader
 	metaMaxSize            = 128 // Maximum size for nod emeta data
 	udpBufSize             = 65536
 	udpRecvBuf             = 2 * 1024 * 1024
