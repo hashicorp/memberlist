@@ -751,7 +751,7 @@ func TestMemberlist_Gossip(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		select {
 		case <-ch:
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(50 * time.Millisecond):
 			t.Fatalf("timeout")
 		}
 	}

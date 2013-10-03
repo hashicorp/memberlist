@@ -175,7 +175,7 @@ func TestMoveDeadNodes(t *testing.T) {
 
 func TestKRandomNodes(t *testing.T) {
 	nodes := []*nodeState{}
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 90; i++ {
 		// Half the nodes are in a bad state
 		state := stateAlive
 		switch i % 3 {
