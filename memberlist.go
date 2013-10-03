@@ -202,12 +202,15 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 	return numSuccess, retErr
 }
 
-// setAlive is used to mark this node as being alive
+// setAlive is used to mark this node as being alive. This is the same
+// as if we received an alive notification our own network channel for
+// ourself.
 func (m *Memberlist) setAlive() error {
 	// Pick a private IP address
 	var ipAddr []byte
 	if m.config.BindAddr == "0.0.0.0" {
-		// Get the interfaces
+		// We're not bound to a specific IP, so let's list the interfaces
+		// on this machine and use the first private IP we find.
 		addresses, err := net.InterfaceAddrs()
 		if err != nil {
 			return fmt.Errorf("Failed to get interface addresses! Err: %vn", err)
@@ -233,8 +236,8 @@ func (m *Memberlist) setAlive() error {
 		if ipAddr == nil {
 			ipAddr = []byte{127, 0, 0, 1}
 		}
-
 	} else {
+		// Use the IP that we're bound to.
 		addr := m.tcpListener.Addr().(*net.TCPAddr)
 		ipAddr = addr.IP
 	}
