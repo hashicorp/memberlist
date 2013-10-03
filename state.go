@@ -473,9 +473,9 @@ func (m *Memberlist) suspectNode(s *suspect) {
 
 		a := alive{
 			Incarnation: inc,
-			Node: state.Name,
-			Addr: state.Addr,
-			Meta: state.Meta,
+			Node:        state.Name,
+			Addr:        state.Addr,
+			Meta:        state.Meta,
 		}
 		m.encodeAndBroadcast(s.Node, aliveMsg, a)
 
