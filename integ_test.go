@@ -40,6 +40,11 @@ func TestMemberlist_Integ(t *testing.T) {
 		c.GossipInterval = 5 * time.Millisecond
 		c.PushPullInterval = 100 * time.Millisecond
 
+		if i == 0 {
+			c.JoinCh = joinCh
+			c.LeaveCh = leaveCh
+		}
+
 		m, err := Create(c)
 		if err != nil {
 			t.Fatalf("unexpected err: %s", err)
@@ -47,10 +52,7 @@ func TestMemberlist_Integ(t *testing.T) {
 		members = append(members, m)
 		defer m.Shutdown()
 
-		if i == 0 {
-			m.config.JoinCh = joinCh
-			m.config.LeaveCh = leaveCh
-		} else {
+		if i > 0 {
 			last := members[i-1]
 			num, err := m.Join([]string{last.config.Name})
 			if num == 0 || err != nil {
