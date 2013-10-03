@@ -5,10 +5,14 @@ import (
 	"time"
 )
 
-func HostMemberlist(host string, t *testing.T) *Memberlist {
+func HostMemberlist(host string, t *testing.T, f func(*Config)) *Memberlist {
 	c := DefaultConfig()
 	c.Name = host
 	c.BindAddr = host
+	if f != nil {
+		f(c)
+	}
+
 	m, err := newMemberlist(c)
 	if err != nil {
 		t.Fatalf("failed to get memberlist: %s", err)
@@ -19,10 +23,11 @@ func HostMemberlist(host string, t *testing.T) *Memberlist {
 func TestMemberList_Probe(t *testing.T) {
 	addr1, ip1 := GetBindAddr()
 	addr2, ip2 := GetBindAddr()
-	m1 := HostMemberlist(addr1, t)
-	m1.config.RTT = time.Millisecond
-	m1.config.ProbeInterval = 10 * time.Millisecond
-	m2 := HostMemberlist(addr2, t)
+	m1 := HostMemberlist(addr1, t, func(c *Config) {
+		c.RTT = time.Millisecond
+		c.ProbeInterval = 10 * time.Millisecond
+	})
+	m2 := HostMemberlist(addr2, t, nil)
 
 	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
@@ -50,11 +55,12 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	addr3, ip3 := GetBindAddr()
 	addr4, ip4 := GetBindAddr()
 
-	m1 := HostMemberlist(addr1, t)
-	m1.config.RTT = time.Millisecond
-	m1.config.ProbeInterval = 10 * time.Millisecond
-	m2 := HostMemberlist(addr2, t)
-	m3 := HostMemberlist(addr3, t)
+	m1 := HostMemberlist(addr1, t, func(c *Config) {
+		c.RTT = time.Millisecond
+		c.ProbeInterval = 10 * time.Millisecond
+	})
+	m2 := HostMemberlist(addr2, t, nil)
+	m3 := HostMemberlist(addr3, t, nil)
 
 	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
@@ -87,10 +93,11 @@ func TestMemberList_ProbeNode(t *testing.T) {
 	addr1, ip1 := GetBindAddr()
 	addr2, ip2 := GetBindAddr()
 
-	m1 := HostMemberlist(addr1, t)
-	m1.config.RTT = time.Millisecond
-	m1.config.ProbeInterval = 10 * time.Millisecond
-	m2 := HostMemberlist(addr2, t)
+	m1 := HostMemberlist(addr1, t, func(c *Config) {
+		c.RTT = time.Millisecond
+		c.ProbeInterval = 10 * time.Millisecond
+	})
+	m2 := HostMemberlist(addr2, t, nil)
 
 	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
@@ -715,16 +722,21 @@ func TestMemberList_MergeState(t *testing.T) {
 }
 
 func TestMemberlist_Gossip(t *testing.T) {
+	ch := make(chan *Node, 3)
+
 	addr1, ip1 := GetBindAddr()
 	addr2, ip2 := GetBindAddr()
 
-	m1 := HostMemberlist(addr1, t)
-	m1.config.GossipInterval = time.Millisecond
-	m2 := HostMemberlist(addr2, t)
-	m2.config.GossipInterval = time.Millisecond
+	m1 := HostMemberlist(addr1, t, func(c *Config) {
+		c.GossipInterval = time.Millisecond
+	})
+	m2 := HostMemberlist(addr2, t, func(c *Config) {
+		c.JoinCh = ch
+		c.GossipInterval = time.Millisecond
+	})
 
-	ch := make(chan *Node, 3)
-	m2.config.JoinCh = ch
+	defer m1.Shutdown()
+	defer m2.Shutdown()
 
 	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
@@ -749,14 +761,19 @@ func TestMemberlist_PushPull(t *testing.T) {
 	addr1, ip1 := GetBindAddr()
 	addr2, ip2 := GetBindAddr()
 
-	m1 := HostMemberlist(addr1, t)
-	m1.config.GossipInterval = 10 * time.Second
-	m1.config.PushPullInterval = time.Millisecond
-	m2 := HostMemberlist(addr2, t)
-	m2.config.GossipInterval = 10 * time.Second
-
 	ch := make(chan *Node, 3)
-	m2.config.JoinCh = ch
+
+	m1 := HostMemberlist(addr1, t, func(c *Config) {
+		c.GossipInterval = 10 * time.Second
+		c.PushPullInterval = time.Millisecond
+	})
+	m2 := HostMemberlist(addr2, t, func(c *Config) {
+		c.GossipInterval = 10 * time.Second
+		c.JoinCh = ch
+	})
+
+	defer m1.Shutdown()
+	defer m2.Shutdown()
 
 	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
