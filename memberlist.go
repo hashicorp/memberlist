@@ -145,7 +145,8 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	// Set the UDP receive window size
 	setUDPRecvBuf(udpLn.(*net.UDPConn))
 
-	m := &Memberlist{config: conf,
+	m := &Memberlist{
+		config:         conf,
 		leaveBroadcast: make(chan struct{}, 1),
 		udpListener:    udpLn.(*net.UDPConn),
 		tcpListener:    tcpLn.(*net.TCPListener),

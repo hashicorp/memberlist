@@ -84,7 +84,9 @@ type pushNodeState struct {
 	State       int
 }
 
-// setUDPRecvBuf is used to resize the UDP receive window
+// setUDPRecvBuf is used to resize the UDP receive window. The function
+// attempts to set the read buffer to `udpRecvBuf` but backs off until
+// the read buffer can be set.
 func setUDPRecvBuf(c *net.UDPConn) {
 	size := udpRecvBuf
 	for {
