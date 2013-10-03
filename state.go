@@ -92,13 +92,17 @@ func (m *Memberlist) probe() {
 	// Track the number of indexes we've considered probing
 	numCheck := 0
 START:
+	m.nodeLock.RLock()
+
 	// Make sure we don't wrap around infinitely
 	if numCheck >= len(m.nodes) {
+		m.nodeLock.RUnlock()
 		return
 	}
 
 	// Handle the wrap around case
 	if m.probeIndex >= len(m.nodes) {
+		m.nodeLock.RUnlock()
 		m.resetNodes()
 		m.probeIndex = 0
 		numCheck++
@@ -108,7 +112,6 @@ START:
 	// Determine if we should probe this node
 	skip := false
 	var node *nodeState
-	m.nodeLock.RLock()
 
 	node = m.nodes[m.probeIndex]
 	if node.Name == m.config.Name {
