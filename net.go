@@ -446,7 +446,9 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 		userBuf = make([]byte, header.UserStateLen)
 		bytes, err := conn.Read(userBuf)
 		if err == nil && bytes != header.UserStateLen {
-			err = fmt.Errorf("Failed to read full user state (%d / %d)", bytes, header.UserStateLen)
+			err = fmt.Errorf(
+				"Failed to read full user state (%d / %d)",
+				bytes, header.UserStateLen)
 		}
 		if err != nil {
 			return remoteNodes, nil, err
