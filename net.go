@@ -86,7 +86,7 @@ type pushNodeState struct {
 	Addr        []byte
 	Meta        []byte
 	Incarnation uint32
-	State       int
+	State       nodeStateType
 }
 
 // setUDPRecvBuf is used to resize the UDP receive window. The function

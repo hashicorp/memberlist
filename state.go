@@ -8,8 +8,10 @@ import (
 	"time"
 )
 
+type nodeStateType int
+
 const (
-	stateAlive = iota
+	stateAlive nodeStateType = iota
 	stateSuspect
 	stateDead
 )
@@ -24,9 +26,9 @@ type Node struct {
 // NodeState is used to manage our state view of another node
 type nodeState struct {
 	Node
-	Incarnation uint32    // Last known incarnation number
-	State       int       // Current state
-	StateChange time.Time // Time last state change happened
+	Incarnation uint32        // Last known incarnation number
+	State       nodeStateType // Current state
+	StateChange time.Time     // Time last state change happened
 }
 
 // ackHandler is used to register handlers for incoming acks
