@@ -151,7 +151,6 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		udpListener:    udpLn.(*net.UDPConn),
 		tcpListener:    tcpLn.(*net.TCPListener),
 		nodeMap:        make(map[string]*nodeState),
-		stopTick:       make(chan struct{}, 32),
 		ackHandlers:    make(map[uint32]*ackHandler),
 		broadcasts:     &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
 	}

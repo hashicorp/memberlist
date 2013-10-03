@@ -35,54 +35,82 @@ type ackHandler struct {
 	timer   *time.Timer
 }
 
-// Schedule is used to ensure the Tick is performed periodically
+// Schedule is used to ensure the Tick is performed periodically. This
+// function is safe to call multiple times. If the memberlist is already
+// scheduled, then it won't do anything.
 func (m *Memberlist) schedule() {
 	m.tickerLock.Lock()
 	defer m.tickerLock.Unlock()
 
+	// If we already have tickers, then don't do anything, since we're
+	// scheduled
+	if len(m.tickers) > 0 {
+		return
+	}
+
+	// Create the stop tick channel, a blocking channel. We close this
+	// when we should stop the tickers.
+	stopCh := make(chan struct{})
+
 	// Create a new probeTicker
 	if m.config.ProbeInterval > 0 {
 		t := time.NewTicker(m.config.ProbeInterval)
-		go m.triggerFunc(t.C, m.probe)
+		go m.triggerFunc(t.C, stopCh, m.probe)
 		m.tickers = append(m.tickers, t)
 	}
 
 	// Create a push pull ticker if needed
 	if m.config.PushPullInterval > 0 {
 		t := time.NewTicker(m.config.PushPullInterval)
-		go m.triggerFunc(t.C, m.pushPull)
+		go m.triggerFunc(t.C, stopCh, m.pushPull)
 		m.tickers = append(m.tickers, t)
 	}
 
 	// Create a gossip ticker if needed
 	if m.config.GossipNodes > 0 {
 		t := time.NewTicker(m.config.GossipInterval)
-		go m.triggerFunc(t.C, m.gossip)
+		go m.triggerFunc(t.C, stopCh, m.gossip)
 		m.tickers = append(m.tickers, t)
+	}
+
+	// If we made any tickers, then record the stopTick channel for
+	// later.
+	if len(m.tickers) > 0 {
+		m.stopTick = stopCh
 	}
 }
 
 // triggerFunc is used to trigger a function call each time a
 // message is received until a stop tick arrives.
-func (m *Memberlist) triggerFunc(C <-chan time.Time, f func()) {
+func (m *Memberlist) triggerFunc(C <-chan time.Time, stop <-chan struct{}, f func()) {
 	for {
 		select {
 		case <-C:
 			f()
-		case <-m.stopTick:
+		case <-stop:
 			return
 		}
 	}
 }
 
-// Deschedule is used to stop the background maintenence
+// Deschedule is used to stop the background maintenence. This is safe
+// to call multiple times.
 func (m *Memberlist) deschedule() {
 	m.tickerLock.Lock()
 	defer m.tickerLock.Unlock()
 
+	// If we have no tickers, then we aren't scheduled.
+	if len(m.tickers) == 0 {
+		return
+	}
+
+	// Close the stop channel so all the ticker listeners stop.
+	close(m.stopTick)
+
+	// Explicitly stop all the tickers themselves so they don't take
+	// up any more resources, and get rid of the list.
 	for _, t := range m.tickers {
 		t.Stop()
-		m.stopTick <- struct{}{}
 	}
 	m.tickers = nil
 }
