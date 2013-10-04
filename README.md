@@ -16,13 +16,13 @@ multiple routes.
 ## Protocol
 
 memberlist is based on ["SWIM: Scalable Weakly-consistent Infection-style Process Group Membership Protocol"](http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf),
-with a few minor adaptations where we felt the protocol was too harsh or
-simply incorrect in practice.
+with a few minor adaptations, mostly to increase propogation speed and
+convergence rate.
 
 A high level overview of the memberlist protocol (based on SWIM) is
 described below, but for details please read the full
 [SWIM paper](http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf)
-accompanied by the memberlist source. We welcome any questions related
+followed by the memberlist source. We welcome any questions related
 to the protocol on our issue tracker.
 
 memberlist begins by joining an existing cluster or starting a new
@@ -32,9 +32,8 @@ least one existing member in order to join the cluster. The new member
 does a full state sync with the existing member over TCP and begins gossiping its
 existence to the cluster.
 
-Gossip is done over UDP to a configurable but fixed number of nodes at a
-configurable interval. This ensures that network
-usage is constant growth with regards to number of nodes, as opposed to
+Gossip is done over UDP to a with a configurable but fixed fanout and interval.
+This ensures that network usage is constant with regards to number of nodes, as opposed to
 exponential growth that can occur with traditional heartbeat mechanisms.
 Complete state exchanges with a random node are done periodically over
 TCP, but much less often than gossip messages. This increases the likelihood
@@ -42,7 +41,7 @@ that the membership list converges properly since the full state is exchanged
 and merged. The interval between full state exchanges is configurable or can
 be disabled entirely.
 
-A random node in the memberlist is periodically probed (configurable interval).
+Failure detection is done by periodic random probing using a configurable interval.
 If the node fails to ack within a reasonable time (typically some multiple
 of RTT), then an indirect probe is attempted. An indirect probe asks a
 configurable number of random nodes to probe the same node, in case there
