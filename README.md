@@ -2,6 +2,11 @@
 
 memberlist is a [Go](http://www.golang.org) library that manages cluster
 membership and member failure detection using a gossip based protocol.
+
+The use cases for such a library are far-reaching: all distributed systems
+require membership, and memberlist is a re-usable solution to managing
+cluster membership and node failure detection.
+
 memberlist is eventually consistent but converges quickly on average.
 The speed at which it converges can be heavily tuned via various knobs
 on the protocol. Node failures are detected and network partitions are partially
@@ -48,3 +53,8 @@ A suspicious node is still considered a member of cluster. If no member
 of the cluster disputes the suspicion within a configurable period of
 time, the node is finally considered dead, and this state is then gossiped
 to the cluster.
+
+As mentioned earlier, this is a brief and incomplete description of the
+protocol. For a better idea, please read the
+[SWIM paper](http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf)
+in its entirety, along with the memberlist source code.
