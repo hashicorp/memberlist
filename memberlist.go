@@ -29,7 +29,7 @@ import (
 
 // Delegate is the interface that clients must implement if they want to hook
 // into the gossip layer of Memberlist. All the methods must be thread-safe,
-// as they will be called concurrently.
+// as they can and generally will be called concurrently.
 type Delegate interface {
 	// NodeMeta is used to retrieve meta-data about the current node
 	// when broadcasting an alive message. It's length is limited to
@@ -60,12 +60,16 @@ type Delegate interface {
 }
 
 // EventDelegate is a simpler delegate that is used only to receive
-// notifications about members joining and leaving
+// notifications about members joining and leaving. The methods in this
+// delegate may be called by multiple goroutines, but never concurrently.
+// This allows you to reason about ordering.
 type EventDelegate interface {
-	// NotifyJoin is invoked when a node is detected to have joined
+	// NotifyJoin is invoked when a node is detected to have joined.
+	// The Node argument must not be modified.
 	NotifyJoin(*Node)
 
-	// NotifyLeave is invoked when a node is detected to have left
+	// NotifyLeave is invoked when a node is detected to have left.
+	// The Node argument must not be modified.
 	NotifyLeave(*Node)
 }
 
