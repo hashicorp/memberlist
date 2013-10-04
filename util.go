@@ -70,17 +70,6 @@ func randomOffset(n int) int {
 	return int(rand.Uint32() % uint32(n))
 }
 
-// Does a non-blocking notify
-func notify(ch chan<- *Node, n *Node) {
-	if ch == nil {
-		return
-	}
-	select {
-	case ch <- n:
-	default:
-	}
-}
-
 // suspicionTimeout computes the timeout that should be used when
 // a node is suspected
 func suspicionTimeout(suspicionMult, n int, interval time.Duration) time.Duration {

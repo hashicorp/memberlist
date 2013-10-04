@@ -437,7 +437,9 @@ func (m *Memberlist) aliveNode(a *alive) {
 
 	// if Dead -> Alive, notify of join
 	if oldState == stateDead {
-		notify(m.config.JoinCh, &state.Node)
+		if m.config.Notify != nil {
+			m.config.Notify.NotifyJoin(&state.Node)
+		}
 	}
 }
 
@@ -564,7 +566,9 @@ func (m *Memberlist) deadNode(d *dead) {
 	delete(m.nodeMap, state.Name)
 
 	// Notify of death
-	notify(m.config.LeaveCh, &state.Node)
+	if m.config.Notify != nil {
+		m.config.Notify.NotifyLeave(&state.Node)
+	}
 }
 
 // mergeState is invoked by the network layer when we get a Push/Pull

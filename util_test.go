@@ -40,41 +40,6 @@ func TestRandomOffset_Zero(t *testing.T) {
 	}
 }
 
-func TestNotify(t *testing.T) {
-	ch1 := make(chan *Node, 1)
-	ch2 := make(chan *Node, 1)
-
-	// Make sure ch1 is full
-	ch1 <- &Node{Name: "test"}
-
-	// Notify ch1
-	n := &Node{Name: "Push"}
-	notify(ch1, n)
-
-	v := <-ch1
-	if v.Name != "test" {
-		t.Fatalf("bad name")
-	}
-
-	// Test receive
-	select {
-	case v := <-ch1:
-		t.Fatalf("bad node %v", v)
-	default:
-	}
-
-	// Test ch2
-	notify(ch2, n)
-	select {
-	case v := <-ch2:
-		if v != n {
-			t.Fatalf("bad node %v", v)
-		}
-	default:
-		t.Fatalf("nothing on channel")
-	}
-}
-
 func TestSuspicionTimeout(t *testing.T) {
 	timeout := suspicionTimeout(3, 10, time.Second)
 	if timeout != 6*time.Second {

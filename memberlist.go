@@ -54,6 +54,16 @@ type Delegate interface {
 	MergeRemoteState([]byte)
 }
 
+// EventDelegate is a simpler delegate that is used only to receive
+// notifications about members joining and leaving
+type EventDelegate interface {
+	// NotifyJoin is invoked when a node is detected to have joined
+	NotifyJoin(*Node)
+
+	// NotifyLeave is invoked when a node is detected to have left
+	NotifyLeave(*Node)
+}
+
 type Config struct {
 	Name             string        // Node name (FQDN)
 	BindAddr         string        // Binding address
@@ -70,9 +80,8 @@ type Config struct {
 	GossipNodes    int           // Number of nodes to gossip to per GossipInterval
 	GossipInterval time.Duration // Gossip interval for non-piggyback messages (only if GossipNodes > 0)
 
-	JoinCh       chan<- *Node
-	LeaveCh      chan<- *Node
-	UserDelegate Delegate // Delegate for user data
+	Notify       EventDelegate // Delegate for events
+	UserDelegate Delegate      // Delegate for user data
 }
 
 type Memberlist struct {
@@ -123,8 +132,6 @@ func DefaultConfig() *Config {
 		GossipNodes:    3,                      // Gossip to 3 nodes
 		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly
 
-		JoinCh:       nil,
-		LeaveCh:      nil,
 		UserDelegate: nil,
 	}
 }

@@ -187,7 +187,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	}
 
 	ch := make(chan *Node, 1)
-	m1.config.LeaveCh = ch
+	m1.config.Notify = &ChannelEventDelegate{nil, ch}
 
 	// Leave
 	m2.Leave()
@@ -224,7 +224,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	c.RTT = 100 * time.Microsecond
 
 	ch := make(chan *Node)
-	c.LeaveCh = ch
+	c.Notify = &ChannelEventDelegate{nil, ch}
 
 	m2, err := Create(c)
 	if err != nil {
@@ -260,7 +260,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 func TestMemberlist_DelegateMeta(t *testing.T) {
 	ch := make(chan *Node, 1)
 	m, d := GetMemberlistDelegate(t)
-	m.config.JoinCh = ch
+	m.config.Notify = &ChannelEventDelegate{ch, nil}
 	d.meta = []byte{42}
 
 	m.setAlive()

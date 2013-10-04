@@ -41,8 +41,7 @@ func TestMemberlist_Integ(t *testing.T) {
 		c.PushPullInterval = 100 * time.Millisecond
 
 		if i == 0 {
-			c.JoinCh = joinCh
-			c.LeaveCh = leaveCh
+			c.Notify = &ChannelEventDelegate{joinCh, leaveCh}
 		}
 
 		m, err := Create(c)
