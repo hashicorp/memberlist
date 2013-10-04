@@ -37,7 +37,7 @@ configurable interval. This ensures that network
 usage is constant growth with regards to number of nodes, as opposed to
 exponential growth that can occur with traditional heartbeat mechanisms.
 Complete state exchanges with a random node are done periodically over
-TCP, but much less often that gossip messages. This increases the likelihood
+TCP, but much less often than gossip messages. This increases the likelihood
 that the membership list converges properly since the full state is exchanged
 and merged. The interval between full state exchanges is configurable or can
 be disabled entirely.
