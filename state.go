@@ -141,9 +141,9 @@ START:
 
 	// Determine if we should probe this node
 	skip := false
-	var node *nodeState
+	var node nodeState
 
-	node = m.nodes[m.probeIndex]
+	node = *m.nodes[m.probeIndex]
 	if node.Name == m.config.Name {
 		skip = true
 	} else if node.State == stateDead {
@@ -159,7 +159,7 @@ START:
 	}
 
 	// Probe the specific node
-	m.probeNode(node)
+	m.probeNode(&node)
 }
 
 // probeNode handles a single round of failure checking on a node
@@ -495,9 +495,10 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	time.AfterFunc(timeout, func() {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]
+		timeout := ok && state.State == stateSuspect && state.StateChange == changeTime
 		m.nodeLock.Unlock()
 
-		if ok && state.State == stateSuspect && state.StateChange == changeTime {
+		if timeout {
 			m.suspectTimeout(state)
 		}
 	})
@@ -573,10 +574,11 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 		// Look for a matching local node
 		m.nodeLock.RLock()
 		local, ok := m.nodeMap[r.Name]
+		sameState := ok && local.State == r.State && r.Name != m.config.Name
 		m.nodeLock.RUnlock()
 
 		// Skip if we agree on states
-		if ok && local.State == r.State && r.Name != m.config.Name {
+		if sameState {
 			continue
 		}
 
