@@ -186,8 +186,8 @@ func TestMemberlist_Leave(t *testing.T) {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
 	}
 
-	ch := make(chan *Node, 1)
-	m1.config.Notify = &ChannelEventDelegate{nil, ch}
+	ch := make(chan NodeEvent, 1)
+	m1.config.Notify = &ChannelEventDelegate{ch}
 
 	// Leave
 	m2.Leave()
@@ -223,8 +223,8 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	c.ProbeInterval = time.Millisecond
 	c.RTT = 100 * time.Microsecond
 
-	ch := make(chan *Node)
-	c.Notify = &ChannelEventDelegate{nil, ch}
+	ch := make(chan NodeEvent)
+	c.Notify = &ChannelEventDelegate{ch}
 
 	m2, err := Create(c)
 	if err != nil {
@@ -258,9 +258,9 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 }
 
 func TestMemberlist_DelegateMeta(t *testing.T) {
-	ch := make(chan *Node, 1)
+	ch := make(chan NodeEvent, 1)
 	m, d := GetMemberlistDelegate(t)
-	m.config.Notify = &ChannelEventDelegate{ch, nil}
+	m.config.Notify = &ChannelEventDelegate{ch}
 	d.meta = []byte{42}
 
 	m.setAlive()
@@ -269,7 +269,7 @@ func TestMemberlist_DelegateMeta(t *testing.T) {
 
 	select {
 	case n := <-ch:
-		if n.Meta[0] != 42 {
+		if n.Node.Meta[0] != 42 {
 			t.Fatalf("bad meta data!")
 		}
 	case <-time.After(time.Second):

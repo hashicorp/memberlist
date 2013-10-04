@@ -27,8 +27,7 @@ func TestMemberlist_Integ(t *testing.T) {
 	num := 16
 	var members []*Memberlist
 
-	joinCh := make(chan *Node, num)
-	leaveCh := make(chan *Node, num)
+	eventCh := make(chan NodeEvent, num)
 
 	for i := 0; i < num; i++ {
 		addr, _ := GetBindAddr()
@@ -41,7 +40,7 @@ func TestMemberlist_Integ(t *testing.T) {
 		c.PushPullInterval = 100 * time.Millisecond
 
 		if i == 0 {
-			c.Notify = &ChannelEventDelegate{joinCh, leaveCh}
+			c.Notify = &ChannelEventDelegate{eventCh}
 		}
 
 		m, err := Create(c)
@@ -65,10 +64,12 @@ func TestMemberlist_Integ(t *testing.T) {
 WAIT:
 	for {
 		select {
-		case j := <-joinCh:
-			log.Printf("[DEBUG] Node join: %v (%d)", *j, members[0].NumMembers())
-		case l := <-leaveCh:
-			log.Printf("[DEBUG] Node leave: %v (%d)", *l, members[0].NumMembers())
+		case e := <-eventCh:
+			if e.Event == NodeJoin {
+				log.Printf("[DEBUG] Node join: %v (%d)", *e.Node, members[0].NumMembers())
+			} else {
+				log.Printf("[DEBUG] Node leave: %v (%d)", *e.Node, members[0].NumMembers())
+			}
 		case <-breakTimer:
 			break WAIT
 		}
