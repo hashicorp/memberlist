@@ -25,6 +25,8 @@ described below, but for details please read the full
 followed by the memberlist source. We welcome any questions related
 to the protocol on our issue tracker.
 
+### Protocol Description
+
 memberlist begins by joining an existing cluster or starting a new
 cluster. If starting a new cluster, additional nodes are expected to join
 it. New nodes in an existing cluster must be given the address of at
@@ -53,7 +55,35 @@ of the cluster does not disputes the suspicion within a configurable period of
 time, the node is finally considered dead, and this state is then gossiped
 to the cluster.
 
-As mentioned earlier, this is a brief and incomplete description of the
-protocol. For a better idea, please read the
+This is a brief and incomplete description of the protocol. For a better idea, 
+please read the
 [SWIM paper](http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf)
 in its entirety, along with the memberlist source code.
+
+### Changes from SWIM
+
+As mentioned earlier, the memberlist protocol is based on SWIM but includes
+minor changes, mostly to increase propogation speed and convergence rates.
+
+The changes from SWIM are noted here:
+
+* memberlist does a full state sync over TCP periodically. SWIM only propagates
+  changes over gossip. While both eventually reach convergence, the full state 
+  sync increases the likelihood that nodes are fully converged more quickly,
+  at the expense of more bandwidth usage. This feature can be totally disabled
+  if you wish.
+
+* memberlist has a dedicated gossip layer separate from the failure detection
+  protocol. SWIM only piggybacks gossip messages on top of probe/ack messages.
+  memberlist also piggybacks gossip messages on top of probe/ack messages, but
+  also will periodically send out dedicated gossip messages on their own. This
+  feature lets you have a higher gossip rate (for example once per 200ms)
+  and a slower failure detection rate (such as once per second), resulting
+  in overall faster convergence rates and data propogation speeds. This feature
+  can be totally disabed as well, if you wish.
+
+* memberlist stores around the state of dead nodes for a set amount of time,
+  so that when full syncs are requested, the requester also receives information
+  about dead nodes. Because SWIM doesn't do full syncs, SWIM deletes dead node
+  state immediately upon learning that the node is dead. This change again helps
+  the cluster converge more quickly.
