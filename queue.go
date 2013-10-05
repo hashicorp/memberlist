@@ -18,15 +18,15 @@ type TransmitLimitedQueue struct {
 // limitedBroadcast is used with the TransmitLimitedQueue
 type limitedBroadcast struct {
 	transmits int // Number of transmissions
-	b         broadcast
+	b         Broadcast
 }
 type limitedBroadcasts []*limitedBroadcast
 
 // Broadcast is something that can be put into the queue.
-type broadcast interface {
+type Broadcast interface {
 	// Invalidates checks if enqueuing the current broadcast
 	// invalidates a previous broadcast
-	Invalidates(b broadcast) bool
+	Invalidates(b Broadcast) bool
 
 	// Returns a byte form of the message
 	Message() []byte
@@ -38,7 +38,7 @@ type broadcast interface {
 }
 
 // QueueBroadcast is used to enqueue a broadcast
-func (q *TransmitLimitedQueue) QueueBroadcast(b broadcast) {
+func (q *TransmitLimitedQueue) QueueBroadcast(b Broadcast) {
 	q.Lock()
 	defer q.Unlock()
 
