@@ -69,7 +69,7 @@ func (m *Memberlist) schedule() {
 	}
 
 	// Create a gossip ticker if needed
-	if m.config.GossipNodes > 0 {
+	if m.config.GossipInterval > 0 && m.config.GossipNodes > 0 {
 		t := time.NewTicker(m.config.GossipInterval)
 		go m.triggerFunc(t.C, stopCh, m.gossip)
 		m.tickers = append(m.tickers, t)
