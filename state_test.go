@@ -24,7 +24,7 @@ func TestMemberList_Probe(t *testing.T) {
 	addr1, ip1 := GetBindAddr()
 	addr2, ip2 := GetBindAddr()
 	m1 := HostMemberlist(addr1, t, func(c *Config) {
-		c.RTT = time.Millisecond
+		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
 	m2 := HostMemberlist(addr2, t, nil)
@@ -56,7 +56,7 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	addr4, ip4 := GetBindAddr()
 
 	m1 := HostMemberlist(addr1, t, func(c *Config) {
-		c.RTT = time.Millisecond
+		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
 	m2 := HostMemberlist(addr2, t, nil)
@@ -94,7 +94,7 @@ func TestMemberList_ProbeNode(t *testing.T) {
 	addr2, ip2 := GetBindAddr()
 
 	m1 := HostMemberlist(addr1, t, func(c *Config) {
-		c.RTT = time.Millisecond
+		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
 	m2 := HostMemberlist(addr2, t, nil)
@@ -230,7 +230,7 @@ func TestMemberList_InvokeAckHandler_Channel(t *testing.T) {
 func TestMemberList_AliveNode_NewNode(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m := GetMemberlist(t)
-	m.config.Notify = &ChannelEventDelegate{ch}
+	m.config.Events = &ChannelEventDelegate{ch}
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a)
@@ -278,7 +278,7 @@ func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
 	m.aliveNode(&a)
 
 	// Listen only after first join
-	m.config.Notify = &ChannelEventDelegate{ch}
+	m.config.Events = &ChannelEventDelegate{ch}
 
 	// Make suspect
 	state := m.nodeMap["test"]
@@ -323,7 +323,7 @@ func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 	m.aliveNode(&a)
 
 	// Listen only after first join
-	m.config.Notify = &ChannelEventDelegate{ch}
+	m.config.Events = &ChannelEventDelegate{ch}
 
 	// Make suspect
 	state := m.nodeMap["test"]
@@ -519,7 +519,7 @@ func TestMemberList_DeadNode_NoNode(t *testing.T) {
 func TestMemberList_DeadNode(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m := GetMemberlist(t)
-	m.config.Notify = &ChannelEventDelegate{ch}
+	m.config.Events = &ChannelEventDelegate{ch}
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a)
 
@@ -577,7 +577,7 @@ func TestMemberList_DeadNode_Double(t *testing.T) {
 	m.broadcasts.Reset()
 
 	// Notify after the first dead
-	m.config.Notify = &ChannelEventDelegate{ch}
+	m.config.Events = &ChannelEventDelegate{ch}
 
 	// Should do nothing
 	d.Incarnation = 2
@@ -679,7 +679,7 @@ func TestMemberList_MergeState(t *testing.T) {
 
 	// Listen for changes
 	eventCh := make(chan NodeEvent, 1)
-	m.config.Notify = &ChannelEventDelegate{eventCh}
+	m.config.Events = &ChannelEventDelegate{eventCh}
 
 	// Merge remote state
 	m.mergeState(remote)
@@ -732,7 +732,7 @@ func TestMemberlist_Gossip(t *testing.T) {
 		c.GossipInterval = time.Millisecond
 	})
 	m2 := HostMemberlist(addr2, t, func(c *Config) {
-		c.Notify = &ChannelEventDelegate{ch}
+		c.Events = &ChannelEventDelegate{ch}
 		c.GossipInterval = time.Millisecond
 	})
 
@@ -770,7 +770,7 @@ func TestMemberlist_PushPull(t *testing.T) {
 	})
 	m2 := HostMemberlist(addr2, t, func(c *Config) {
 		c.GossipInterval = 10 * time.Second
-		c.Notify = &ChannelEventDelegate{ch}
+		c.Events = &ChannelEventDelegate{ch}
 	})
 
 	defer m1.Shutdown()

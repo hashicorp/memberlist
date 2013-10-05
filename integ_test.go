@@ -34,13 +34,13 @@ func TestMemberlist_Integ(t *testing.T) {
 		c := DefaultConfig()
 		c.Name = addr
 		c.BindAddr = addr
-		c.RTT = 100 * time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
+		c.ProbeTimeout = 100 * time.Millisecond
 		c.GossipInterval = 5 * time.Millisecond
 		c.PushPullInterval = 100 * time.Millisecond
 
 		if i == 0 {
-			c.Notify = &ChannelEventDelegate{eventCh}
+			c.Events = &ChannelEventDelegate{eventCh}
 		}
 
 		m, err := Create(c)

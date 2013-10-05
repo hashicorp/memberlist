@@ -74,23 +74,95 @@ type EventDelegate interface {
 }
 
 type Config struct {
-	Name             string        // Node name (FQDN)
-	BindAddr         string        // Binding address
-	UDPPort          int           // UDP port to listen on
-	TCPPort          int           // TCP port to listen on
-	TCPTimeout       time.Duration // TCP timeout
-	IndirectChecks   int           // Number of indirect checks to use
-	RetransmitMult   int           // Retransmits = RetransmitMult * log(N+1)
-	SuspicionMult    int           // Suspicion time = SuspcicionMult * log(N+1) * Interval
-	PushPullInterval time.Duration // How often we do a Push/Pull update
-	RTT              time.Duration // 99% precentile of round-trip-time
-	ProbeInterval    time.Duration // Failure probing interval length
+	// The name of this node. This must be unique in the cluster.
+	Name string
 
-	GossipNodes    int           // Number of nodes to gossip to per GossipInterval
-	GossipInterval time.Duration // Gossip interval for non-piggyback messages (only if GossipNodes > 0)
+	// Configuration related to what address to bind to and ports to
+	// listen on. The ports used must match every node in the cluster,
+	// since they'll be used for connecting as well as listening.
+	BindAddr string
+	UDPPort  int
+	TCPPort  int
 
-	Notify       EventDelegate // Delegate for events
-	UserDelegate Delegate      // Delegate for user data
+	// TCPTimeout is the timeout for establishing a TCP connection with
+	// a remote node for a full state sync.
+	TCPTimeout time.Duration
+
+	// IndirectChecks is the number of nodes that will be asked to perform
+	// an indirect probe of a node in the case a direct probe fails. Memberlist
+	// waits for an ack from any single indirect node, so increasing this
+	// number will increase the likelihood that an indirect probe will succeed
+	// at the expense of bandwidth.
+	IndirectChecks int
+
+	// RetransmitMult is the multiplier for the number of retransmissions
+	// that are attempted for messages broadcasted over gossip. The actual
+	// count of retransmissions is calculated using the formula:
+	//
+	//   Retransmits = RetransmitMult * log(N+1)
+	//
+	// This allows the retransmits to scale properly with cluster size. The
+	// higher the multiplier, the more likely a failed broadcast is to converge
+	// at the expense of increased bandwidth.
+	RetransmitMult int
+
+	// SuspicionMult is the multiplier for determining the time an
+	// inaccessible node is considered suspect before declaring it dead.
+	// The actual timeout is calculated using the formula:
+	//
+	//   SuspicionTimeout = SuspicionMult * log(N+1) * ProbeInterval
+	//
+	// This allows the timeout to scale properly with expected propagation
+	// delay with a larger cluster size. The higher the multiplier, the longer
+	// an inaccessible node is considered part of the cluster before declaring
+	// it dead, giving that suspect node more time to refute if it is indeed
+	// still alive.
+	SuspicionMult int
+
+	// PushPullInterval is the interval between complete state syncs.
+	// Complete state syncs are done with a single node over TCP and are
+	// quite expensive relative to standard gossiped messages. Setting this
+	// to zero will disable state push/pull syncs completely.
+	//
+	// Setting this interval lower (more frequent) will increase convergence
+	// speeds across larger clusters at the expense of increased bandwidth
+	// usage.
+	PushPullInterval time.Duration
+
+	// ProbeInterval and ProbeTimeout are used to configure probing
+	// behavior for memberlist.
+	//
+	// ProbeInterval is the interval between random node probes. Setting
+	// this lower (more frequent) will cause the memberlist cluster to detect
+	// failed nodes more quickly at the expense of increased bandwidth usage.
+	//
+	// ProbeTimeout is the timeout to wait for an ack from a probed node
+	// before assuming it is unhealthy. This should be set to 99-percentile
+	// of RTT (round-trip time) on your network.
+	ProbeInterval time.Duration
+	ProbeTimeout  time.Duration
+
+	// GossipInterval and GossipNodes are used to configure the gossip
+	// behavior of memberlist.
+	//
+	// GossipInterval is the interval between sending messages that need
+	// to be gossiped that haven't been able to piggyback on probing messages.
+	// If this is set to zero, non-piggyback gossip is disabled. By lowering
+	// this value (more frequent) gossip messages are propagated across
+	// the cluster more quickly at the expense of increased bandwidth.
+	//
+	// GossipNodes is the number of random nodes to send gossip messages to
+	// per GossipInterval. Increasing this number causes the gossip messages
+	// to propagate across the cluster more quickly at the expense of
+	// increased bandwidth.
+	GossipInterval time.Duration
+	GossipNodes    int
+
+	// Delegate and Events are delegates for receiving and providing
+	// data to memberlist via callback mechanisms. For Delegate, see
+	// the Delegate interface. For Events, see the EventDelegate interface.
+	Delegate Delegate
+	Events   EventDelegate
 }
 
 type Memberlist struct {
@@ -135,13 +207,11 @@ func DefaultConfig() *Config {
 		RetransmitMult:   4,                     // Retransmit a message 4 * log(N+1) nodes
 		SuspicionMult:    5,                     // Suspect a node for 5 * log(N+1) * Interval
 		PushPullInterval: 30 * time.Second,      // Low frequency
-		RTT:              20 * time.Millisecond, // Reasonable RTT time for LAN
+		ProbeTimeout:     20 * time.Millisecond, // Reasonable RTT time for LAN
 		ProbeInterval:    1 * time.Second,       // Failure check every second
 
 		GossipNodes:    3,                      // Gossip to 3 nodes
 		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly
-
-		UserDelegate: nil,
 	}
 }
 
@@ -179,7 +249,11 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	return m, nil
 }
 
-// Create will start memberlist but does not connect to any other node
+// Create will create a new Memberlist using the given configuration.
+// This will not connect to any other node (see Join) yet, but will start
+// all the listeners to allow other nodes to join this memberlist.
+// After creating a Memberlist, the configuration given should not be
+// modified by the user anymore.
 func Create(conf *Config) (*Memberlist, error) {
 	m, err := newMemberlist(conf)
 	if err != nil {
@@ -263,8 +337,8 @@ func (m *Memberlist) setAlive() error {
 
 	// Get the node meta data
 	var meta []byte
-	if m.config.UserDelegate != nil {
-		meta = m.config.UserDelegate.NodeMeta(metaMaxSize)
+	if m.config.Delegate != nil {
+		meta = m.config.Delegate.NodeMeta(metaMaxSize)
 		if len(meta) > metaMaxSize {
 			panic("Node meta data provided is longer than the limit")
 		}

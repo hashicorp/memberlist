@@ -48,7 +48,7 @@ func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
 
 	c := DefaultConfig()
 	c.BindAddr = "127.0.0.1"
-	c.UserDelegate = d
+	c.Delegate = d
 
 	var m *Memberlist
 	var err error
@@ -187,7 +187,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	}
 
 	ch := make(chan NodeEvent, 1)
-	m1.config.Notify = &ChannelEventDelegate{ch}
+	m1.config.Events = &ChannelEventDelegate{ch}
 
 	// Leave
 	m2.Leave()
@@ -221,10 +221,10 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	c.UDPPort = m1.config.UDPPort
 	c.TCPPort = m1.config.TCPPort
 	c.ProbeInterval = time.Millisecond
-	c.RTT = 100 * time.Microsecond
+	c.ProbeTimeout = 100 * time.Microsecond
 
 	ch := make(chan NodeEvent)
-	c.Notify = &ChannelEventDelegate{ch}
+	c.Events = &ChannelEventDelegate{ch}
 
 	m2, err := Create(c)
 	if err != nil {
@@ -260,7 +260,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 func TestMemberlist_DelegateMeta(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m, d := GetMemberlistDelegate(t)
-	m.config.Notify = &ChannelEventDelegate{ch}
+	m.config.Events = &ChannelEventDelegate{ch}
 	d.meta = []byte{42}
 
 	m.setAlive()
@@ -301,7 +301,7 @@ func TestMemberlist_UserData(t *testing.T) {
 	c.TCPPort = m1.config.TCPPort
 	c.GossipInterval = time.Millisecond
 	c.PushPullInterval = time.Millisecond
-	c.UserDelegate = d2
+	c.Delegate = d2
 
 	m2, err := Create(c)
 	if err != nil {

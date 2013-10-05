@@ -184,7 +184,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		if v == true {
 			return
 		}
-	case <-time.After(m.config.RTT):
+	case <-time.After(m.config.ProbeTimeout):
 	}
 
 	// Get some random live nodes
@@ -301,8 +301,8 @@ func (m *Memberlist) pushPullNode(addr []byte) error {
 	m.mergeState(remote)
 
 	// Invoke the delegate
-	if m.config.UserDelegate != nil {
-		m.config.UserDelegate.MergeRemoteState(userState)
+	if m.config.Delegate != nil {
+		m.config.Delegate.MergeRemoteState(userState)
 	}
 	return nil
 }
@@ -437,8 +437,8 @@ func (m *Memberlist) aliveNode(a *alive) {
 
 	// if Dead -> Alive, notify of join
 	if oldState == stateDead {
-		if m.config.Notify != nil {
-			m.config.Notify.NotifyJoin(&state.Node)
+		if m.config.Events != nil {
+			m.config.Events.NotifyJoin(&state.Node)
 		}
 	}
 }
@@ -566,8 +566,8 @@ func (m *Memberlist) deadNode(d *dead) {
 	delete(m.nodeMap, state.Name)
 
 	// Notify of death
-	if m.config.Notify != nil {
-		m.config.Notify.NotifyLeave(&state.Node)
+	if m.config.Events != nil {
+		m.config.Events.NotifyLeave(&state.Node)
 	}
 }
 

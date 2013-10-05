@@ -135,8 +135,8 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	m.mergeState(remoteNodes)
 
 	// Invoke the delegate for user state
-	if m.config.UserDelegate != nil {
-		m.config.UserDelegate.MergeRemoteState(userState)
+	if m.config.Delegate != nil {
+		m.config.Delegate.MergeRemoteState(userState)
 	}
 }
 
@@ -249,7 +249,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 			log.Printf("[ERR] Failed to forward ack: %s", err)
 		}
 	}
-	m.setAckHandler(localSeqNo, respHandler, m.config.RTT)
+	m.setAckHandler(localSeqNo, respHandler, m.config.ProbeTimeout)
 
 	// Send the ping
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
@@ -295,7 +295,7 @@ func (m *Memberlist) handleDead(buf []byte, from net.Addr) {
 
 // handleUser is used to notify channels of incoming user data
 func (m *Memberlist) handleUser(buf []byte, from net.Addr) {
-	d := m.config.UserDelegate
+	d := m.config.Delegate
 	if d != nil {
 		d.NotifyMsg(buf)
 	}
@@ -384,8 +384,8 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 
 	// Get the delegate state
 	var userData []byte
-	if m.config.UserDelegate != nil {
-		userData = m.config.UserDelegate.LocalState()
+	if m.config.Delegate != nil {
+		userData = m.config.Delegate.LocalState()
 	}
 
 	// Send our node state

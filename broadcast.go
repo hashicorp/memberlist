@@ -78,7 +78,7 @@ func (m *Memberlist) getBroadcasts(overhead, limit int) [][]byte {
 	toSend := m.broadcasts.GetBroadcasts(overhead, limit)
 
 	// Check if the user has anything to broadcast
-	d := m.config.UserDelegate
+	d := m.config.Delegate
 	if d != nil {
 		// Determine the bytes used already
 		bytesUsed := 0
