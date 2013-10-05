@@ -5,28 +5,36 @@ import (
 	"sync"
 )
 
-// TransmitLimitedQueue is used to queue messages to broadcast but
-// limits the number of transmits per message, and also prioritises
-// messages with lower transmit counts (hence new messages).
+// TransmitLimitedQueue is used to queue messages to broadcast to
+// the cluster (via gossip) but limits the number of transmits per
+// message. It also prioritizes messages with lower transmit counts
+// (hence newer messages).
 type TransmitLimitedQueue struct {
-	sync.Mutex
-	bcQueue        limitedBroadcasts
-	NumNodes       func() int
+	// NumNodes returns the number of nodes in the cluster. This is
+	// used to determine the retransmit count, which is calculated
+	// based on the log of this.
+	NumNodes func() int
+
+	// RetransmitMult is the multiplier used to determine the maximum
+	// number of retransmissions attempted.
 	RetransmitMult int
+
+	sync.Mutex
+	bcQueue limitedBroadcasts
 }
 
-// limitedBroadcast is used with the TransmitLimitedQueue
 type limitedBroadcast struct {
-	transmits int // Number of transmissions
-	b         Broadcast
+	transmits int // Number of transmissions attempted.
+	b         Broadcastable
 }
 type limitedBroadcasts []*limitedBroadcast
 
-// Broadcast is something that can be put into the queue.
-type Broadcast interface {
+// Broadcastable is something that can be broadcasted via gossip to
+// the memberlist cluster.
+type Broadcastable interface {
 	// Invalidates checks if enqueuing the current broadcast
 	// invalidates a previous broadcast
-	Invalidates(b Broadcast) bool
+	Invalidates(b Broadcastable) bool
 
 	// Returns a byte form of the message
 	Message() []byte
@@ -38,7 +46,7 @@ type Broadcast interface {
 }
 
 // QueueBroadcast is used to enqueue a broadcast
-func (q *TransmitLimitedQueue) QueueBroadcast(b Broadcast) {
+func (q *TransmitLimitedQueue) QueueBroadcast(b Broadcastable) {
 	q.Lock()
 	defer q.Unlock()
 
