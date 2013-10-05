@@ -1,21 +1,16 @@
 /*
-The memberlist package is used to provide a lightweight gossip based
-mechanism for node membership and failure detection. It is loosely
-based on the SWIM paper (Scalable Weakly-consistent Infection-style
-process group Membership protocol). There are a few notable differences,
-including the uses of additional gossip (instead of purely piggybacking on
-failure detection) and the addition of a state push/pull mechanism.
+memberlist is a library that manages cluster
+membership and member failure detection using a gossip based protocol.
 
-An independent gossip mechanism is used because it allows for changes to be propogated
-more quickly, and also enables us to gossip at a different interval that we perform
-failure checks. The gossip rate is tunable, and can be disabled.
+The use cases for such a library are far-reaching: all distributed systems
+require membership, and memberlist is a re-usable solution to managing
+cluster membership and node failure detection.
 
-A Push/Pull mechanism is also included because it allows new nodes to
-get an almost complete member list upon joining. It also is used as
-a periodic anti-entropy mechanism to ensure very high convergence rates.
-The frequency of this can be adjusted to change the overhead, or disabled
-entirely.
-
+memberlist is eventually consistent but converges quickly on average.
+The speed at which it converges can be heavily tuned via various knobs
+on the protocol. Node failures are detected and network partitions are partially
+tolerated by attempting to communicate to potentially dead nodes through
+multiple routes.
 */
 package memberlist
 
@@ -194,9 +189,12 @@ type Memberlist struct {
 	startStopLock sync.Mutex
 }
 
-// DefaultConfig is used to return a default sane set of configurations for
-// Memberlist. It uses the hostname as the node name, and otherwise sets conservative
-// values that are sane for most LAN environments.
+// DefaultConfig returns a sane set of configurations for Memberlist.
+// It uses the hostname as the node name, and otherwise sets very conservative
+// values that are sane for most LAN environments. The default configuration
+// errs on the side on the side of caution, choosing values that are optimized
+// for higher convergence at the cost of higher bandwidth usage. Regardless,
+// these values are a good starting point when getting started with memberlist.
 func DefaultConfig() *Config {
 	hostname, _ := os.Hostname()
 	return &Config{
@@ -204,13 +202,13 @@ func DefaultConfig() *Config {
 		BindAddr:         "0.0.0.0",
 		UDPPort:          7946,
 		TCPPort:          7946,
-		TCPTimeout:       10 * time.Second,      // Timeout after 10 seconds
-		IndirectChecks:   3,                     // Use 3 nodes for the indirect ping
-		RetransmitMult:   4,                     // Retransmit a message 4 * log(N+1) nodes
-		SuspicionMult:    5,                     // Suspect a node for 5 * log(N+1) * Interval
-		PushPullInterval: 30 * time.Second,      // Low frequency
-		ProbeTimeout:     20 * time.Millisecond, // Reasonable RTT time for LAN
-		ProbeInterval:    1 * time.Second,       // Failure check every second
+		TCPTimeout:       30 * time.Second,       // Timeout after 10 seconds
+		IndirectChecks:   3,                      // Use 3 nodes for the indirect ping
+		RetransmitMult:   4,                      // Retransmit a message 4 * log(N+1) nodes
+		SuspicionMult:    5,                      // Suspect a node for 5 * log(N+1) * Interval
+		PushPullInterval: 30 * time.Second,       // Low frequency
+		ProbeTimeout:     500 * time.Millisecond, // Reasonable RTT time for LAN
+		ProbeInterval:    1 * time.Second,        // Failure check every second
 
 		GossipNodes:    3,                      // Gossip to 3 nodes
 		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly

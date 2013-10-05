@@ -15,7 +15,36 @@ multiple routes.
 
 ## Usage
 
+Memberlist is surprisingly simple to use. An example is shown below:
 
+```go
+// Create the initial memberlist from a safe configuration.
+list, err := memberlist.Create(memberlist.DefaultConfig())
+if err != nil {
+	panic("Failed to create memberlist: " + err.Error())
+}
+
+// Join an existing cluster by specifying at least one known member.
+n, err := list.Join([]string{"1.2.3.4"})
+if err != nil {
+	panic("Failed to join cluster: " + err.Error())
+}
+
+// Ask for members of the cluster
+for _, member := range list.Members() {
+	fmt.Printf("Member: %s %s\n", member.Name, member.Addr)
+}
+
+// Continue doing whatever you need, memberlist will maintain membership
+// information in the background. Delegates can be used for receiving
+// events when members join or leave.
+```
+
+The most difficult part of memberlist is configuring it since it has many
+available knobs in order to tune state propagation delay and convergence times.
+Memberlist provides a default configuration that offers a good starting point,
+but errs on the side of caution, choosing values that are optimized for
+higher convergence at the cost of higher bandwidth usage.
 
 ## Protocol
 
