@@ -8,7 +8,7 @@ import (
 // TransmitLimitedQueue is used to queue messages to broadcast but
 // limits the number of transmits per message, and also prioritises
 // messages with lower transmit counts (hence new messages).
-type transmitLimitedQueue struct {
+type TransmitLimitedQueue struct {
 	sync.Mutex
 	bcQueue        limitedBroadcasts
 	NumNodes       func() int
@@ -38,7 +38,7 @@ type broadcast interface {
 }
 
 // QueueBroadcast is used to enqueue a broadcast
-func (q *transmitLimitedQueue) QueueBroadcast(b broadcast) {
+func (q *TransmitLimitedQueue) QueueBroadcast(b broadcast) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -60,7 +60,7 @@ func (q *transmitLimitedQueue) QueueBroadcast(b broadcast) {
 
 // GetBroadcasts is used to get a number of broadcasts, up to a byte limit
 // and applying a per-message overhead as provided.
-func (q *transmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
+func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 	q.Lock()
 	defer q.Unlock()
 
@@ -104,14 +104,14 @@ func (q *transmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 }
 
 // NumQueued returns the number of queued messages
-func (q *transmitLimitedQueue) NumQueued() int {
+func (q *TransmitLimitedQueue) NumQueued() int {
 	q.Lock()
 	defer q.Unlock()
 	return len(q.bcQueue)
 }
 
 // Reset clears all the queued messages
-func (q *transmitLimitedQueue) Reset() {
+func (q *TransmitLimitedQueue) Reset() {
 	q.Lock()
 	defer q.Unlock()
 	for _, b := range q.bcQueue {

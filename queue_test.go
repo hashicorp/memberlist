@@ -5,7 +5,7 @@ import (
 )
 
 func TestTransmitLimited_Queue(t *testing.T) {
-	q := &transmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 1 }}
+	q := &TransmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 1 }}
 	q.QueueBroadcast(&memberlistBroadcast{"test", nil, nil})
 	q.QueueBroadcast(&memberlistBroadcast{"foo", nil, nil})
 	q.QueueBroadcast(&memberlistBroadcast{"bar", nil, nil})
@@ -41,7 +41,7 @@ func TestTransmitLimited_Queue(t *testing.T) {
 }
 
 func TestTransmitLimited_GetBroadcasts(t *testing.T) {
-	q := &transmitLimitedQueue{RetransmitMult: 3, NumNodes: func() int { return 10 }}
+	q := &TransmitLimitedQueue{RetransmitMult: 3, NumNodes: func() int { return 10 }}
 
 	// 18 bytes per message
 	q.QueueBroadcast(&memberlistBroadcast{"test", []byte("1. this is a test."), nil})
@@ -63,7 +63,7 @@ func TestTransmitLimited_GetBroadcasts(t *testing.T) {
 }
 
 func TestTransmitLimited_GetBroadcasts_Limit(t *testing.T) {
-	q := &transmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 10 }}
+	q := &TransmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 10 }}
 
 	// 18 bytes per message
 	q.QueueBroadcast(&memberlistBroadcast{"test", []byte("1. this is a test."), nil})
