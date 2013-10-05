@@ -55,7 +55,7 @@ of the cluster does not disputes the suspicion within a configurable period of
 time, the node is finally considered dead, and this state is then gossiped
 to the cluster.
 
-This is a brief and incomplete description of the protocol. For a better idea, 
+This is a brief and incomplete description of the protocol. For a better idea,
 please read the
 [SWIM paper](http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf)
 in its entirety, along with the memberlist source code.
@@ -68,7 +68,7 @@ minor changes, mostly to increase propogation speed and convergence rates.
 The changes from SWIM are noted here:
 
 * memberlist does a full state sync over TCP periodically. SWIM only propagates
-  changes over gossip. While both eventually reach convergence, the full state 
+  changes over gossip. While both eventually reach convergence, the full state
   sync increases the likelihood that nodes are fully converged more quickly,
   at the expense of more bandwidth usage. This feature can be totally disabled
   if you wish.
