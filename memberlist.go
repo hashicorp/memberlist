@@ -190,6 +190,8 @@ type Memberlist struct {
 	ackHandlers map[uint32]*ackHandler
 
 	broadcasts *TransmitLimitedQueue
+
+	startStopLock sync.Mutex
 }
 
 // DefaultConfig is used to return a default sane set of configurations for
@@ -267,9 +269,15 @@ func Create(conf *Config) (*Memberlist, error) {
 	return m, nil
 }
 
-// Join is used to take an existing Memberlist and attempt to join
-// a cluster by contacting all the given hosts. Returns the number successfully,
-// contacted and an error if none could be reached.
+// Join is used to take an existing Memberlist and attempt to join a cluster
+// by contacting all the given hosts and performing a state sync. Initially,
+// the Memberlist only contains our own state, so doing this will cause
+// remote nodes to become aware of the existence of this node, effectively
+// joining the cluster.
+//
+// This returns the number of hosts successfully contacted and an error if
+// none could be reached. If an error is returned, the node did not successfully
+// join the cluster.
 func (m *Memberlist) Join(existing []string) (int, error) {
 	// Attempt to join any of them
 	numSuccess := 0
@@ -292,6 +300,7 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 	if numSuccess > 0 {
 		retErr = nil
 	}
+
 	return numSuccess, retErr
 }
 
@@ -380,29 +389,54 @@ func (m *Memberlist) NumMembers() (alive int) {
 	return
 }
 
-// Leave will broadcast a leave message but will not shutdown
-// the memberlist background maintenence. This should be followed
-// by a Shutdown(). This will block until the death message has
-// finished gossiping out.
+// Leave will broadcast a leave message but will not shutdown the background
+// listeners, meaning the node will continue participating in gossip and state
+// updates.
+//
+// This will block until the leave message is successfully broadcasted to
+// a member of the cluster, if any exist.
+//
+// This method is safe to call multiple times, but must not be called
+// after the cluster is already shut down.
 func (m *Memberlist) Leave() error {
-	m.leave = true
-	d := dead{Incarnation: m.incarnation, Node: m.config.Name}
-	m.deadNode(&d)
+	m.startStopLock.Lock()
+	defer m.startStopLock.Unlock()
 
-	// Block until the broadcast goes out
-	if len(m.nodes) > 1 {
-		<-m.leaveBroadcast
+	if m.shutdown {
+		panic("leave after shutdown")
 	}
+
+	if !m.leave {
+		m.leave = true
+		d := dead{Incarnation: m.incarnation, Node: m.config.Name}
+		m.deadNode(&d)
+
+		// Block until the broadcast goes out
+		if len(m.nodes) > 1 {
+			<-m.leaveBroadcast
+		}
+	}
+
 	return nil
 }
 
-// Shutdown will stop the memberlist background maintenence
-// but will not broadcast a leave message prior. If no prior
-// leave was issued, other nodes will detect this as a failure.
+// Shutdown will stop any background maintanence of network activity
+// for this memberlist, causing it to appear "dead". A leave message
+// will not be broadcasted prior, so the cluster being left will have
+// to detect this node's shutdown using probing. If you wish to more
+// gracefully exit the cluster, call Leave prior to shutting down.
+//
+// This method is safe to call multiple times.
 func (m *Memberlist) Shutdown() error {
-	m.shutdown = true
-	m.deschedule()
-	m.udpListener.Close()
-	m.tcpListener.Close()
+	m.startStopLock.Lock()
+	defer m.startStopLock.Unlock()
+
+	if !m.shutdown {
+		m.shutdown = true
+		m.deschedule()
+		m.udpListener.Close()
+		m.tcpListener.Close()
+	}
+
 	return nil
 }

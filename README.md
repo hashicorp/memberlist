@@ -13,6 +13,10 @@ on the protocol. Node failures are detected and network partitions are partially
 tolerated by attempting to communicate to potentially dead nodes through
 multiple routes.
 
+## Usage
+
+
+
 ## Protocol
 
 memberlist is based on ["SWIM: Scalable Weakly-consistent Infection-style Process Group Membership Protocol"](http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf),
