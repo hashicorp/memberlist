@@ -360,32 +360,41 @@ func (m *Memberlist) setAlive() error {
 		Meta:        meta,
 	}
 	m.aliveNode(&a)
+
 	return nil
 }
 
-// Members is used to return a list of all known live nodes
+// Members returns a list of all known live nodes. The node structures
+// returned must not be modified. If you wish to modify a Node, make a
+// copy first.
 func (m *Memberlist) Members() []*Node {
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
+
 	nodes := make([]*Node, 0, len(m.nodes))
 	for _, n := range m.nodes {
 		if n.State != stateDead {
 			nodes = append(nodes, &n.Node)
 		}
 	}
+
 	return nodes
 }
 
-// NumMembers provides an efficient way to determine
-// the number of alive members
+// NumMembers returns the number of alive nodes currently known. Between
+// the time of calling this and calling Members, the number of alive nodes
+// may have changed, so this shouldn't be used to determine how many
+// members will be returned by Members.
 func (m *Memberlist) NumMembers() (alive int) {
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
+
 	for _, n := range m.nodes {
 		if n.State != stateDead {
 			alive++
 		}
 	}
+
 	return
 }
 
