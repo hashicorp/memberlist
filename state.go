@@ -16,11 +16,11 @@ const (
 	stateDead
 )
 
-// Node is used to represent a known node
+// Node represents a node in the cluster.
 type Node struct {
-	Name string // Remote node name
-	Addr net.IP // Remote address
-	Meta []byte // Node meta data
+	Name string
+	Addr net.IP
+	Meta []byte // Metadata from the delegate for this node.
 }
 
 // NodeState is used to manage our state view of another node

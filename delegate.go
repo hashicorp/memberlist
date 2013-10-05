@@ -1,6 +1,7 @@
 package memberlist
 
-// Constant event types
+// NodeEventType are the types of events that can be sent from the
+// ChannelEventDelegate.
 type NodeEventType int
 
 const (
@@ -10,12 +11,15 @@ const (
 
 // ChannelEventDelegate is used to enable an application to receive
 // events about joins and leaves over a channel instead of a direct
-// function call
+// function call.
 type ChannelEventDelegate struct {
 	Ch chan<- NodeEvent
 }
 
-// NodeEvent is used to represent a node event
+// NodeEvent is a single event related to node activity in the memberlist.
+// The Node member of this struct must not be directly modified. It is passed
+// as a pointer to avoid unnecessary copies. If you wish to modify the node,
+// make a copy first.
 type NodeEvent struct {
 	Event NodeEventType
 	Node  *Node

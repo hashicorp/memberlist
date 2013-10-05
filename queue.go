@@ -8,7 +8,7 @@ import (
 // TransmitLimitedQueue is used to queue messages to broadcast but
 // limits the number of transmits per message, and also prioritises
 // messages with lower transmit counts (hence new messages).
-type TransmitLimitedQueue struct {
+type transmitLimitedQueue struct {
 	sync.Mutex
 	bcQueue        limitedBroadcasts
 	NumNodes       func() int
@@ -18,15 +18,15 @@ type TransmitLimitedQueue struct {
 // limitedBroadcast is used with the TransmitLimitedQueue
 type limitedBroadcast struct {
 	transmits int // Number of transmissions
-	b         Broadcast
+	b         broadcast
 }
 type limitedBroadcasts []*limitedBroadcast
 
-// Broadcast is something that can be put into the queue
-type Broadcast interface {
+// Broadcast is something that can be put into the queue.
+type broadcast interface {
 	// Invalidates checks if enqueuing the current broadcast
 	// invalidates a previous broadcast
-	Invalidates(b Broadcast) bool
+	Invalidates(b broadcast) bool
 
 	// Returns a byte form of the message
 	Message() []byte
@@ -38,7 +38,7 @@ type Broadcast interface {
 }
 
 // QueueBroadcast is used to enqueue a broadcast
-func (q *TransmitLimitedQueue) QueueBroadcast(b Broadcast) {
+func (q *transmitLimitedQueue) QueueBroadcast(b broadcast) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -60,7 +60,7 @@ func (q *TransmitLimitedQueue) QueueBroadcast(b Broadcast) {
 
 // GetBroadcasts is used to get a number of broadcasts, up to a byte limit
 // and applying a per-message overhead as provided.
-func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
+func (q *transmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 	q.Lock()
 	defer q.Unlock()
 
@@ -104,14 +104,14 @@ func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 }
 
 // NumQueued returns the number of queued messages
-func (q *TransmitLimitedQueue) NumQueued() int {
+func (q *transmitLimitedQueue) NumQueued() int {
 	q.Lock()
 	defer q.Unlock()
 	return len(q.bcQueue)
 }
 
 // Reset clears all the queued messages
-func (q *TransmitLimitedQueue) Reset() {
+func (q *transmitLimitedQueue) Reset() {
 	q.Lock()
 	defer q.Unlock()
 	for _, b := range q.bcQueue {
