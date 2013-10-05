@@ -25,16 +25,16 @@ type TransmitLimitedQueue struct {
 
 type limitedBroadcast struct {
 	transmits int // Number of transmissions attempted.
-	b         Broadcastable
+	b         Broadcast
 }
 type limitedBroadcasts []*limitedBroadcast
 
-// Broadcastable is something that can be broadcasted via gossip to
+// Broadcast is something that can be broadcasted via gossip to
 // the memberlist cluster.
-type Broadcastable interface {
+type Broadcast interface {
 	// Invalidates checks if enqueuing the current broadcast
 	// invalidates a previous broadcast
-	Invalidates(b Broadcastable) bool
+	Invalidates(b Broadcast) bool
 
 	// Returns a byte form of the message
 	Message() []byte
@@ -46,7 +46,7 @@ type Broadcastable interface {
 }
 
 // QueueBroadcast is used to enqueue a broadcast
-func (q *TransmitLimitedQueue) QueueBroadcast(b Broadcastable) {
+func (q *TransmitLimitedQueue) QueueBroadcast(b Broadcast) {
 	q.Lock()
 	defer q.Unlock()
 

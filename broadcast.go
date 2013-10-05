@@ -22,7 +22,7 @@ type memberlistBroadcast struct {
 	notify chan struct{}
 }
 
-func (b *memberlistBroadcast) Invalidates(other Broadcastable) bool {
+func (b *memberlistBroadcast) Invalidates(other Broadcast) bool {
 	// Check if that broadcast is a memberlist type
 	mb, ok := other.(*memberlistBroadcast)
 	if !ok {
