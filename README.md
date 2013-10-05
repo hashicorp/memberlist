@@ -46,6 +46,8 @@ Memberlist provides a default configuration that offers a good starting point,
 but errs on the side of caution, choosing values that are optimized for
 higher convergence at the cost of higher bandwidth usage.
 
+For complete documentation, see the associated [Godoc](#).
+
 ## Protocol
 
 memberlist is based on ["SWIM: Scalable Weakly-consistent Infection-style Process Group Membership Protocol"](http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf),
