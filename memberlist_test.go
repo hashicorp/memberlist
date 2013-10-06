@@ -186,18 +186,11 @@ func TestMemberlist_Leave(t *testing.T) {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
 	}
 
-	ch := make(chan NodeEvent, 1)
-	m1.config.Events = &ChannelEventDelegate{ch}
-
 	// Leave
 	m2.Leave()
 
 	// Wait for leave
-	select {
-	case <-ch:
-	case <-time.After(10 * time.Millisecond):
-		t.Fatalf("timeout on leave")
-	}
+	time.Sleep(10 * time.Millisecond)
 
 	// m1 should think dead
 	if len(m1.Members()) != 1 {
