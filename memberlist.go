@@ -423,13 +423,8 @@ func (m *Memberlist) Leave() error {
 			return nil
 		}
 
-		inc := m.nextIncarnation()
-		for state.Incarnation >= inc {
-			inc = m.nextIncarnation()
-		}
-
 		d := dead{
-			Incarnation: inc,
+			Incarnation: state.Incarnation,
 			Node: state.Name,
 		}
 		m.deadNode(&d)
