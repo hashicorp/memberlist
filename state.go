@@ -385,6 +385,14 @@ func (m *Memberlist) aliveNode(a *alive) {
 	defer m.nodeLock.Unlock()
 	state, ok := m.nodeMap[a.Node]
 
+	// It is possible that during a Leave(), there is already an aliveMsg
+	// in-queue to be processed but blocked by the locks above. If we let
+	// that aliveMsg process, it'll cause us to re-join the cluster. This
+	// ensures that we don't.
+	if m.leave && a.Node == m.config.Name {
+		return
+	}
+
 	// Check if we've never seen this node before, and if not, then
 	// store this node in our node map.
 	if !ok {
