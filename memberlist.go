@@ -16,6 +16,7 @@ package memberlist
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"sync"
@@ -415,7 +416,22 @@ func (m *Memberlist) Leave() error {
 
 	if !m.leave {
 		m.leave = true
-		d := dead{Incarnation: m.incarnation, Node: m.config.Name}
+
+		state, ok := m.nodeMap[m.config.Name]
+		if !ok {
+			log.Println("[WARN] Leave but we're not in the node map.")
+			return nil
+		}
+
+		inc := m.nextIncarnation()
+		for state.Incarnation >= inc {
+			inc = m.nextIncarnation()
+		}
+
+		d := dead{
+			Incarnation: inc,
+			Node: state.Name,
+		}
 		m.deadNode(&d)
 
 		// Block until the broadcast goes out
