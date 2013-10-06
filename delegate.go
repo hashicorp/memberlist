@@ -12,6 +12,9 @@ const (
 // ChannelEventDelegate is used to enable an application to receive
 // events about joins and leaves over a channel instead of a direct
 // function call.
+//
+// Care must be taken that events are processed in a timely manner from
+// the channel, since this delegate will block until an event can be sent.
 type ChannelEventDelegate struct {
 	Ch chan<- NodeEvent
 }
@@ -26,15 +29,9 @@ type NodeEvent struct {
 }
 
 func (c *ChannelEventDelegate) NotifyJoin(n *Node) {
-	select {
-	case c.Ch <- NodeEvent{NodeJoin, n}:
-	default:
-	}
+	c.Ch <- NodeEvent{NodeJoin, n}
 }
 
 func (c *ChannelEventDelegate) NotifyLeave(n *Node) {
-	select {
-	case c.Ch <- NodeEvent{NodeLeave, n}:
-	default:
-	}
+	c.Ch <- NodeEvent{NodeLeave, n}
 }

@@ -223,9 +223,6 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	c.ProbeInterval = time.Millisecond
 	c.ProbeTimeout = 100 * time.Microsecond
 
-	ch := make(chan NodeEvent)
-	c.Events = &ChannelEventDelegate{ch}
-
 	m2, err := Create(c)
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
@@ -245,12 +242,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 
 	m1.Shutdown()
 
-	// Wait for leave
-	select {
-	case <-ch:
-	case <-time.After(10 * time.Millisecond):
-		t.Fatalf("timeout on leave")
-	}
+	time.Sleep(10 * time.Millisecond)
 
 	if len(m2.Members()) != 1 {
 		t.Fatalf("should have 1 nodes! %v", m2.Members())
