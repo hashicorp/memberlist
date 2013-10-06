@@ -425,7 +425,7 @@ func (m *Memberlist) Leave() error {
 
 		d := dead{
 			Incarnation: state.Incarnation,
-			Node: state.Name,
+			Node:        state.Name,
 		}
 		m.deadNode(&d)
 
