@@ -414,7 +414,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 
 	// Check if this address is different than the existing node
 	if !reflect.DeepEqual([]byte(state.Addr), a.Addr) {
-		log.Printf("[WARN] Conflicting address for %s. Addresses: %v %v",
+		log.Printf("[WARN] Conflicting address for %s. Mine: %v Theirs: %v",
 			state.Name, state.Addr, net.IP(a.Addr))
 		return
 	}
