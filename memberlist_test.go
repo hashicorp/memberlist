@@ -31,6 +31,10 @@ func testConfig() *Config {
 	return config
 }
 
+func yield() {
+	time.Sleep(5 * time.Millisecond)
+}
+
 type MockDelegate struct {
 	meta        []byte
 	msgs        [][]byte
@@ -250,22 +254,68 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 }
 
 func TestMemberlist_delegateMeta(t *testing.T) {
-	ch := make(chan NodeEvent, 1)
-	m, d := GetMemberlistDelegate(t)
-	m.config.Events = &ChannelEventDelegate{ch}
-	d.meta = []byte{42}
+	c1 := testConfig()
+	c2 := testConfig()
+	c1.Delegate = &MockDelegate{meta: []byte("web")}
+	c2.Delegate = &MockDelegate{meta: []byte("lb")}
 
-	m.setAlive()
-	m.schedule()
-	defer m.Shutdown()
+	m1, err := Create(c1)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m1.Shutdown()
 
-	select {
-	case n := <-ch:
-		if n.Node.Meta[0] != 42 {
-			t.Fatalf("bad meta data!")
-		}
-	case <-time.After(time.Second):
-		t.Fatalf("timeout")
+	m2, err := Create(c2)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m2.Shutdown()
+
+	_, err = m1.Join([]string{c2.BindAddr})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	yield()
+
+	var roles map[string]string
+
+	// Check the roles of members of m1
+	m1m := m1.Members()
+	if len(m1m) != 2 {
+		t.Fatalf("bad: %#v", m1m)
+	}
+
+	roles = make(map[string]string)
+	for _, m := range m1m {
+		roles[m.Name] = string(m.Meta)
+	}
+
+	if r := roles[c1.Name]; r != "web" {
+		t.Fatalf("bad role for %s: %s", c1.Name, r)
+	}
+
+	if r := roles[c2.Name]; r != "lb" {
+		t.Fatalf("bad role for %s: %s", c2.Name, r)
+	}
+
+	// Check the roles of members of m2
+	m2m := m2.Members()
+	if len(m2m) != 2 {
+		t.Fatalf("bad: %#v", m2m)
+	}
+
+	roles = make(map[string]string)
+	for _, m := range m2m {
+		roles[m.Name] = string(m.Meta)
+	}
+
+	if r := roles[c1.Name]; r != "web" {
+		t.Fatalf("bad role for %s: %s", c1.Name, r)
+	}
+
+	if r := roles[c2.Name]; r != "lb" {
+		t.Fatalf("bad role for %s: %s", c2.Name, r)
 	}
 }
 

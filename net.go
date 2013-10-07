@@ -379,6 +379,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 		localNodes[idx].Addr = n.Addr
 		localNodes[idx].Incarnation = n.Incarnation
 		localNodes[idx].State = n.State
+		localNodes[idx].Meta = n.Meta
 	}
 	m.nodeLock.RUnlock()
 
