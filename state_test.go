@@ -21,24 +21,24 @@ func HostMemberlist(host string, t *testing.T, f func(*Config)) *Memberlist {
 }
 
 func TestMemberList_Probe(t *testing.T) {
-	addr1, ip1 := GetBindAddr()
-	addr2, ip2 := GetBindAddr()
-	m1 := HostMemberlist(addr1, t, func(c *Config) {
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
-	m2 := HostMemberlist(addr2, t, nil)
+	m2 := HostMemberlist(addr2.String(), t, nil)
 
-	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
+	a1 := alive{Node: addr1.String(), Addr: []byte(addr1), Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: addr2, Addr: ip2, Incarnation: 1}
+	a2 := alive{Node: addr2.String(), Addr: []byte(addr2), Incarnation: 1}
 	m1.aliveNode(&a2)
 
 	// should ping addr2
 	m1.probe()
 
 	// Should not be marked suspect
-	n := m1.nodeMap[addr2]
+	n := m1.nodeMap[addr2.String()]
 	if n.State != stateAlive {
 		t.Fatalf("Expect node to be alive")
 	}
@@ -50,28 +50,32 @@ func TestMemberList_Probe(t *testing.T) {
 }
 
 func TestMemberList_ProbeNode_Suspect(t *testing.T) {
-	addr1, ip1 := GetBindAddr()
-	addr2, ip2 := GetBindAddr()
-	addr3, ip3 := GetBindAddr()
-	addr4, ip4 := GetBindAddr()
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	addr3 := getBindAddr()
+	addr4 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+	ip3 := []byte(addr3)
+	ip4 := []byte(addr4)
 
-	m1 := HostMemberlist(addr1, t, func(c *Config) {
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
-	m2 := HostMemberlist(addr2, t, nil)
-	m3 := HostMemberlist(addr3, t, nil)
+	m2 := HostMemberlist(addr2.String(), t, nil)
+	m3 := HostMemberlist(addr3.String(), t, nil)
 
-	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
+	a1 := alive{Node: addr1.String(), Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: addr2, Addr: ip2, Incarnation: 1}
+	a2 := alive{Node: addr2.String(), Addr: ip2, Incarnation: 1}
 	m1.aliveNode(&a2)
-	a3 := alive{Node: addr3, Addr: ip3, Incarnation: 1}
+	a3 := alive{Node: addr3.String(), Addr: ip3, Incarnation: 1}
 	m1.aliveNode(&a3)
-	a4 := alive{Node: addr4, Addr: ip4, Incarnation: 1}
+	a4 := alive{Node: addr4.String(), Addr: ip4, Incarnation: 1}
 	m1.aliveNode(&a4)
 
-	n := m1.nodeMap[addr4]
+	n := m1.nodeMap[addr4.String()]
 	m1.probeNode(n)
 
 	// Should be marked suspect
@@ -90,21 +94,23 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 }
 
 func TestMemberList_ProbeNode(t *testing.T) {
-	addr1, ip1 := GetBindAddr()
-	addr2, ip2 := GetBindAddr()
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
 
-	m1 := HostMemberlist(addr1, t, func(c *Config) {
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
-	m2 := HostMemberlist(addr2, t, nil)
+	m2 := HostMemberlist(addr2.String(), t, nil)
 
-	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
+	a1 := alive{Node: addr1.String(), Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: addr2, Addr: ip2, Incarnation: 1}
+	a2 := alive{Node: addr2.String(), Addr: ip2, Incarnation: 1}
 	m1.aliveNode(&a2)
 
-	n := m1.nodeMap[addr2]
+	n := m1.nodeMap[addr2.String()]
 	m1.probeNode(n)
 
 	// Should be marked suspect
@@ -725,13 +731,15 @@ func TestMemberList_MergeState(t *testing.T) {
 func TestMemberlist_Gossip(t *testing.T) {
 	ch := make(chan NodeEvent, 3)
 
-	addr1, ip1 := GetBindAddr()
-	addr2, ip2 := GetBindAddr()
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
 
-	m1 := HostMemberlist(addr1, t, func(c *Config) {
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.GossipInterval = time.Millisecond
 	})
-	m2 := HostMemberlist(addr2, t, func(c *Config) {
+	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
 		c.Events = &ChannelEventDelegate{ch}
 		c.GossipInterval = time.Millisecond
 	})
@@ -739,9 +747,9 @@ func TestMemberlist_Gossip(t *testing.T) {
 	defer m1.Shutdown()
 	defer m2.Shutdown()
 
-	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
+	a1 := alive{Node: addr1.String(), Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: addr2, Addr: ip2, Incarnation: 1}
+	a2 := alive{Node: addr2.String(), Addr: ip2, Incarnation: 1}
 	m1.aliveNode(&a2)
 	a3 := alive{Node: "172.0.0.1", Addr: []byte{172, 0, 0, 1}, Incarnation: 1}
 	m1.aliveNode(&a3)
@@ -759,16 +767,18 @@ func TestMemberlist_Gossip(t *testing.T) {
 }
 
 func TestMemberlist_PushPull(t *testing.T) {
-	addr1, ip1 := GetBindAddr()
-	addr2, ip2 := GetBindAddr()
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
 
 	ch := make(chan NodeEvent, 3)
 
-	m1 := HostMemberlist(addr1, t, func(c *Config) {
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.GossipInterval = 10 * time.Second
 		c.PushPullInterval = time.Millisecond
 	})
-	m2 := HostMemberlist(addr2, t, func(c *Config) {
+	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
 		c.GossipInterval = 10 * time.Second
 		c.Events = &ChannelEventDelegate{ch}
 	})
@@ -776,9 +786,9 @@ func TestMemberlist_PushPull(t *testing.T) {
 	defer m1.Shutdown()
 	defer m2.Shutdown()
 
-	a1 := alive{Node: addr1, Addr: ip1, Incarnation: 1}
+	a1 := alive{Node: addr1.String(), Addr: ip1, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: addr2, Addr: ip2, Incarnation: 1}
+	a2 := alive{Node: addr2.String(), Addr: ip2, Incarnation: 1}
 	m1.aliveNode(&a2)
 
 	// Gossip should send all this to m2

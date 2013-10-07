@@ -30,10 +30,10 @@ func TestMemberlist_Integ(t *testing.T) {
 	eventCh := make(chan NodeEvent, num)
 
 	for i := 0; i < num; i++ {
-		addr, _ := GetBindAddr()
+		addr := getBindAddr()
 		c := DefaultConfig()
-		c.Name = addr
-		c.BindAddr = addr
+		c.Name = addr.String()
+		c.BindAddr = addr.String()
 		c.ProbeInterval = 10 * time.Millisecond
 		c.ProbeTimeout = 100 * time.Millisecond
 		c.GossipInterval = 5 * time.Millisecond

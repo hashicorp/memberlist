@@ -1,7 +1,7 @@
 package memberlist
 
 import (
-	"fmt"
+	"net"
 	"reflect"
 	"sync"
 	"testing"
@@ -9,9 +9,20 @@ import (
 )
 
 var bindLock sync.Mutex
-var (
-	bindNum = 10
-)
+var bindNum byte = 10
+
+func getBindAddr() net.IP {
+	bindLock.Lock()
+	defer bindLock.Unlock()
+
+	result := net.IPv4(127, 0, 0, bindNum)
+	bindNum++
+	if bindNum > 255 {
+		bindNum = 10
+	}
+
+	return result
+}
 
 type MockDelegate struct {
 	meta        []byte
@@ -82,16 +93,6 @@ func GetMemberlist(t *testing.T) *Memberlist {
 	return nil
 }
 
-func GetBindAddr() (string, []byte) {
-	bindLock.Lock()
-	defer bindLock.Unlock()
-	addr := bindNum
-	bindNum++
-	s := fmt.Sprintf("127.0.0.%d", addr)
-	b := []byte{127, 0, 0, byte(addr)}
-	return s, b
-}
-
 func TestMemberList_CreateShutdown(t *testing.T) {
 	m := GetMemberlist(t)
 	m.schedule()
@@ -127,9 +128,9 @@ func TestMemberlist_Join(t *testing.T) {
 
 	// Create a second node
 	c := DefaultConfig()
-	addr1, _ := GetBindAddr()
-	c.Name = addr1
-	c.BindAddr = addr1
+	addr1 := getBindAddr()
+	c.Name = addr1.String()
+	c.BindAddr = addr1.String()
 	c.UDPPort = m1.config.UDPPort
 	c.TCPPort = m1.config.TCPPort
 
@@ -159,9 +160,9 @@ func TestMemberlist_Leave(t *testing.T) {
 
 	// Create a second node
 	c := DefaultConfig()
-	addr1, _ := GetBindAddr()
-	c.Name = addr1
-	c.BindAddr = addr1
+	addr1 := getBindAddr()
+	c.Name = addr1.String()
+	c.BindAddr = addr1.String()
 	c.UDPPort = m1.config.UDPPort
 	c.TCPPort = m1.config.TCPPort
 	c.GossipInterval = time.Millisecond
@@ -196,6 +197,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	if len(m1.Members()) != 1 {
 		t.Fatalf("should have 1 node")
 	}
+
 	if len(m2.Members()) != 1 {
 		t.Fatalf("should have 1 node")
 	}
@@ -208,9 +210,9 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 
 	// Create a second node
 	c := DefaultConfig()
-	addr1, _ := GetBindAddr()
-	c.Name = addr1
-	c.BindAddr = addr1
+	addr1 := getBindAddr()
+	c.Name = addr1.String()
+	c.BindAddr = addr1.String()
 	c.UDPPort = m1.config.UDPPort
 	c.TCPPort = m1.config.TCPPort
 	c.ProbeInterval = time.Millisecond
@@ -279,9 +281,9 @@ func TestMemberlist_UserData(t *testing.T) {
 
 	// Create a second node
 	c := DefaultConfig()
-	addr1, _ := GetBindAddr()
-	c.Name = addr1
-	c.BindAddr = addr1
+	addr1 := getBindAddr()
+	c.Name = addr1.String()
+	c.BindAddr = addr1.String()
 	c.UDPPort = m1.config.UDPPort
 	c.TCPPort = m1.config.TCPPort
 	c.GossipInterval = time.Millisecond
