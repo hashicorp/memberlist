@@ -24,6 +24,13 @@ func getBindAddr() net.IP {
 	return result
 }
 
+func testConfig() *Config {
+	config := DefaultConfig()
+	config.BindAddr = getBindAddr().String()
+	config.Name = config.BindAddr
+	return config
+}
+
 type MockDelegate struct {
 	meta        []byte
 	msgs        [][]byte
@@ -57,8 +64,7 @@ func (m *MockDelegate) MergeRemoteState(s []byte) {
 func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
 	d := &MockDelegate{}
 
-	c := DefaultConfig()
-	c.BindAddr = "127.0.0.1"
+	c := testConfig()
 	c.Delegate = d
 
 	var m *Memberlist
@@ -76,8 +82,7 @@ func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
 }
 
 func GetMemberlist(t *testing.T) *Memberlist {
-	c := DefaultConfig()
-	c.BindAddr = "127.0.0.1"
+	c := testConfig()
 
 	var m *Memberlist
 	var err error
@@ -138,7 +143,7 @@ func TestMemberlist_Join(t *testing.T) {
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
-	num, err := m2.Join([]string{"127.0.0.1"})
+	num, err := m2.Join([]string{m1.config.BindAddr})
 	if num != 1 {
 		t.Fatal("unexpected 1: %d", num)
 	}
@@ -171,7 +176,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
-	num, err := m2.Join([]string{"127.0.0.1"})
+	num, err := m2.Join([]string{m1.config.BindAddr})
 	if num != 1 {
 		t.Fatal("unexpected 1: %d", num)
 	}
@@ -222,7 +227,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
-	num, err := m2.Join([]string{"127.0.0.1"})
+	num, err := m2.Join([]string{m1.config.BindAddr})
 	if num != 1 {
 		t.Fatal("unexpected 1: %d", num)
 	}
@@ -244,7 +249,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	}
 }
 
-func TestMemberlist_DelegateMeta(t *testing.T) {
+func TestMemberlist_delegateMeta(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m, d := GetMemberlistDelegate(t)
 	m.config.Events = &ChannelEventDelegate{ch}
@@ -294,7 +299,7 @@ func TestMemberlist_UserData(t *testing.T) {
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
-	num, err := m2.Join([]string{"127.0.0.1"})
+	num, err := m2.Join([]string{m1.config.BindAddr})
 	if num != 1 {
 		t.Fatal("unexpected 1: %d", num)
 	}

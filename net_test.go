@@ -39,7 +39,7 @@ func TestHandleCompoundPing(t *testing.T) {
 	compound := makeCompoundMessage([][]byte{buf.Bytes(), buf.Bytes(), buf.Bytes()})
 
 	// Send compound version
-	addr := &net.UDPAddr{IP: []byte{127, 0, 0, 1}, Port: m.config.UDPPort}
+	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.UDPPort}
 	udp.WriteTo(compound.Bytes(), addr)
 
 	// Wait for responses
@@ -98,7 +98,7 @@ func TestHandlePing(t *testing.T) {
 	}
 
 	// Send
-	addr := &net.UDPAddr{IP: []byte{127, 0, 0, 1}, Port: m.config.UDPPort}
+	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.UDPPort}
 	udp.WriteTo(buf.Bytes(), addr)
 
 	// Wait for response
@@ -148,14 +148,14 @@ func TestHandleIndirectPing(t *testing.T) {
 	}
 
 	// Encode an indirect ping
-	ind := indirectPingReq{SeqNo: 100, Target: []byte{127, 0, 0, 1}}
+	ind := indirectPingReq{SeqNo: 100, Target: net.ParseIP(m.config.BindAddr)}
 	buf, err := encode(indirectPingMsg, &ind)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
 
 	// Send
-	addr := &net.UDPAddr{IP: []byte{127, 0, 0, 1}, Port: m.config.UDPPort}
+	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.UDPPort}
 	udp.WriteTo(buf.Bytes(), addr)
 
 	// Wait for response
@@ -192,14 +192,14 @@ func TestTCPPushPull(t *testing.T) {
 	m.nodes = append(m.nodes, &nodeState{
 		Node: Node{
 			Name: "Test 0",
-			Addr: []byte{127, 0, 0, 1},
+			Addr: net.ParseIP(m.config.BindAddr),
 		},
 		Incarnation: 0,
 		State:       stateSuspect,
 		StateChange: time.Now().Add(-1 * time.Second),
 	})
 
-	addr := fmt.Sprintf("127.0.0.1:%d", m.config.TCPPort)
+	addr := fmt.Sprintf("%s:%d", m.config.BindAddr, m.config.TCPPort)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
@@ -208,15 +208,15 @@ func TestTCPPushPull(t *testing.T) {
 
 	localNodes := make([]pushNodeState, 3)
 	localNodes[0].Name = "Test 0"
-	localNodes[0].Addr = []byte{127, 0, 0, 1}
+	localNodes[0].Addr = net.ParseIP(m.config.BindAddr)
 	localNodes[0].Incarnation = 1
 	localNodes[0].State = stateAlive
 	localNodes[1].Name = "Test 1"
-	localNodes[1].Addr = []byte{127, 0, 0, 1}
+	localNodes[1].Addr = net.ParseIP(m.config.BindAddr)
 	localNodes[1].Incarnation = 1
 	localNodes[1].State = stateAlive
 	localNodes[2].Name = "Test 2"
-	localNodes[2].Addr = []byte{127, 0, 0, 1}
+	localNodes[2].Addr = net.ParseIP(m.config.BindAddr)
 	localNodes[2].Incarnation = 1
 	localNodes[2].State = stateAlive
 
@@ -272,7 +272,7 @@ func TestTCPPushPull(t *testing.T) {
 	if n.Name != "Test 0" {
 		t.Fatalf("bad name")
 	}
-	if bytes.Compare(n.Addr, []byte{127, 0, 0, 1}) != 0 {
+	if bytes.Compare(n.Addr, net.ParseIP(m.config.BindAddr)) != 0 {
 		t.Fatal("bad addr")
 	}
 	if n.Incarnation != 0 {
@@ -309,7 +309,7 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	}
 
 	// Send
-	addr := &net.UDPAddr{IP: []byte{127, 0, 0, 1}, Port: m.config.UDPPort}
+	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.UDPPort}
 	udp.WriteTo(buf.Bytes(), addr)
 
 	// Wait for response
