@@ -184,6 +184,12 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		if v == true {
 			return
 		}
+
+		// As an edge case, if we get a timeout, we need to re-enqueue it
+		// here to break out of the select below
+		if v == false {
+			ackCh <- v
+		}
 	case <-time.After(m.config.ProbeTimeout):
 	}
 
