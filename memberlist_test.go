@@ -197,7 +197,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	}
 
 	// Leave
-	m1.Leave()
+	m1.Leave(time.Second)
 
 	// Wait for leave
 	time.Sleep(10 * time.Millisecond)

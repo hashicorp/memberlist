@@ -356,11 +356,12 @@ func (m *Memberlist) NumMembers() (alive int) {
 // updates.
 //
 // This will block until the leave message is successfully broadcasted to
-// a member of the cluster, if any exist.
+// a member of the cluster, if any exist or until a specified timeout
+// is reached.
 //
 // This method is safe to call multiple times, but must not be called
 // after the cluster is already shut down.
-func (m *Memberlist) Leave() error {
+func (m *Memberlist) Leave(timeout time.Duration) error {
 	m.startStopLock.Lock()
 	defer m.startStopLock.Unlock()
 
@@ -385,7 +386,15 @@ func (m *Memberlist) Leave() error {
 
 		// Block until the broadcast goes out
 		if len(m.nodes) > 1 {
-			<-m.leaveBroadcast
+			var timeoutCh <-chan time.Time
+			if timeout > 0 {
+				timeoutCh = time.After(timeout)
+			}
+			select {
+			case <-m.leaveBroadcast:
+			case <-timeoutCh:
+				return fmt.Errorf("timeout waiting for leave broadcast")
+			}
 		}
 	}
 
