@@ -5,6 +5,7 @@ import (
 	"github.com/ugorji/go/codec"
 	"log"
 	"net"
+	"time"
 )
 
 // messageType is an integer ID of a type of message that can be received
@@ -146,7 +147,14 @@ func (m *Memberlist) udpListen() {
 	var n int
 	var addr net.Addr
 	var err error
+	var lastPacket time.Time
 	for {
+		// Do a check for potentially blocking operations
+		if !lastPacket.IsZero() && time.Now().Sub(lastPacket) > time.Millisecond {
+			diff := time.Now().Sub(lastPacket)
+			log.Printf("[WARN] Potential blocking operation. Last command took %v", diff)
+		}
+
 		// Reset buffer
 		buf := mainBuf[0:udpBufSize]
 
@@ -165,6 +173,9 @@ func (m *Memberlist) udpListen() {
 			log.Printf("[ERR] UDP packet too short (%d bytes). From: %s", len(buf), addr)
 			continue
 		}
+
+		// Capture the current time
+		lastPacket = time.Now()
 
 		// Handle the command
 		m.handleCommand(buf[:n], addr)
