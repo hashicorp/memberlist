@@ -16,17 +16,18 @@ const (
 	stateDead
 )
 
-// Node represents a node in the cluster.
+// Node represents a node in the cluster. Clients with pointers to the
+// node should NOT under any circumstance modify it.
 type Node struct {
-	Name string
-	Addr net.IP
-	Meta []byte // Metadata from the delegate for this node.
+	Name        string
+	Addr        net.IP
+	Meta        []byte // Metadata from the delegate for this node.
+	Incarnation uint32 // Last known incarnation number
 }
 
 // NodeState is used to manage our state view of another node
 type nodeState struct {
 	Node
-	Incarnation uint32        // Last known incarnation number
 	State       nodeStateType // Current state
 	StateChange time.Time     // Time last state change happened
 }

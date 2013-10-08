@@ -191,10 +191,10 @@ func TestTCPPushPull(t *testing.T) {
 	defer m.Shutdown()
 	m.nodes = append(m.nodes, &nodeState{
 		Node: Node{
-			Name: "Test 0",
-			Addr: net.ParseIP(m.config.BindAddr),
+			Name:        "Test 0",
+			Addr:        net.ParseIP(m.config.BindAddr),
+			Incarnation: 0,
 		},
-		Incarnation: 0,
 		State:       stateSuspect,
 		StateChange: time.Now().Add(-1 * time.Second),
 	})
