@@ -189,7 +189,6 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 	// Decode the message type
 	msgType := messageType(buf[0])
 	buf = buf[1:]
-	m.logger.Printf("[DEBUG] Received message type: %d", msgType)
 
 	// Switch on the msgType
 	switch msgType {
