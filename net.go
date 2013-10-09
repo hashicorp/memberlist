@@ -119,7 +119,7 @@ func (m *Memberlist) tcpListen() {
 
 // handleConn handles a single incoming TCP connection
 func (m *Memberlist) handleConn(conn *net.TCPConn) {
-	m.logger.Printf("[INFO] Doing push/pull sync with: %s", conn.RemoteAddr())
+	m.logger.Printf("[INFO] Responding to push/pull sync with: %s", conn.RemoteAddr())
 	defer conn.Close()
 
 	remoteNodes, userState, err := readRemoteState(conn)
@@ -367,6 +367,7 @@ func (m *Memberlist) sendAndReceiveState(addr []byte) ([]pushNodeState, []byte, 
 		return nil, nil, err
 	}
 	defer conn.Close()
+	m.logger.Printf("[INFO] Initiating push/pull sync with: %s", conn.RemoteAddr())
 
 	// Send our state
 	if err := m.sendLocalState(conn); err != nil {
