@@ -12,10 +12,6 @@ are contradictory. For example, if we send "{suspect M1 inc: 1},
 then a following {alive M1 inc: 2} will invalidate that message
 */
 
-import (
-	"log"
-)
-
 type memberlistBroadcast struct {
 	node   string
 	msg    []byte
@@ -56,7 +52,7 @@ func (m *Memberlist) encodeAndBroadcast(node string, msgType messageType, msg in
 func (m *Memberlist) encodeBroadcastNotify(node string, msgType messageType, msg interface{}, notify chan struct{}) {
 	buf, err := encode(msgType, msg)
 	if err != nil {
-		log.Printf("[ERR] Failed to encode message for broadcast: %s", err)
+		m.logger.Printf("[ERR] Failed to encode message for broadcast: %s", err)
 	} else {
 		m.queueBroadcast(node, buf.Bytes(), notify)
 	}

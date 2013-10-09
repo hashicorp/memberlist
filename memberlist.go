@@ -16,6 +16,8 @@ package memberlist
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -113,6 +115,10 @@ type Config struct {
 	// the Delegate interface. For Events, see the EventDelegate interface.
 	Delegate Delegate
 	Events   EventDelegate
+
+	// LogOutput is the writer where logs should be sent. If this is not
+	// set, logging will not be enabled.
+	LogOutput io.Writer
 }
 
 type Memberlist struct {
@@ -142,6 +148,8 @@ type Memberlist struct {
 	broadcasts *TransmitLimitedQueue
 
 	startStopLock sync.Mutex
+
+	logger *log.Logger
 }
 
 // DefaultConfig returns a sane set of configurations for Memberlist.
@@ -189,6 +197,10 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	// Set the UDP receive window size
 	setUDPRecvBuf(udpLn.(*net.UDPConn))
 
+	if conf.LogOutput == nil {
+		conf.LogOutput = ioutil.Discard
+	}
+
 	m := &Memberlist{
 		config:         conf,
 		leaveBroadcast: make(chan struct{}, 1),
@@ -197,6 +209,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		nodeMap:        make(map[string]*nodeState),
 		ackHandlers:    make(map[uint32]*ackHandler),
 		broadcasts:     &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
+		logger:         log.New(conf.LogOutput, "", log.LstdFlags),
 	}
 	m.broadcasts.NumNodes = func() int { return len(m.nodes) }
 	go m.tcpListen()
@@ -374,7 +387,7 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 
 		state, ok := m.nodeMap[m.config.Name]
 		if !ok {
-			log.Println("[WARN] Leave but we're not in the node map.")
+			m.logger.Println("[WARN] Leave but we're not in the node map.")
 			return nil
 		}
 

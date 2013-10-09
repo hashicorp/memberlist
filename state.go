@@ -1,7 +1,6 @@
 package memberlist
 
 import (
-	"log"
 	"net"
 	"reflect"
 	"sync/atomic"
@@ -174,7 +173,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 
 	// Send the ping message
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
-		log.Printf("[ERR] Failed to send ping: %s", err)
+		m.logger.Printf("[ERR] Failed to send ping: %s", err)
 		return
 	}
 
@@ -204,7 +203,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	for _, peer := range kNodes {
 		destAddr := &net.UDPAddr{IP: peer.Addr, Port: m.config.UDPPort}
 		if err := m.encodeAndSendMsg(destAddr, indirectPingMsg, &ind); err != nil {
-			log.Printf("[ERR] Failed to send indirect ping: %s", err)
+			m.logger.Printf("[ERR] Failed to send indirect ping: %s", err)
 		}
 	}
 
@@ -267,7 +266,7 @@ func (m *Memberlist) gossip() {
 		// Send the compound message
 		destAddr := &net.UDPAddr{IP: node.Addr, Port: m.config.UDPPort}
 		if err := m.rawSendMsg(destAddr, compound.Bytes()); err != nil {
-			log.Printf("[ERR] Failed to send gossip to %s: %s", destAddr, err)
+			m.logger.Printf("[ERR] Failed to send gossip to %s: %s", destAddr, err)
 		}
 	}
 }
@@ -291,7 +290,7 @@ func (m *Memberlist) pushPull() {
 
 	// Attempt a push pull
 	if err := m.pushPullNode(node.Addr); err != nil {
-		log.Printf("[ERR] Push/Pull with %s failed: %s", node.Name, err)
+		m.logger.Printf("[ERR] Push/Pull with %s failed: %s", node.Name, err)
 	}
 }
 
@@ -428,7 +427,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 
 	// Check if this address is different than the existing node
 	if !reflect.DeepEqual([]byte(state.Addr), a.Addr) {
-		log.Printf("[WARN] Conflicting address for %s. Mine: %v Theirs: %v",
+		m.logger.Printf("[WARN] Conflicting address for %s. Mine: %v Theirs: %v",
 			state.Name, state.Addr, net.IP(a.Addr))
 		return
 	}
