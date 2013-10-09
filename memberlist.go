@@ -117,7 +117,7 @@ type Config struct {
 	Events   EventDelegate
 
 	// LogOutput is the writer where logs should be sent. If this is not
-	// set, logging will not be enabled.
+	// set, logging will go to stderr by default.
 	LogOutput io.Writer
 }
 
@@ -198,7 +198,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	setUDPRecvBuf(udpLn.(*net.UDPConn))
 
 	if conf.LogOutput == nil {
-		conf.LogOutput = ioutil.Discard
+		conf.LogOutput = os.Stderr
 	}
 
 	m := &Memberlist{
