@@ -396,8 +396,17 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 		}
 		m.deadNode(&d)
 
+		// Check for any other alive node
+		anyAlive := false
+		for _, n := range m.nodes {
+			if n.State != stateDead {
+				anyAlive = true
+				break
+			}
+		}
+
 		// Block until the broadcast goes out
-		if len(m.nodes) > 1 {
+		if anyAlive {
 			var timeoutCh <-chan time.Time
 			if timeout > 0 {
 				timeoutCh = time.After(timeout)
