@@ -17,7 +17,6 @@ package memberlist
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"

@@ -119,6 +119,7 @@ func (m *Memberlist) tcpListen() {
 
 // handleConn handles a single incoming TCP connection
 func (m *Memberlist) handleConn(conn *net.TCPConn) {
+	m.logger.Printf("[INFO] Doing push/pull sync with: %s", conn.RemoteAddr())
 	defer conn.Close()
 
 	remoteNodes, userState, err := readRemoteState(conn)
@@ -151,7 +152,9 @@ func (m *Memberlist) udpListen() {
 		// Do a check for potentially blocking operations
 		if !lastPacket.IsZero() && time.Now().Sub(lastPacket) > time.Millisecond {
 			diff := time.Now().Sub(lastPacket)
-			m.logger.Printf("[WARN] Potential blocking operation. Last command took %v", diff)
+			m.logger.Printf(
+				"[WARN] Potential blocking operation. Last command took %v",
+				diff)
 		}
 
 		// Reset buffer
@@ -169,7 +172,8 @@ func (m *Memberlist) udpListen() {
 
 		// Check the length
 		if n < 1 {
-			m.logger.Printf("[ERR] UDP packet too short (%d bytes). From: %s", len(buf), addr)
+			m.logger.Printf("[ERR] UDP packet too short (%d bytes). From: %s",
+				len(buf), addr)
 			continue
 		}
 
@@ -185,6 +189,7 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 	// Decode the message type
 	msgType := messageType(buf[0])
 	buf = buf[1:]
+	m.logger.Printf("[DEBUG] Received message type: %d", msgType)
 
 	// Switch on the msgType
 	switch msgType {
