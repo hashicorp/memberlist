@@ -32,6 +32,7 @@ const (
 	udpRecvBuf             = 2 * 1024 * 1024
 	udpSendBuf             = 1400
 	userMsgOverhead        = 1
+	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
 )
 
 // ping request sent directly to node
@@ -150,7 +151,7 @@ func (m *Memberlist) udpListen() {
 	var lastPacket time.Time
 	for {
 		// Do a check for potentially blocking operations
-		if !lastPacket.IsZero() && time.Now().Sub(lastPacket) > time.Millisecond {
+		if !lastPacket.IsZero() && time.Now().Sub(lastPacket) > blockingWarning {
 			diff := time.Now().Sub(lastPacket)
 			m.logger.Printf(
 				"[WARN] Potential blocking operation. Last command took %v",
