@@ -200,6 +200,14 @@ func DefaultConfig() *Config {
 // newMemberlist creates the network listeners.
 // Does not schedule execution of background maintenence.
 func newMemberlist(conf *Config) (*Memberlist, error) {
+	if conf.ProtocolVersion < ProtocolVersionMin {
+		return nil, fmt.Errorf("Protocol version '%d' too low. Must be in range: [%d, %d]",
+			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
+	} else if conf.ProtocolVersion > ProtocolVersionMax {
+		return nil, fmt.Errorf("Protocol version '%d' too high. Must be in range: [%d, %d]",
+			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
+	}
+
 	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.TCPPort)
 	tcpLn, err := net.Listen("tcp", tcpAddr)
 	if err != nil {

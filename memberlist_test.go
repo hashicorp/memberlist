@@ -109,6 +109,36 @@ func TestDefaultConfig_protocolVersion(t *testing.T) {
 	}
 }
 
+func TestCreate_protocolVersion(t *testing.T) {
+	cases := []struct {
+		version uint8
+		err     bool
+	}{
+		{ProtocolVersionMin, false},
+		{ProtocolVersionMax, false},
+		// TODO(mitchellh): uncommon when we're over 0
+		//{ProtocolVersionMin - 1, true},
+		{ProtocolVersionMax + 1, true},
+		{ProtocolVersionMax - 1, false},
+	}
+
+	for _, tc := range cases {
+		c := DefaultConfig()
+		c.BindAddr = getBindAddr().String()
+		c.ProtocolVersion = tc.version
+		m, err := Create(c)
+		if tc.err && err == nil {
+			t.Errorf("Should've failed with version: %d", tc.version)
+		} else if !tc.err && err != nil {
+			t.Errorf("Version '%d' error: %s", tc.version, err)
+		}
+
+		if err == nil {
+			m.Shutdown()
+		}
+	}
+}
+
 func TestMemberList_CreateShutdown(t *testing.T) {
 	m := GetMemberlist(t)
 	m.schedule()
