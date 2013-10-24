@@ -12,7 +12,7 @@ import (
 
 // This is the minimum and maximum protocol version that we can
 // _understand_. We're allowed to speak at any version within this
-// range.
+// range. This range is inclusive.
 const (
 	ProtocolVersionMin uint8 = 0
 	ProtocolVersionMax       = 1
@@ -83,6 +83,8 @@ type alive struct {
 	Node        string
 	Addr        []byte
 	Meta        []byte
+	PMin        uint8
+	PMax        uint8
 }
 
 // dead is broadcast when we confirm a node is dead

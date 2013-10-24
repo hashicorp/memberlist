@@ -315,7 +315,12 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	defer m.Shutdown()
 
 	// Add a message to be broadcast
-	a := alive{10, "rand", []byte{127, 0, 0, 255}, nil}
+	a := alive{
+		Incarnation: 10,
+		Node:        "rand",
+		Addr:        []byte{127, 0, 0, 255},
+		Meta:        nil,
+	}
 	m.encodeAndBroadcast("rand", aliveMsg, &a)
 
 	var udp *net.UDPConn

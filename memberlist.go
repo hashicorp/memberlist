@@ -351,6 +351,8 @@ func (m *Memberlist) setAlive() error {
 		Node:        m.config.Name,
 		Addr:        ipAddr,
 		Meta:        meta,
+		PMin:        ProtocolVersionMin,
+		PMax:        ProtocolVersionMax,
 	}
 	m.aliveNode(&a)
 

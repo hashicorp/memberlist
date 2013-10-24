@@ -21,6 +21,8 @@ type Node struct {
 	Name string
 	Addr net.IP
 	Meta []byte // Metadata from the delegate for this node.
+	PMin uint8  // Minimum protocol version this understands
+	PMax uint8  // Maximum protocol version this understands
 }
 
 // NodeState is used to manage our state view of another node
@@ -461,6 +463,10 @@ func (m *Memberlist) aliveNode(a *alive) {
 	if a.Incarnation <= state.Incarnation {
 		return
 	}
+
+	// Update our protocol versions
+	state.PMin = a.PMin
+	state.PMax = a.PMax
 
 	// Re-Broadcast
 	m.encodeAndBroadcast(a.Node, aliveMsg, a)

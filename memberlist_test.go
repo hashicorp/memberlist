@@ -139,6 +139,30 @@ func TestCreate_protocolVersion(t *testing.T) {
 	}
 }
 
+func TestCreate(t *testing.T) {
+	c := testConfig()
+	m, err := Create(c)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
+	yield()
+
+	members := m.Members()
+	if len(members) != 1 {
+		t.Fatalf("bad number of members")
+	}
+
+	if members[0].PMin != ProtocolVersionMin {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
+	if members[0].PMax != ProtocolVersionMax {
+		t.Fatalf("bad: %#v", members[0])
+	}
+}
+
 func TestMemberList_CreateShutdown(t *testing.T) {
 	m := GetMemberlist(t)
 	m.schedule()
