@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/ugorji/go/codec"
 	"net"
@@ -445,13 +446,18 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 		userData = m.config.Delegate.LocalState()
 	}
 
+	// Create a buffered writer
+	bufConn := bufio.NewWriter(conn)
+
 	// Send our node state
 	header := pushPullHeader{Nodes: len(localNodes), UserStateLen: len(userData)}
 	hd := codec.MsgpackHandle{}
-	enc := codec.NewEncoder(conn, &hd)
+	enc := codec.NewEncoder(bufConn, &hd)
 
 	// Begin state push
-	conn.Write([]byte{byte(pushPullMsg)})
+	if _, err := bufConn.Write([]byte{byte(pushPullMsg)}); err != nil {
+		return err
+	}
 
 	if err := enc.Encode(&header); err != nil {
 		return err
@@ -464,16 +470,26 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 
 	// Write the user state as well
 	if userData != nil {
-		conn.Write(userData)
+		if _, err := bufConn.Write(userData); err != nil {
+			return err
+		}
+	}
+
+	// Flush the buffered writer
+	if err := bufConn.Flush(); err != nil {
+		return err
 	}
 	return nil
 }
 
 // recvRemoteState is used to read the remote state from a connection
 func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
+	// Created a buffered reader
+	bufConn := bufio.NewReader(conn)
+
 	// Read the message type
 	buf := [1]byte{0}
-	if _, err := conn.Read(buf[:]); err != nil {
+	if _, err := bufConn.Read(buf[:]); err != nil {
 		return nil, nil, err
 	}
 	msgType := messageType(buf[0])
@@ -487,7 +503,7 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	// Read the push/pull header
 	var header pushPullHeader
 	hd := codec.MsgpackHandle{}
-	dec := codec.NewDecoder(conn, &hd)
+	dec := codec.NewDecoder(bufConn, &hd)
 	if err := dec.Decode(&header); err != nil {
 		return nil, nil, err
 	}
@@ -506,7 +522,7 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	var userBuf []byte
 	if header.UserStateLen > 0 {
 		userBuf = make([]byte, header.UserStateLen)
-		bytes, err := conn.Read(userBuf)
+		bytes, err := bufConn.Read(userBuf)
 		if err == nil && bytes != header.UserStateLen {
 			err = fmt.Errorf(
 				"Failed to read full user state (%d / %d)",
