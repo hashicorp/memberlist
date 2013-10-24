@@ -2,9 +2,7 @@ package memberlist
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"github.com/ugorji/go/codec"
 	"net"
 	"testing"
 	"time"
@@ -199,69 +197,30 @@ func TestTCPPushPull(t *testing.T) {
 		StateChange: time.Now().Add(-1 * time.Second),
 	})
 
-	addr := fmt.Sprintf("%s:%d", m.config.BindAddr, m.config.TCPPort)
-	conn, err := net.Dial("tcp", addr)
+	m2 := GetMemberlist(t)
+	defer m2.Shutdown()
+	m2.nodes = append(m2.nodes,
+		&nodeState{
+			Node: Node{
+				Name: "Test 0",
+				Addr: net.ParseIP(m.config.BindAddr),
+			},
+			Incarnation: 2,
+			State:       stateAlive,
+		},
+		&nodeState{
+			Node: Node{
+				Name: "Test 1",
+				Addr: net.ParseIP(m.config.BindAddr),
+			},
+			Incarnation: 2,
+			State:       stateAlive,
+		},
+	)
+
+	remoteNodes, _, err := m2.sendAndReceiveState(net.ParseIP(m.config.BindAddr))
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
-	}
-	defer conn.Close()
-
-	localNodes := make([]pushNodeState, 3)
-	localNodes[0].Name = "Test 0"
-	localNodes[0].Addr = net.ParseIP(m.config.BindAddr)
-	localNodes[0].Incarnation = 1
-	localNodes[0].State = stateAlive
-	localNodes[1].Name = "Test 1"
-	localNodes[1].Addr = net.ParseIP(m.config.BindAddr)
-	localNodes[1].Incarnation = 1
-	localNodes[1].State = stateAlive
-	localNodes[2].Name = "Test 2"
-	localNodes[2].Addr = net.ParseIP(m.config.BindAddr)
-	localNodes[2].Incarnation = 1
-	localNodes[2].State = stateAlive
-
-	// Send our node state
-	header := pushPullHeader{Nodes: 3}
-	hd := codec.MsgpackHandle{}
-	enc := codec.NewEncoder(conn, &hd)
-
-	// Send the push/pull indicator
-	conn.Write([]byte{byte(pushPullMsg)})
-
-	if err := enc.Encode(&header); err != nil {
-		t.Fatalf("unexpected err %s", err)
-	}
-	for i := 0; i < header.Nodes; i++ {
-		if err := enc.Encode(&localNodes[i]); err != nil {
-			t.Fatalf("unexpected err %s", err)
-		}
-	}
-
-	// Read the message type
-	var msgType messageType
-	if err := binary.Read(conn, binary.BigEndian, &msgType); err != nil {
-		t.Fatalf("unexpected err %s", err)
-	}
-
-	// Quit if not push/pull
-	if msgType != pushPullMsg {
-		t.Fatalf("bad message type")
-	}
-
-	msghd := codec.MsgpackHandle{}
-	dec := codec.NewDecoder(conn, &msghd)
-	if err := dec.Decode(&header); err != nil {
-		t.Fatalf("unexpected err %s", err)
-	}
-
-	// Allocate space for the transfer
-	remoteNodes := make([]pushNodeState, header.Nodes)
-
-	// Try to decode all the states
-	for i := 0; i < header.Nodes; i++ {
-		if err := dec.Decode(&remoteNodes[i]); err != nil {
-			t.Fatalf("unexpected err %s", err)
-		}
 	}
 
 	if len(remoteNodes) != 1 {
