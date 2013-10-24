@@ -256,3 +256,19 @@ func TestDecodeCompoundMessage_Trunc(t *testing.T) {
 		}
 	}
 }
+
+func TestCompressDecompressPayload(t *testing.T) {
+	buf, err := compressPayload([]byte("testing"))
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+
+	decomp, err := decompressPayload(buf.Bytes()[1:])
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+
+	if !reflect.DeepEqual(decomp, []byte("testing")) {
+		t.Fatalf("bad payload: %v", decomp)
+	}
+}

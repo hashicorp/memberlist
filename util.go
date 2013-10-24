@@ -2,9 +2,11 @@ package memberlist
 
 import (
 	"bytes"
+	"compress/flate"
 	"encoding/binary"
 	"fmt"
 	"github.com/ugorji/go/codec"
+	"io"
 	"math"
 	"math/rand"
 	"net"
@@ -223,4 +225,58 @@ func isPrivateIP(ip_str string) bool {
 		}
 	}
 	return false
+}
+
+// compressPayload takes an opaque input buffer, compresses it
+// and wraps it in a compress{} message that is encoded.
+func compressPayload(inp []byte) (*bytes.Buffer, error) {
+	var buf bytes.Buffer
+	compressor, err := flate.NewWriter(&buf, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = compressor.Write(inp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure we flush everything out
+	if err := compressor.Flush(); err != nil {
+		return nil, err
+	}
+	if err := compressor.Close(); err != nil {
+		return nil, err
+	}
+
+	// Create a compressed message
+	c := compress{
+		Algo: deflateAlgo,
+		Buf:  buf.Bytes(),
+	}
+	return encode(compressMsg, &c)
+}
+
+// decompressPayload is used to unpack an encoded compress{}
+// message and return its payload uncompressed
+func decompressPayload(msg []byte) ([]byte, error) {
+	// Decode the message
+	var c compress
+	if err := decode(msg, &c); err != nil {
+		return nil, err
+	}
+
+	// Create a uncompressor
+	uncomp := flate.NewReader(bytes.NewReader(c.Buf))
+	defer uncomp.Close()
+
+	// Read all the data
+	var b bytes.Buffer
+	_, err := io.Copy(&b, uncomp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the uncompressed bytes
+	return b.Bytes(), nil
 }

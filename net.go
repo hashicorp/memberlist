@@ -22,6 +22,14 @@ const (
 	pushPullMsg
 	compoundMsg
 	userMsg // User mesg, not handled by us
+	compressMsg
+)
+
+// compressionType is used to specify the compression algorithm
+type compressionType uint8
+
+const (
+	deflateAlgo compressionType = iota
 )
 
 const (
@@ -88,6 +96,13 @@ type pushNodeState struct {
 	Meta        []byte
 	Incarnation uint32
 	State       nodeStateType
+}
+
+// compress is used to wrap an underlying payload
+// using a specified compression algorithm
+type compress struct {
+	Algo compressionType
+	Buf  []byte
 }
 
 // setUDPRecvBuf is used to resize the UDP receive window. The function
@@ -209,6 +224,8 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 		m.handleDead(buf, from)
 	case userMsg:
 		m.handleUser(buf, from)
+	case compressMsg:
+		m.handleCompressed(buf, from)
 	default:
 		m.logger.Printf("[ERR] UDP msg type (%d) not supported. From: %s", msgType, from)
 	}
@@ -316,6 +333,19 @@ func (m *Memberlist) handleUser(buf []byte, from net.Addr) {
 	}
 }
 
+// handleCompressed is used to unpack a compressed message
+func (m *Memberlist) handleCompressed(buf []byte, from net.Addr) {
+	// Try to decode the payload
+	payload, err := decompressPayload(buf)
+	if err != nil {
+		m.logger.Printf("[ERR] Failed to decompress payload: %v", err)
+		return
+	}
+
+	// Recursively handle the payload
+	m.handleCommand(payload, from)
+}
+
 // encodeAndSendMsg is used to combine the encoding and sending steps
 func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType messageType, msg interface{}) error {
 	out, err := encode(msgType, msg)
@@ -354,6 +384,16 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 
 // rawSendMsg is used to send a UDP message to another host without modification
 func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
+	// Check if we have compression enabled
+	if m.config.EnableCompression {
+		buf, err := compressPayload(msg)
+		if err != nil {
+			m.logger.Printf("[WARN] Failed to compress payload: %v", err)
+		} else {
+			msg = buf.Bytes()
+		}
+	}
+
 	_, err := m.udpListener.WriteTo(msg, to)
 	return err
 }
