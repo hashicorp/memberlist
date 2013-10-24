@@ -141,6 +141,9 @@ func TestCreate_protocolVersion(t *testing.T) {
 
 func TestCreate(t *testing.T) {
 	c := testConfig()
+	c.DelegateProtocolMin = 12
+	c.DelegateProtocolMax = 24
+
 	m, err := Create(c)
 	if err != nil {
 		t.Fatalf("err: %s", err)
@@ -159,6 +162,14 @@ func TestCreate(t *testing.T) {
 	}
 
 	if members[0].PMax != ProtocolVersionMax {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
+	if members[0].DMin != c.DelegateProtocolMin {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
+	if members[0].DMax != c.DelegateProtocolMax {
 		t.Fatalf("bad: %#v", members[0])
 	}
 }

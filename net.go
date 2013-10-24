@@ -85,6 +85,8 @@ type alive struct {
 	Meta        []byte
 	PMin        uint8
 	PMax        uint8
+	DMin        uint8
+	DMax        uint8
 }
 
 // dead is broadcast when we confirm a node is dead
