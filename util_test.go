@@ -13,8 +13,18 @@ func TestEncodeDecode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
+
+	bufBytes := buf.Bytes()
+	if messageType(bufBytes[0]) != pingMsg {
+		t.Fatalf("bad message type: %d", bufBytes[0])
+	}
+
+	if messageVersion(bufBytes[1]) != messageTypeVersions[pingMsg] {
+		t.Fatalf("bad message version: %d", bufBytes[1])
+	}
+
 	var out ping
-	if err := decode(buf.Bytes()[1:], &out); err != nil {
+	if err := decode(buf.Bytes()[2:], &out); err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
 	if msg.SeqNo != out.SeqNo {
@@ -213,7 +223,16 @@ func TestDecodeCompoundMessage(t *testing.T) {
 	msgs := [][]byte{buf.Bytes(), buf.Bytes(), buf.Bytes()}
 	compound := makeCompoundMessage(msgs)
 
-	trunc, parts, err := decodeCompoundMessage(compound.Bytes()[1:])
+	compoundBytes := compound.Bytes()
+	if messageType(compoundBytes[0]) != compoundMsg {
+		t.Fatalf("bad: %d", compoundBytes[0])
+	}
+
+	if messageVersion(compoundBytes[1]) != messageTypeVersions[compoundMsg] {
+		t.Fatalf("bad: %d", compoundBytes[1])
+	}
+
+	trunc, parts, err := decodeCompoundMessage(compound.Bytes()[2:])
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
@@ -240,7 +259,7 @@ func TestDecodeCompoundMessage_Trunc(t *testing.T) {
 	msgs := [][]byte{buf.Bytes(), buf.Bytes(), buf.Bytes()}
 	compound := makeCompoundMessage(msgs)
 
-	trunc, parts, err := decodeCompoundMessage(compound.Bytes()[1:30])
+	trunc, parts, err := decodeCompoundMessage(compound.Bytes()[2:31])
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}

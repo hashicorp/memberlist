@@ -14,6 +14,15 @@ import (
 // on network channels from other members.
 type messageType uint8
 
+// messageVersion is the version number of a message type. The version
+// numbers work in this way: _EVEN_ numbers are completely new versions
+// with no backwards compatibility. _ODD_ numbers have both new and old
+// fields populated. When a message is received, we decode the packet
+// even if it is a greater version than us as long as it is only +1 greater.
+// When we encode a packet, we encode it with the latest version for that
+// message type.
+type messageVersion uint8
+
 // The list of available message types.
 const (
 	pingMsg messageType = iota
@@ -35,8 +44,25 @@ const (
 	deflateAlgo compressionType = iota
 )
 
+// The list of the current versions of the message types.
+var messageTypeVersions map[messageType]messageVersion
+
+func init() {
+	messageTypeVersions = map[messageType]messageVersion{
+		pingMsg:         0,
+		indirectPingMsg: 0,
+		ackRespMsg:      0,
+		suspectMsg:      0,
+		aliveMsg:        0,
+		deadMsg:         0,
+		pushPullMsg:     0,
+		compoundMsg:     0,
+		userMsg:         0,
+	}
+}
+
 const (
-	compoundHeaderOverhead = 2   // Assumed header overhead
+	compoundHeaderOverhead = 3   // Assumed header overhead
 	compoundOverhead       = 2   // Assumed overhead per entry in compoundHeader
 	metaMaxSize            = 128 // Maximum size for nod emeta data
 	udpBufSize             = 65536
@@ -207,7 +233,10 @@ func (m *Memberlist) udpListen() {
 func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 	// Decode the message type
 	msgType := messageType(buf[0])
-	buf = buf[1:]
+	msgVersion := messageVersion(buf[1])
+	buf = buf[2:]
+
+	println(fmt.Sprintf("VERSION: %d", msgVersion))
 
 	// Switch on the msgType
 	switch msgType {
@@ -457,7 +486,8 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 	enc := codec.NewEncoder(bufConn, &hd)
 
 	// Begin state push
-	if _, err := bufConn.Write([]byte{byte(pushPullMsg)}); err != nil {
+	if _, err := bufConn.Write([]byte{
+		byte(pushPullMsg), byte(messageTypeVersions[pushPullMsg])}); err != nil {
 		return err
 	}
 
@@ -503,11 +533,14 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	var bufConn io.Reader = bufio.NewReader(conn)
 
 	// Read the message type
-	buf := [1]byte{0}
-	if _, err := bufConn.Read(buf[:]); err != nil {
+	buf := [2]byte{0, 0}
+	if _, err := conn.Read(buf[:]); err != nil {
 		return nil, nil, err
 	}
 	msgType := messageType(buf[0])
+	msgVersion := messageVersion(buf[1])
+
+	println(fmt.Sprintf("PP VERSION: %d", msgVersion))
 
 	// Get the msgPack decoders
 	hd := codec.MsgpackHandle{}
