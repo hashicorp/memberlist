@@ -2,8 +2,6 @@ package memberlist
 
 import (
 	"fmt"
-	"github.com/ugorji/go/codec"
-	"io"
 	"net"
 	"testing"
 	"time"
