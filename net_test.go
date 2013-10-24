@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestHandleCommand_newVersion2(t *testing.T) {
+func TestHandleCommand_badVersion(t *testing.T) {
 	m := GetMemberlist(t)
 	defer m.Shutdown()
 	mAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d",
@@ -27,7 +27,7 @@ func TestHandleCommand_newVersion2(t *testing.T) {
 
 	// Manually set the version too high
 	bufBytes := buf.Bytes()
-	bufBytes[1] = uint8(messageTypeVersions[pingMsg]) + 2
+	bufBytes[1] = uint8(messageTypeVersions[pingMsg]) - 2
 
 	// A fake addr to send a response back to (it'll never come back)
 	ln, err := net.ListenPacket("udp", "127.0.0.1:0")

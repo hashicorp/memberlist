@@ -236,15 +236,9 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 	msgVersion := messageVersion(buf[1])
 	buf = buf[2:]
 
-	var ourVersion messageVersion
-	ourVersion, ok := messageTypeVersions[msgType]
-	if !ok {
-		ourVersion = 0
-	}
-
-	if msgVersion > ourVersion+1 {
-		m.logger.Printf("[ERR] Received message with too new of a version: %d. Ours: %d",
-			msgVersion, ourVersion)
+	// Verify that we can process this version
+	if !validVersion(msgType, msgVersion) {
+		m.logger.Printf("[ERR] Received message with a bad version: %d", msgVersion)
 		return
 	}
 
@@ -550,7 +544,10 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	msgType := messageType(buf[0])
 	msgVersion := messageVersion(buf[1])
 
-	println(fmt.Sprintf("PP VERSION: %d", msgVersion))
+	// Verify that we can understanad this PP request
+	if !validVersion(msgType, msgVersion) {
+		return nil, nil, fmt.Errorf("[ERR] Received PP request with a bad version: %d", msgVersion)
+	}
 
 	// Get the msgPack decoders
 	hd := codec.MsgpackHandle{}
@@ -615,4 +612,14 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	}
 
 	return remoteNodes, userBuf, nil
+}
+
+func validVersion(msgType messageType, msgVersion messageVersion) bool {
+	var ourVersion messageVersion
+	ourVersion, ok := messageTypeVersions[msgType]
+	if !ok {
+		ourVersion = 0
+	}
+
+	return msgVersion == ourVersion || msgVersion == ourVersion-1
 }
