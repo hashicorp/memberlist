@@ -236,7 +236,17 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 	msgVersion := messageVersion(buf[1])
 	buf = buf[2:]
 
-	println(fmt.Sprintf("VERSION: %d", msgVersion))
+	var ourVersion messageVersion
+	ourVersion, ok := messageTypeVersions[msgType]
+	if !ok {
+		ourVersion = 0
+	}
+
+	if msgVersion > ourVersion+1 {
+		m.logger.Printf("[ERR] Received message with too new of a version: %d. Ours: %d",
+			msgVersion, ourVersion)
+		return
+	}
 
 	// Switch on the msgType
 	switch msgType {

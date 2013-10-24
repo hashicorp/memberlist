@@ -9,6 +9,46 @@ import (
 	"time"
 )
 
+func TestHandleCommand_newVersion2(t *testing.T) {
+	m := GetMemberlist(t)
+	defer m.Shutdown()
+	mAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d",
+		m.config.BindAddr, m.config.UDPPort))
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	// Encode a ping
+	ping := ping{SeqNo: 42}
+	buf, err := encode(pingMsg, ping)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	// Manually set the version too high
+	bufBytes := buf.Bytes()
+	bufBytes[1] = uint8(messageTypeVersions[pingMsg]) + 2
+
+	// A fake addr to send a response back to (it'll never come back)
+	ln, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer ln.Close()
+
+	// Handle it
+	ln.WriteTo(bufBytes, mAddr)
+
+	// Make sure we can never read
+	ln.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+
+	raw := make([]byte, 1500)
+	_, _, err = ln.ReadFrom(raw)
+	if err == nil {
+		t.Fatal("should have error!")
+	}
+}
+
 func TestHandleCompoundPing(t *testing.T) {
 	m := GetMemberlist(t)
 	m.config.EnableCompression = false
