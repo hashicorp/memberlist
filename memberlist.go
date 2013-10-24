@@ -109,6 +109,17 @@ type Config struct {
 	GossipInterval time.Duration
 	GossipNodes    int
 
+	// EnableCompression is used to control message compression. This can
+	// be used to reduce bandwidth usage at the cost of slightly more CPU
+	// utilization.
+	EnableCompression bool
+
+	// SecretKey is provided if message level encryption and verification
+	// are to be used. The key is passed through a Key Derivation Function
+	// (PBKDF2) to ensure suitability. This key is also used for an HMAC-SHA1
+	// to provide message integrity.
+	SecretKey string
+
 	// Delegate and Events are delegates for receiving and providing
 	// data to memberlist via callback mechanisms. For Delegate, see
 	// the Delegate interface. For Events, see the EventDelegate interface.
@@ -174,6 +185,9 @@ func DefaultConfig() *Config {
 
 		GossipNodes:    3,                      // Gossip to 3 nodes
 		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly
+
+		EnableCompression: true, // Enable compression by default
+		SecretKey:         "",
 	}
 }
 
