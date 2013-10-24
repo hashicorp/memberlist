@@ -265,6 +265,16 @@ func decompressPayload(msg []byte) ([]byte, error) {
 	if err := decode(msg, &c); err != nil {
 		return nil, err
 	}
+	return decompressBuffer(&c)
+}
+
+// decompressBuffer is used to decompress the buffer of
+// a single compress message, handling multiple algorithms
+func decompressBuffer(c *compress) ([]byte, error) {
+	// Verify the algorithm
+	if c.Algo != deflateAlgo {
+		return nil, fmt.Errorf("Cannot decompress unknown algorithm %d", c.Algo)
+	}
 
 	// Create a uncompressor
 	uncomp := flate.NewReader(bytes.NewReader(c.Buf))

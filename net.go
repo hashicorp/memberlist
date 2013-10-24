@@ -2,8 +2,10 @@ package memberlist
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"github.com/ugorji/go/codec"
+	"io"
 	"net"
 	"time"
 )
@@ -446,8 +448,8 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 		userData = m.config.Delegate.LocalState()
 	}
 
-	// Create a buffered writer
-	bufConn := bufio.NewWriter(conn)
+	// Create a bytes buffer writer
+	bufConn := bytes.NewBuffer(nil)
 
 	// Send our node state
 	header := pushPullHeader{Nodes: len(localNodes), UserStateLen: len(userData)}
@@ -475,8 +477,21 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 		}
 	}
 
-	// Flush the buffered writer
-	if err := bufConn.Flush(); err != nil {
+	// Get the send buffer
+	sendBuf := bufConn.Bytes()
+
+	// Check if compresion is enabled
+	if m.config.EnableCompression {
+		compBuf, err := compressPayload(bufConn.Bytes())
+		if err != nil {
+			m.logger.Printf("[ERROR] Failed to compress local state: %v", err)
+		} else {
+			sendBuf = compBuf.Bytes()
+		}
+	}
+
+	// Write out the entire send buffer
+	if _, err := conn.Write(sendBuf); err != nil {
 		return err
 	}
 	return nil
@@ -485,7 +500,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 // recvRemoteState is used to read the remote state from a connection
 func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	// Created a buffered reader
-	bufConn := bufio.NewReader(conn)
+	var bufConn io.Reader = bufio.NewReader(conn)
 
 	// Read the message type
 	buf := [1]byte{0}
@@ -493,6 +508,31 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 		return nil, nil, err
 	}
 	msgType := messageType(buf[0])
+
+	// Get the msgPack decoders
+	hd := codec.MsgpackHandle{}
+	dec := codec.NewDecoder(bufConn, &hd)
+
+	// Check if we have a compressed message
+	if msgType == compressMsg {
+		var c compress
+		if err := dec.Decode(&c); err != nil {
+			return nil, nil, err
+		}
+		decomp, err := decompressBuffer(&c)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Reset the message type
+		msgType = messageType(decomp[0])
+
+		// Create a new bufConn
+		bufConn = bytes.NewReader(decomp[1:])
+
+		// Create a new decoder
+		dec = codec.NewDecoder(bufConn, &hd)
+	}
 
 	// Quit if not push/pull
 	if msgType != pushPullMsg {
@@ -502,8 +542,6 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 
 	// Read the push/pull header
 	var header pushPullHeader
-	hd := codec.MsgpackHandle{}
-	dec := codec.NewDecoder(bufConn, &hd)
 	if err := dec.Decode(&header); err != nil {
 		return nil, nil, err
 	}
