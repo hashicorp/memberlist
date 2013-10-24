@@ -1,15 +1,51 @@
 package memberlist
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
-	"github.com/ugorji/go/codec"
-	"io"
 	"net"
 	"testing"
 	"time"
 )
+
+func TestHandleCommand_badVersion(t *testing.T) {
+	m := GetMemberlist(t)
+	defer m.Shutdown()
+	mAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d",
+		m.config.BindAddr, m.config.UDPPort))
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	// Encode a ping
+	ping := ping{SeqNo: 42}
+	buf, err := encode(pingMsg, ping)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	// Manually set the version too high
+	bufBytes := buf.Bytes()
+	bufBytes[1] = uint8(messageTypeVersions[pingMsg]) - 2
+
+	// A fake addr to send a response back to (it'll never come back)
+	ln, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer ln.Close()
+
+	// Handle it
+	ln.WriteTo(bufBytes, mAddr)
+
+	// Make sure we can never read
+	ln.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+
+	raw := make([]byte, 1500)
+	_, _, err = ln.ReadFrom(raw)
+	if err == nil {
+		t.Fatal("should have error!")
+	}
+}
 
 func TestHandleCompoundPing(t *testing.T) {
 	m := GetMemberlist(t)
@@ -64,7 +100,7 @@ func TestHandleCompoundPing(t *testing.T) {
 		}
 
 		var ack ackResp
-		if err := decode(in[1:], &ack); err != nil {
+		if err := decode(in[2:], &ack); err != nil {
 			t.Fatalf("unexpected err %s", err)
 		}
 
@@ -123,7 +159,7 @@ func TestHandlePing(t *testing.T) {
 	}
 
 	var ack ackResp
-	if err := decode(in[1:], &ack); err != nil {
+	if err := decode(in[2:], &ack); err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
 
@@ -181,132 +217,12 @@ func TestHandleIndirectPing(t *testing.T) {
 	}
 
 	var ack ackResp
-	if err := decode(in[1:], &ack); err != nil {
+	if err := decode(in[2:], &ack); err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
 
 	if ack.SeqNo != 100 {
 		t.Fatalf("bad sequence no")
-	}
-}
-
-func TestTCPPushPull(t *testing.T) {
-	m := GetMemberlist(t)
-	defer m.Shutdown()
-	m.nodes = append(m.nodes, &nodeState{
-		Node: Node{
-			Name: "Test 0",
-			Addr: net.ParseIP(m.config.BindAddr),
-		},
-		Incarnation: 0,
-		State:       stateSuspect,
-		StateChange: time.Now().Add(-1 * time.Second),
-	})
-
-	addr := fmt.Sprintf("%s:%d", m.config.BindAddr, m.config.TCPPort)
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("unexpected err %s", err)
-	}
-	defer conn.Close()
-
-	localNodes := make([]pushNodeState, 3)
-	localNodes[0].Name = "Test 0"
-	localNodes[0].Addr = net.ParseIP(m.config.BindAddr)
-	localNodes[0].Incarnation = 1
-	localNodes[0].State = stateAlive
-	localNodes[1].Name = "Test 1"
-	localNodes[1].Addr = net.ParseIP(m.config.BindAddr)
-	localNodes[1].Incarnation = 1
-	localNodes[1].State = stateAlive
-	localNodes[2].Name = "Test 2"
-	localNodes[2].Addr = net.ParseIP(m.config.BindAddr)
-	localNodes[2].Incarnation = 1
-	localNodes[2].State = stateAlive
-
-	// Send our node state
-	header := pushPullHeader{Nodes: 3}
-	hd := codec.MsgpackHandle{}
-	enc := codec.NewEncoder(conn, &hd)
-
-	// Send the push/pull indicator
-	conn.Write([]byte{byte(pushPullMsg)})
-
-	if err := enc.Encode(&header); err != nil {
-		t.Fatalf("unexpected err %s", err)
-	}
-	for i := 0; i < header.Nodes; i++ {
-		if err := enc.Encode(&localNodes[i]); err != nil {
-			t.Fatalf("unexpected err %s", err)
-		}
-	}
-
-	// Read the message type
-	var msgType messageType
-	if err := binary.Read(conn, binary.BigEndian, &msgType); err != nil {
-		t.Fatalf("unexpected err %s", err)
-	}
-
-	var bufConn io.Reader = conn
-	msghd := codec.MsgpackHandle{}
-	dec := codec.NewDecoder(bufConn, &msghd)
-
-	// Check if we have a compressed message
-	if msgType == compressMsg {
-		var c compress
-		if err := dec.Decode(&c); err != nil {
-			t.Fatalf("unexpected err %s", err)
-		}
-		decomp, err := decompressBuffer(&c)
-		if err != nil {
-			t.Fatalf("unexpected err %s", err)
-		}
-
-		// Reset the message type
-		msgType = messageType(decomp[0])
-
-		// Create a new bufConn
-		bufConn = bytes.NewReader(decomp[1:])
-
-		// Create a new decoder
-		dec = codec.NewDecoder(bufConn, &hd)
-	}
-
-	// Quit if not push/pull
-	if msgType != pushPullMsg {
-		t.Fatalf("bad message type")
-	}
-
-	if err := dec.Decode(&header); err != nil {
-		t.Fatalf("unexpected err %s", err)
-	}
-
-	// Allocate space for the transfer
-	remoteNodes := make([]pushNodeState, header.Nodes)
-
-	// Try to decode all the states
-	for i := 0; i < header.Nodes; i++ {
-		if err := dec.Decode(&remoteNodes[i]); err != nil {
-			t.Fatalf("unexpected err %s", err)
-		}
-	}
-
-	if len(remoteNodes) != 1 {
-		t.Fatalf("bad response")
-	}
-
-	n := &remoteNodes[0]
-	if n.Name != "Test 0" {
-		t.Fatalf("bad name")
-	}
-	if bytes.Compare(n.Addr, net.ParseIP(m.config.BindAddr)) != 0 {
-		t.Fatal("bad addr")
-	}
-	if n.Incarnation != 0 {
-		t.Fatal("bad incarnation")
-	}
-	if n.State != stateSuspect {
-		t.Fatal("bad state")
 	}
 }
 
@@ -357,14 +273,22 @@ func TestSendMsg_Piggyback(t *testing.T) {
 		t.Fatalf("bad response %v", in)
 	}
 
+	if messageVersion(in[1]) != messageTypeVersions[compressMsg] {
+		t.Fatalf("bad response %v", in)
+	}
+
 	// Decompress first
-	in, err = decompressPayload(in[1:])
+	in, err = decompressPayload(in[2:])
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
 
+	if messageVersion(in[1]) != messageTypeVersions[compoundMsg] {
+		t.Fatalf("bad response %v", in)
+	}
+
 	// get the parts
-	trunc, parts, err := decodeCompoundMessage(in[1:])
+	trunc, parts, err := decodeCompoundMessage(in[2:])
 	if trunc != 0 {
 		t.Fatalf("unexpected truncation")
 	}
@@ -376,7 +300,7 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	}
 
 	var ack ackResp
-	if err := decode(parts[0][1:], &ack); err != nil {
+	if err := decode(parts[0][2:], &ack); err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
 
@@ -385,7 +309,7 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	}
 
 	var aliveout alive
-	if err := decode(parts[1][1:], &aliveout); err != nil {
+	if err := decode(parts[1][2:], &aliveout); err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
 
