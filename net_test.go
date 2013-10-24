@@ -273,8 +273,12 @@ func TestSendMsg_Piggyback(t *testing.T) {
 		t.Fatalf("bad response %v", in)
 	}
 
+	if messageVersion(in[1]) != messageTypeVersions[compressMsg] {
+		t.Fatalf("bad response %v", in)
+	}
+
 	// Decompress first
-	in, err = decompressPayload(in[1:])
+	in, err = decompressPayload(in[2:])
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}

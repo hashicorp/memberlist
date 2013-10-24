@@ -58,6 +58,7 @@ func init() {
 		pushPullMsg:     0,
 		compoundMsg:     0,
 		userMsg:         0,
+		compressMsg:     0,
 	}
 }
 
@@ -544,7 +545,7 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	msgType := messageType(buf[0])
 	msgVersion := messageVersion(buf[1])
 
-	// Verify that we can understanad this PP request
+	// Verify that we can understand this PP request
 	if !validVersion(msgType, msgVersion) {
 		return nil, nil, fmt.Errorf("[ERR] Received PP request with a bad version: %d", msgVersion)
 	}
@@ -566,9 +567,10 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 
 		// Reset the message type
 		msgType = messageType(decomp[0])
+		msgVersion = messageVersion(decomp[1])
 
 		// Create a new bufConn
-		bufConn = bytes.NewReader(decomp[1:])
+		bufConn = bytes.NewReader(decomp[2:])
 
 		// Create a new decoder
 		dec = codec.NewDecoder(bufConn, &hd)
@@ -578,6 +580,11 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	if msgType != pushPullMsg {
 		err := fmt.Errorf("received invalid msgType (%d)", msgType)
 		return nil, nil, err
+	}
+
+	// Verify that we can understand this PP request
+	if !validVersion(msgType, msgVersion) {
+		return nil, nil, fmt.Errorf("[ERR] Received PP request with a bad version: %d", msgVersion)
 	}
 
 	// Read the push/pull header

@@ -282,7 +282,7 @@ func TestCompressDecompressPayload(t *testing.T) {
 		t.Fatalf("unexpected err: %s", err)
 	}
 
-	decomp, err := decompressPayload(buf.Bytes()[1:])
+	decomp, err := decompressPayload(buf.Bytes()[2:])
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
