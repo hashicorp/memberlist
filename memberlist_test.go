@@ -102,6 +102,13 @@ func GetMemberlist(t *testing.T) *Memberlist {
 	return nil
 }
 
+func TestDefaultConfig_protocolVersion(t *testing.T) {
+	c := DefaultConfig()
+	if c.ProtocolVersion != ProtocolVersionMin {
+		t.Fatalf("should be min: %d", c.ProtocolVersion)
+	}
+}
+
 func TestMemberList_CreateShutdown(t *testing.T) {
 	m := GetMemberlist(t)
 	m.schedule()

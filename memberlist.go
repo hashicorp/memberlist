@@ -35,6 +35,11 @@ type Config struct {
 	UDPPort  int
 	TCPPort  int
 
+	// ProtocolVersion is the configured protocol version that we
+	// will _speak_. This must be between ProtocolVersionMin and
+	// ProtocolVersionMax.
+	ProtocolVersion uint8
+
 	// TCPTimeout is the timeout for establishing a TCP connection with
 	// a remote node for a full state sync.
 	TCPTimeout time.Duration
@@ -175,6 +180,7 @@ func DefaultConfig() *Config {
 		BindAddr:         "0.0.0.0",
 		UDPPort:          7946,
 		TCPPort:          7946,
+		ProtocolVersion:  ProtocolVersionMin,
 		TCPTimeout:       10 * time.Second,       // Timeout after 10 seconds
 		IndirectChecks:   3,                      // Use 3 nodes for the indirect ping
 		RetransmitMult:   4,                      // Retransmit a message 4 * log(N+1) nodes

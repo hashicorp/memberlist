@@ -10,6 +10,14 @@ import (
 	"time"
 )
 
+// This is the minimum and maximum protocol version that we can
+// _understand_. We're allowed to speak at any version within this
+// range.
+const (
+	ProtocolVersionMin uint8 = 0
+	ProtocolVersionMax       = 1
+)
+
 // messageType is an integer ID of a type of message that can be received
 // on network channels from other members.
 type messageType uint8
