@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"compress/flate"
 	"fmt"
 	"github.com/ugorji/go/codec"
 	"net"
@@ -73,13 +74,6 @@ type dead struct {
 	Node        string
 }
 
-// pushPullHeader is used to inform the
-// otherside how many states we are transfering
-type pushPullHeader struct {
-	Nodes        int
-	UserStateLen int // Encodes the byte lengh of user state
-}
-
 // pushNodeState is used for pushPullReq when we are
 // transfering out node states
 type pushNodeState struct {
@@ -88,6 +82,11 @@ type pushNodeState struct {
 	Meta        []byte
 	Incarnation uint32
 	State       nodeStateType
+}
+
+type pushPullRequest struct {
+	NodeStates []pushNodeState
+	LocalState []byte
 }
 
 // setUDPRecvBuf is used to resize the UDP receive window. The function
@@ -400,82 +399,57 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 	m.nodeLock.RUnlock()
 
 	// Get the delegate state
-	var userData []byte
+	var localState []byte
 	if m.config.Delegate != nil {
-		userData = m.config.Delegate.LocalState()
+		localState = m.config.Delegate.LocalState()
 	}
 
-	// Send our node state
-	header := pushPullHeader{Nodes: len(localNodes), UserStateLen: len(userData)}
-	hd := codec.MsgpackHandle{}
-	enc := codec.NewEncoder(conn, &hd)
+	// send the message type
+	conn.Write([]byte { byte(pushPullMsg) })
 
-	// Begin state push
-	conn.Write([]byte{byte(pushPullMsg)})
-
-	if err := enc.Encode(&header); err != nil {
+	// set up encoders
+	flt, err := flate.NewWriter(conn, flate.DefaultCompression)
+	if err != nil {
 		return err
 	}
-	for i := 0; i < header.Nodes; i++ {
-		if err := enc.Encode(&localNodes[i]); err != nil {
-			return err
-		}
+	enc := codec.NewEncoder(flt, &codec.MsgpackHandle{})
+
+	// send the encoded request
+	pushPullRequest := pushPullRequest {
+		NodeStates: localNodes,
+		LocalState: localState,
+	}
+	enc.Encode(&pushPullRequest)
+	if err := flt.Flush(); err != nil {
+		return err
 	}
 
-	// Write the user state as well
-	if userData != nil {
-		conn.Write(userData)
-	}
 	return nil
 }
 
 // recvRemoteState is used to read the remote state from a connection
 func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	// Read the message type
-	buf := [1]byte{0}
-	if _, err := conn.Read(buf[:]); err != nil {
+  var msgTypeBuf [1]byte
+  if _, err := conn.Read(msgTypeBuf[:]); err != nil {
 		return nil, nil, err
-	}
-	msgType := messageType(buf[0])
+  }
 
-	// Quit if not push/pull
-	if msgType != pushPullMsg {
-		err := fmt.Errorf("received invalid msgType (%d)", msgType)
-		return nil, nil, err
-	}
-
-	// Read the push/pull header
-	var header pushPullHeader
-	hd := codec.MsgpackHandle{}
-	dec := codec.NewDecoder(conn, &hd)
-	if err := dec.Decode(&header); err != nil {
+	if messageType(msgTypeBuf[0]) != pushPullMsg {
+		err := fmt.Errorf("received invalid msgType (%d)", msgTypeBuf[0])
 		return nil, nil, err
 	}
 
-	// Allocate space for the transfer
-	remoteNodes := make([]pushNodeState, header.Nodes)
+	// Set up decoders
+	flt := flate.NewReader(conn)
+	dec := codec.NewDecoder(flt, &codec.MsgpackHandle{})
+	defer flt.Close()
 
-	// Try to decode all the states
-	for i := 0; i < header.Nodes; i++ {
-		if err := dec.Decode(&remoteNodes[i]); err != nil {
-			return remoteNodes, nil, err
-		}
+	// Read the message
+	var request pushPullRequest
+	if err := dec.Decode(&request); err != nil {
+		return nil, nil, err
 	}
 
-	// Read the remote user state into a buffer
-	var userBuf []byte
-	if header.UserStateLen > 0 {
-		userBuf = make([]byte, header.UserStateLen)
-		bytes, err := conn.Read(userBuf)
-		if err == nil && bytes != header.UserStateLen {
-			err = fmt.Errorf(
-				"Failed to read full user state (%d / %d)",
-				bytes, header.UserStateLen)
-		}
-		if err != nil {
-			return remoteNodes, nil, err
-		}
-	}
-
-	return remoteNodes, userBuf, nil
+	return request.NodeStates, request.LocalState, nil
 }
