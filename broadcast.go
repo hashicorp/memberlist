@@ -89,9 +89,8 @@ func (m *Memberlist) getBroadcasts(overhead, limit int) [][]byte {
 
 			// Frame each user message
 			for _, msg := range userMsgs {
-				buf := make([]byte, 2, len(msg)+2)
+				buf := make([]byte, 1, len(msg)+1)
 				buf[0] = byte(userMsg)
-				buf[1] = byte(messageTypeVersions[userMsg])
 				buf = append(buf, msg...)
 				toSend = append(toSend, buf)
 			}

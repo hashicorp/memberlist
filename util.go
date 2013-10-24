@@ -58,7 +58,6 @@ func decode(buf []byte, out interface{}) error {
 func encode(msgType messageType, in interface{}) (*bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
 	buf.WriteByte(uint8(msgType))
-	buf.WriteByte(uint8(messageTypeVersions[msgType]))
 	hd := codec.MsgpackHandle{}
 	enc := codec.NewEncoder(buf, &hd)
 	err := enc.Encode(in)
@@ -161,9 +160,6 @@ func makeCompoundMessage(msgs [][]byte) *bytes.Buffer {
 
 	// Write out the type
 	buf.WriteByte(uint8(compoundMsg))
-
-	// Write out the version
-	buf.WriteByte(uint8(messageTypeVersions[compoundMsg]))
 
 	// Write out the number of message
 	buf.WriteByte(uint8(len(msgs)))
