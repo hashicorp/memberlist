@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/ugorji/go/codec"
+	"io"
 	"net"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 func TestHandleCompoundPing(t *testing.T) {
 	m := GetMemberlist(t)
+	m.config.EnableCompression = false
 	defer m.Shutdown()
 
 	var udp *net.UDPConn
@@ -74,6 +76,7 @@ func TestHandleCompoundPing(t *testing.T) {
 
 func TestHandlePing(t *testing.T) {
 	m := GetMemberlist(t)
+	m.config.EnableCompression = false
 	defer m.Shutdown()
 
 	var udp *net.UDPConn
@@ -131,6 +134,7 @@ func TestHandlePing(t *testing.T) {
 
 func TestHandleIndirectPing(t *testing.T) {
 	m := GetMemberlist(t)
+	m.config.EnableCompression = false
 	defer m.Shutdown()
 
 	var udp *net.UDPConn
@@ -243,13 +247,36 @@ func TestTCPPushPull(t *testing.T) {
 		t.Fatalf("unexpected err %s", err)
 	}
 
+	var bufConn io.Reader = conn
+	msghd := codec.MsgpackHandle{}
+	dec := codec.NewDecoder(bufConn, &msghd)
+
+	// Check if we have a compressed message
+	if msgType == compressMsg {
+		var c compress
+		if err := dec.Decode(&c); err != nil {
+			t.Fatalf("unexpected err %s", err)
+		}
+		decomp, err := decompressBuffer(&c)
+		if err != nil {
+			t.Fatalf("unexpected err %s", err)
+		}
+
+		// Reset the message type
+		msgType = messageType(decomp[0])
+
+		// Create a new bufConn
+		bufConn = bytes.NewReader(decomp[1:])
+
+		// Create a new decoder
+		dec = codec.NewDecoder(bufConn, &hd)
+	}
+
 	// Quit if not push/pull
 	if msgType != pushPullMsg {
 		t.Fatalf("bad message type")
 	}
 
-	msghd := codec.MsgpackHandle{}
-	dec := codec.NewDecoder(conn, &msghd)
 	if err := dec.Decode(&header); err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -326,8 +353,14 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	in = in[0:n]
 
 	msgType := messageType(in[0])
-	if msgType != compoundMsg {
+	if msgType != compressMsg {
 		t.Fatalf("bad response %v", in)
+	}
+
+	// Decompress first
+	in, err = decompressPayload(in[1:])
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
 	}
 
 	// get the parts

@@ -1,8 +1,11 @@
 package memberlist
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"github.com/ugorji/go/codec"
+	"io"
 	"net"
 	"time"
 )
@@ -22,6 +25,14 @@ const (
 	pushPullMsg
 	compoundMsg
 	userMsg // User mesg, not handled by us
+	compressMsg
+)
+
+// compressionType is used to specify the compression algorithm
+type compressionType uint8
+
+const (
+	deflateAlgo compressionType = iota
 )
 
 const (
@@ -88,6 +99,13 @@ type pushNodeState struct {
 	Meta        []byte
 	Incarnation uint32
 	State       nodeStateType
+}
+
+// compress is used to wrap an underlying payload
+// using a specified compression algorithm
+type compress struct {
+	Algo compressionType
+	Buf  []byte
 }
 
 // setUDPRecvBuf is used to resize the UDP receive window. The function
@@ -209,6 +227,8 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 		m.handleDead(buf, from)
 	case userMsg:
 		m.handleUser(buf, from)
+	case compressMsg:
+		m.handleCompressed(buf, from)
 	default:
 		m.logger.Printf("[ERR] UDP msg type (%d) not supported. From: %s", msgType, from)
 	}
@@ -316,6 +336,19 @@ func (m *Memberlist) handleUser(buf []byte, from net.Addr) {
 	}
 }
 
+// handleCompressed is used to unpack a compressed message
+func (m *Memberlist) handleCompressed(buf []byte, from net.Addr) {
+	// Try to decode the payload
+	payload, err := decompressPayload(buf)
+	if err != nil {
+		m.logger.Printf("[ERR] Failed to decompress payload: %v", err)
+		return
+	}
+
+	// Recursively handle the payload
+	m.handleCommand(payload, from)
+}
+
 // encodeAndSendMsg is used to combine the encoding and sending steps
 func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType messageType, msg interface{}) error {
 	out, err := encode(msgType, msg)
@@ -354,6 +387,16 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 
 // rawSendMsg is used to send a UDP message to another host without modification
 func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
+	// Check if we have compression enabled
+	if m.config.EnableCompression {
+		buf, err := compressPayload(msg)
+		if err != nil {
+			m.logger.Printf("[WARN] Failed to compress payload: %v", err)
+		} else {
+			msg = buf.Bytes()
+		}
+	}
+
 	_, err := m.udpListener.WriteTo(msg, to)
 	return err
 }
@@ -405,13 +448,18 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 		userData = m.config.Delegate.LocalState()
 	}
 
+	// Create a bytes buffer writer
+	bufConn := bytes.NewBuffer(nil)
+
 	// Send our node state
 	header := pushPullHeader{Nodes: len(localNodes), UserStateLen: len(userData)}
 	hd := codec.MsgpackHandle{}
-	enc := codec.NewEncoder(conn, &hd)
+	enc := codec.NewEncoder(bufConn, &hd)
 
 	// Begin state push
-	conn.Write([]byte{byte(pushPullMsg)})
+	if _, err := bufConn.Write([]byte{byte(pushPullMsg)}); err != nil {
+		return err
+	}
 
 	if err := enc.Encode(&header); err != nil {
 		return err
@@ -424,19 +472,67 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 
 	// Write the user state as well
 	if userData != nil {
-		conn.Write(userData)
+		if _, err := bufConn.Write(userData); err != nil {
+			return err
+		}
+	}
+
+	// Get the send buffer
+	sendBuf := bufConn.Bytes()
+
+	// Check if compresion is enabled
+	if m.config.EnableCompression {
+		compBuf, err := compressPayload(bufConn.Bytes())
+		if err != nil {
+			m.logger.Printf("[ERROR] Failed to compress local state: %v", err)
+		} else {
+			sendBuf = compBuf.Bytes()
+		}
+	}
+
+	// Write out the entire send buffer
+	if _, err := conn.Write(sendBuf); err != nil {
+		return err
 	}
 	return nil
 }
 
 // recvRemoteState is used to read the remote state from a connection
 func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
+	// Created a buffered reader
+	var bufConn io.Reader = bufio.NewReader(conn)
+
 	// Read the message type
 	buf := [1]byte{0}
-	if _, err := conn.Read(buf[:]); err != nil {
+	if _, err := bufConn.Read(buf[:]); err != nil {
 		return nil, nil, err
 	}
 	msgType := messageType(buf[0])
+
+	// Get the msgPack decoders
+	hd := codec.MsgpackHandle{}
+	dec := codec.NewDecoder(bufConn, &hd)
+
+	// Check if we have a compressed message
+	if msgType == compressMsg {
+		var c compress
+		if err := dec.Decode(&c); err != nil {
+			return nil, nil, err
+		}
+		decomp, err := decompressBuffer(&c)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Reset the message type
+		msgType = messageType(decomp[0])
+
+		// Create a new bufConn
+		bufConn = bytes.NewReader(decomp[1:])
+
+		// Create a new decoder
+		dec = codec.NewDecoder(bufConn, &hd)
+	}
 
 	// Quit if not push/pull
 	if msgType != pushPullMsg {
@@ -446,8 +542,6 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 
 	// Read the push/pull header
 	var header pushPullHeader
-	hd := codec.MsgpackHandle{}
-	dec := codec.NewDecoder(conn, &hd)
 	if err := dec.Decode(&header); err != nil {
 		return nil, nil, err
 	}
@@ -466,7 +560,7 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	var userBuf []byte
 	if header.UserStateLen > 0 {
 		userBuf = make([]byte, header.UserStateLen)
-		bytes, err := conn.Read(userBuf)
+		bytes, err := bufConn.Read(userBuf)
 		if err == nil && bytes != header.UserStateLen {
 			err = fmt.Errorf(
 				"Failed to read full user state (%d / %d)",
