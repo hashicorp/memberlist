@@ -870,12 +870,31 @@ func TestVerifyProtocol(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		testVerifyProtocolSingle(t, tc.Anodes, tc.Bnodes, tc.expected)
-		testVerifyProtocolSingle(t, tc.Bnodes, tc.Anodes, tc.expected)
+		aCore := make([][6]uint8, len(tc.Anodes))
+		aApp := make([][6]uint8, len(tc.Anodes))
+		for i, n := range tc.Anodes {
+			aCore[i] = [6]uint8{n[0], n[1], n[2], 0, 0, 0}
+			aApp[i] = [6]uint8{0, 0, 0, n[0], n[1], n[2]}
+		}
+
+		bCore := make([][6]uint8, len(tc.Bnodes))
+		bApp := make([][6]uint8, len(tc.Bnodes))
+		for i, n := range tc.Bnodes {
+			bCore[i] = [6]uint8{n[0], n[1], n[2], 0, 0, 0}
+			bApp[i] = [6]uint8{0, 0, 0, n[0], n[1], n[2]}
+		}
+
+		// Test core protocol verification
+		testVerifyProtocolSingle(t, aCore, bCore, tc.expected)
+		testVerifyProtocolSingle(t, bCore, aCore, tc.expected)
+
+		//  Test app protocol verification
+		testVerifyProtocolSingle(t, aApp, bApp, tc.expected)
+		testVerifyProtocolSingle(t, bApp, aApp, tc.expected)
 	}
 }
 
-func testVerifyProtocolSingle(t *testing.T, A [][3]uint8, B [][3]uint8, expect bool) {
+func testVerifyProtocolSingle(t *testing.T, A [][6]uint8, B [][6]uint8, expect bool) {
 	m := GetMemberlist(t)
 	defer m.Shutdown()
 
@@ -886,6 +905,9 @@ func testVerifyProtocolSingle(t *testing.T, A [][3]uint8, B [][3]uint8, expect b
 				PMin: n[0],
 				PMax: n[1],
 				PCur: n[2],
+				DMin: n[3],
+				DMax: n[4],
+				DCur: n[5],
 			},
 		}
 	}
@@ -894,7 +916,7 @@ func testVerifyProtocolSingle(t *testing.T, A [][3]uint8, B [][3]uint8, expect b
 	for i, n := range B {
 		remote[i] = pushNodeState{
 			Name: fmt.Sprintf("node %d", i),
-			Vsn:  []uint8{n[0], n[1], n[2], 0, 0, 0},
+			Vsn:  []uint8{n[0], n[1], n[2], n[3], n[4], n[5]},
 		}
 	}
 

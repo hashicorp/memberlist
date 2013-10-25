@@ -372,6 +372,22 @@ func (m *Memberlist) verifyProtocol(remote []pushNodeState) error {
 						"node '%s': [%d, %d]",
 					rn.Name, rn.Vsn[2], n.Name, n.PMin, n.PMax)
 			}
+
+			// Check that our delegate protocol is in range
+			if n.DCur < rn.Vsn[3] || n.DCur > rn.Vsn[4] {
+				return fmt.Errorf(
+					"Node '%s' delegate version (%d) is incompatible with "+
+						"remote node '%s': [%d, %d]",
+					n.Name, n.DCur, rn.Name, rn.Vsn[3], rn.Vsn[4])
+			}
+
+			// Check their delegate protocol version is in range
+			if rn.Vsn[5] < n.DMin || rn.Vsn[5] > n.DMax {
+				return fmt.Errorf(
+					"Remote node '%s' delegate version (%d) is incompatible with "+
+						"node '%s': [%d, %d]",
+					rn.Name, rn.Vsn[5], n.Name, n.DMin, n.DMax)
+			}
 		}
 	}
 
