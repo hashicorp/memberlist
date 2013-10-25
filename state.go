@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"math/rand"
 	"net"
 	"reflect"
 	"sync/atomic"
@@ -56,21 +57,21 @@ func (m *Memberlist) schedule() {
 	// Create a new probeTicker
 	if m.config.ProbeInterval > 0 {
 		t := time.NewTicker(m.config.ProbeInterval)
-		go m.triggerFunc(t.C, stopCh, m.probe)
+		go m.triggerFunc(m.config.ProbeInterval, t.C, stopCh, m.probe)
 		m.tickers = append(m.tickers, t)
 	}
 
 	// Create a push pull ticker if needed
 	if m.config.PushPullInterval > 0 {
 		t := time.NewTicker(m.config.PushPullInterval)
-		go m.triggerFunc(t.C, stopCh, m.pushPull)
+		go m.triggerFunc(m.config.PushPullInterval, t.C, stopCh, m.pushPull)
 		m.tickers = append(m.tickers, t)
 	}
 
 	// Create a gossip ticker if needed
 	if m.config.GossipInterval > 0 && m.config.GossipNodes > 0 {
 		t := time.NewTicker(m.config.GossipInterval)
-		go m.triggerFunc(t.C, stopCh, m.gossip)
+		go m.triggerFunc(m.config.GossipInterval, t.C, stopCh, m.gossip)
 		m.tickers = append(m.tickers, t)
 	}
 
@@ -83,7 +84,10 @@ func (m *Memberlist) schedule() {
 
 // triggerFunc is used to trigger a function call each time a
 // message is received until a stop tick arrives.
-func (m *Memberlist) triggerFunc(C <-chan time.Time, stop <-chan struct{}, f func()) {
+func (m *Memberlist) triggerFunc(stagger time.Duration, C <-chan time.Time, stop <-chan struct{}, f func()) {
+	// Use a random stagger to avoid syncronizing
+	randStagger := time.Duration(uint64(rand.Int63()) % uint64(stagger))
+	time.Sleep(randStagger)
 	for {
 		select {
 		case <-C:
