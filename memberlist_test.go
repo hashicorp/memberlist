@@ -141,6 +141,8 @@ func TestCreate_protocolVersion(t *testing.T) {
 
 func TestCreate(t *testing.T) {
 	c := testConfig()
+	c.ProtocolVersion = ProtocolVersionMin
+	c.DelegateProtocolVersion = 13
 	c.DelegateProtocolMin = 12
 	c.DelegateProtocolMax = 24
 
@@ -165,11 +167,19 @@ func TestCreate(t *testing.T) {
 		t.Fatalf("bad: %#v", members[0])
 	}
 
+	if members[0].PCur != c.ProtocolVersion {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
 	if members[0].DMin != c.DelegateProtocolMin {
 		t.Fatalf("bad: %#v", members[0])
 	}
 
 	if members[0].DMax != c.DelegateProtocolMax {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
+	if members[0].DCur != c.DelegateProtocolVersion {
 		t.Fatalf("bad: %#v", members[0])
 	}
 }
@@ -231,6 +241,9 @@ func TestMemberlist_Join(t *testing.T) {
 	if len(m2.Members()) != 2 {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
 	}
+}
+
+func TestMemberlist_Join_protocolVersions(t *testing.T) {
 }
 
 func TestMemberlist_Leave(t *testing.T) {

@@ -133,10 +133,11 @@ type Config struct {
 	// for any custom messages that the delegate might do (broadcasts,
 	// local/remote state, etc.). If you don't set these, then the protocol
 	// versions will just be zero, and version compliance won't be done.
-	Delegate            Delegate
-	DelegateProtocolMin uint8
-	DelegateProtocolMax uint8
-	Events              EventDelegate
+	Delegate                Delegate
+	DelegateProtocolVersion uint8
+	DelegateProtocolMin     uint8
+	DelegateProtocolMax     uint8
+	Events                  EventDelegate
 
 	// LogOutput is the writer where logs should be sent. If this is not
 	// set, logging will go to stderr by default.
@@ -358,10 +359,11 @@ func (m *Memberlist) setAlive() error {
 		Node:        m.config.Name,
 		Addr:        ipAddr,
 		Meta:        meta,
-		PMin:        ProtocolVersionMin,
-		PMax:        ProtocolVersionMax,
-		DMin:        m.config.DelegateProtocolMin,
-		DMax:        m.config.DelegateProtocolMax,
+		Vsn: []uint8{
+			ProtocolVersionMin, ProtocolVersionMax, m.config.ProtocolVersion,
+			m.config.DelegateProtocolMin, m.config.DelegateProtocolMax,
+			m.config.DelegateProtocolVersion,
+		},
 	}
 	m.aliveNode(&a)
 

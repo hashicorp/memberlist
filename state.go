@@ -23,8 +23,10 @@ type Node struct {
 	Meta []byte // Metadata from the delegate for this node.
 	PMin uint8  // Minimum protocol version this understands
 	PMax uint8  // Maximum protocol version this understands
+	PCur uint8  // Current version node is speaking
 	DMin uint8  // Min protocol version for the delegate to understand
 	DMax uint8  // Max protocol version for the delegate to understand
+	DCur uint8  // Current version delegate is speaking
 }
 
 // NodeState is used to manage our state view of another node
@@ -466,11 +468,15 @@ func (m *Memberlist) aliveNode(a *alive) {
 		return
 	}
 
-	// Update our protocol versions
-	state.PMin = a.PMin
-	state.PMax = a.PMax
-	state.DMin = a.DMin
-	state.DMax = a.DMax
+	// Update our protocol versions if it arrived
+	if len(a.Vsn) > 0 {
+		state.PMin = a.Vsn[0]
+		state.PMax = a.Vsn[1]
+		state.PCur = a.Vsn[2]
+		state.DMin = a.Vsn[3]
+		state.DMax = a.Vsn[4]
+		state.DCur = a.Vsn[5]
+	}
 
 	// Re-Broadcast
 	m.encodeAndBroadcast(a.Node, aliveMsg, a)

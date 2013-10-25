@@ -83,10 +83,10 @@ type alive struct {
 	Node        string
 	Addr        []byte
 	Meta        []byte
-	PMin        uint8
-	PMax        uint8
-	DMin        uint8
-	DMax        uint8
+
+	// The versions of the protocol/delegate that are being spoken, order:
+	// pmin, pmax, pcur, dmin, dmax, dcur
+	Vsn []uint8
 }
 
 // dead is broadcast when we confirm a node is dead
@@ -111,6 +111,8 @@ type pushNodeState struct {
 	Meta        []byte
 	Incarnation uint32
 	State       nodeStateType
+	PMin, PMax  uint8
+	DMin, DMax  uint8
 }
 
 // compress is used to wrap an underlying payload
