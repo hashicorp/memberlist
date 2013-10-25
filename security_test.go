@@ -28,7 +28,7 @@ func TestDeriveKey(t *testing.T) {
 }
 
 func TestPKCS7(t *testing.T) {
-	for i := 1; i <= 32; i++ {
+	for i := 1; i <= 255; i++ {
 		// Make a buffer of size i
 		buf := []byte{}
 		for j := 0; j < i; j++ {

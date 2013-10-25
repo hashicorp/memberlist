@@ -44,8 +44,11 @@ func pkcs7decode(buf []byte, blockSize int) []byte {
 		panic("Cannot decode a PKCS7 buffer of zero length")
 	}
 	n := len(buf)
-	last := buf[n-1]
-	n -= (int(last) % blockSize)
+	last := int(buf[n-1])
+	if last == 0 || last >= blockSize {
+		return buf
+	}
+	n -= (last % blockSize)
 	return buf[:n]
 }
 
