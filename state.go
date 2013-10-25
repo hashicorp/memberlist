@@ -63,9 +63,7 @@ func (m *Memberlist) schedule() {
 
 	// Create a push pull ticker if needed
 	if m.config.PushPullInterval > 0 {
-		t := time.NewTicker(m.config.PushPullInterval)
-		go m.triggerFunc(m.config.PushPullInterval, t.C, stopCh, m.pushPull)
-		m.tickers = append(m.tickers, t)
+		go m.pushPullTrigger(stopCh)
 	}
 
 	// Create a gossip ticker if needed
@@ -92,6 +90,29 @@ func (m *Memberlist) triggerFunc(stagger time.Duration, C <-chan time.Time, stop
 		select {
 		case <-C:
 			f()
+		case <-stop:
+			return
+		}
+	}
+}
+
+// pushPullTrigger is used to periodically trigger a push/pull until
+// a stop tick arrives. We don't use triggerFunc since the push/pull
+// timer is dynamically scaled based on cluster size to avoid network
+// saturation
+func (m *Memberlist) pushPullTrigger(stop <-chan struct{}) {
+	interval := m.config.PushPullInterval
+
+	// Use a random stagger to avoid syncronizing
+	randStagger := time.Duration(uint64(rand.Int63()) % uint64(interval))
+	time.Sleep(randStagger)
+
+	// Tick using a dynamic timer
+	for {
+		tickTime := pushPullScale(interval, len(m.nodes))
+		select {
+		case <-time.After(tickTime):
+			m.pushPull()
 		case <-stop:
 			return
 		}
