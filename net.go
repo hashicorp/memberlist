@@ -234,7 +234,7 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr) {
 
 		// Decrypt the payload
 		n := len(buf) - HMACLength
-		plain, err := decryptPayload(m.derivedKey[:n], buf)
+		plain, err := decryptPayload(m.derivedKey, buf[:n])
 		if err != nil {
 			m.logger.Printf("[ERR] Decrypt packet failed: %v", err)
 			return

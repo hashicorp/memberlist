@@ -38,6 +38,7 @@ func TestMemberlist_Integ(t *testing.T) {
 		c.ProbeTimeout = 100 * time.Millisecond
 		c.GossipInterval = 5 * time.Millisecond
 		c.PushPullInterval = 100 * time.Millisecond
+		c.SecretKey = "nobody knows!"
 
 		if i == 0 {
 			c.Events = &ChannelEventDelegate{eventCh}
