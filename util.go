@@ -28,6 +28,11 @@ const pushPullScaleThreshold = 32
  */
 var privateBlocks []*net.IPNet
 
+const (
+	// Constant compression level, between 1-9
+	flateCompressLevel = 3
+)
+
 func init() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UnixNano())
@@ -251,7 +256,7 @@ func isPrivateIP(ip_str string) bool {
 // and wraps it in a compress{} message that is encoded.
 func compressPayload(inp []byte) (*bytes.Buffer, error) {
 	var buf bytes.Buffer
-	compressor, err := flate.NewWriter(&buf, 3)
+	compressor, err := flate.NewWriter(&buf, flateCompressLevel)
 	if err != nil {
 		return nil, err
 	}
