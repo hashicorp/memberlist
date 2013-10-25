@@ -8,14 +8,19 @@ import (
 )
 
 func TestDeriveKey(t *testing.T) {
-	k1 := deriveKey([]byte("foobar"))
-	k2 := deriveKey([]byte("foobar"))
+	k1 := deriveKey([]byte("foobar"), []byte(keySalt))
+	k2 := deriveKey([]byte("foobar"), []byte(keySalt))
 	if bytes.Compare(k1, k2) != 0 {
 		t.Fatalf("not equal")
 	}
 
-	k3 := deriveKey([]byte("test"))
+	k3 := deriveKey([]byte("test"), []byte(keySalt))
 	if bytes.Compare(k1, k3) == 0 {
+		t.Fatalf("should not be equal")
+	}
+
+	k4 := deriveKey([]byte("foobar"), []byte(hmacSalt))
+	if bytes.Compare(k1, k4) == 0 {
 		t.Fatalf("should not be equal")
 	}
 
@@ -54,7 +59,7 @@ func TestPKCS7(t *testing.T) {
 }
 
 func TestEncryptDecrypt(t *testing.T) {
-	k1 := deriveKey([]byte("foobar"))
+	k1 := deriveKey([]byte("foobar"), []byte(keySalt))
 	plaintext := []byte("this is a plain text message")
 
 	buf, err := encryptPayload(k1, plaintext)
@@ -77,7 +82,7 @@ func TestEncryptDecrypt(t *testing.T) {
 }
 
 func TestHMACVerify(t *testing.T) {
-	k1 := deriveKey([]byte("foobar"))
+	k1 := deriveKey([]byte("foobar"), []byte(hmacSalt))
 	plaintext := []byte("this is a plain text message")
 
 	buf := bytes.NewBuffer(nil)

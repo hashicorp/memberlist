@@ -172,9 +172,11 @@ type Memberlist struct {
 
 	startStopLock sync.Mutex
 
-	// derivedKey is the actual key we use for encryption and HMAC. It is
-	// generated using PBKDF2
+	// derivedKey is the key we use for encryption. Generated using PBKDF2
 	derivedKey []byte
+
+	// derivedKey is the key we use for HMAC. Generated using PBKDF2
+	derivedHMACKey []byte
 
 	logger *log.Logger
 }
@@ -259,7 +261,8 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 
 	// Generate the encryption key if we need one
 	if conf.SecretKey != "" {
-		m.derivedKey = deriveKey([]byte(conf.SecretKey))
+		m.derivedKey = deriveKey([]byte(conf.SecretKey), []byte(keySalt))
+		m.derivedHMACKey = deriveKey([]byte(conf.SecretKey), []byte(hmacSalt))
 	}
 
 	go m.tcpListen()

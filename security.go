@@ -14,6 +14,7 @@ import (
 
 const (
 	keySalt           = "\xb1\x94\x18k$\x9cc\xb4++of\x8e\xcd\x8c\x84\xf7\xf6F:\xd6d\x1e\x15\x82Mj\xd5~M\xa5<"
+	hmacSalt          = "\xcc\x87\xeb\xa8C\x928\xb6\x89\xb7\xf6\xeb\xe0\x8bp\xe8t\xf6\xdd\xad\xe0f\x9aT\xba\x80\x12\xe3\xa0o\x84\x83"
 	keyRounds         = 2048
 	keyLength         = aes.BlockSize
 	hmacLength        = sha1.Size
@@ -22,8 +23,8 @@ const (
 
 // deriveKey is used to generat the encryption key we use from the secret
 // that is provided. We use PBKDF2 to ensure the key is crypto worthy
-func deriveKey(secret []byte) []byte {
-	return pbkdf2.Key(secret, []byte(keySalt), keyRounds, keyLength, sha1.New)
+func deriveKey(secret, salt []byte) []byte {
+	return pbkdf2.Key(secret, salt, keyRounds, keyLength, sha1.New)
 }
 
 // pkcs7encode is used to pad a byte buffer to a specific block size using

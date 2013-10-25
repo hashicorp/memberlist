@@ -230,7 +230,7 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr) {
 	// Check if encryption is enabled
 	if m.derivedKey != nil {
 		// Verify HMAC first
-		if err := hmacVerifyPayload(m.derivedKey, buf); err != nil {
+		if err := hmacVerifyPayload(m.derivedHMACKey, buf); err != nil {
 			m.logger.Printf("[WARN] Decode packet failed: %v", err)
 			return
 		}
@@ -457,7 +457,7 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 		}
 
 		// Append an HMAC signature
-		if err := hmacPayload(m.derivedKey, buf); err != nil {
+		if err := hmacPayload(m.derivedHMACKey, buf); err != nil {
 			m.logger.Printf("[ERR] HMAC signing of message failed: %v", err)
 			return err
 		}
@@ -599,7 +599,7 @@ func (m *Memberlist) encryptLocalState(sendBuf []byte) ([]byte, error) {
 	buf.Write(cipherText.Bytes())
 
 	// Append an HMAC signature
-	if err := hmacPayload(m.derivedKey, buf); err != nil {
+	if err := hmacPayload(m.derivedHMACKey, buf); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -629,7 +629,7 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 	}
 
 	// Verify the HMAC
-	if err := hmacVerifyPayload(m.derivedKey, cipherText.Bytes()); err != nil {
+	if err := hmacVerifyPayload(m.derivedHMACKey, cipherText.Bytes()); err != nil {
 		return nil, err
 	}
 

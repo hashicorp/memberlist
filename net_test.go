@@ -403,7 +403,8 @@ func TestSendMsg_Piggyback(t *testing.T) {
 func TestEncryptDecryptState(t *testing.T) {
 	state := []byte("this is our internal state...")
 	m := &Memberlist{
-		derivedKey: deriveKey([]byte("secret")),
+		derivedKey:     deriveKey([]byte("secret"), []byte(keySalt)),
+		derivedHMACKey: deriveKey([]byte("secret"), []byte(hmacSalt)),
 	}
 
 	crypt, err := m.encryptLocalState(state)
