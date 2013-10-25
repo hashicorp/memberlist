@@ -662,6 +662,9 @@ func (m *Memberlist) readRemoteState(conn net.Conn) ([]pushNodeState, []byte, er
 		// Reset message type and bufConn
 		msgType = messageType(plain[0])
 		bufConn = bytes.NewReader(plain[1:])
+	} else if m.derivedKey != nil {
+		return nil, nil,
+			fmt.Errorf("SecretKey is configured but remote state is not encrypted")
 	}
 
 	// Get the msgPack decoders
