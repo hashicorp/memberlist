@@ -111,8 +111,7 @@ type pushNodeState struct {
 	Meta        []byte
 	Incarnation uint32
 	State       nodeStateType
-	PMin, PMax  uint8
-	DMin, DMax  uint8
+	Vsn         []uint8 // Protocol versions
 }
 
 // compress is used to wrap an underlying payload
@@ -453,6 +452,10 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 		localNodes[idx].Incarnation = n.Incarnation
 		localNodes[idx].State = n.State
 		localNodes[idx].Meta = n.Meta
+		localNodes[idx].Vsn = []uint8{
+			n.PMin, n.PMax, n.PCur,
+			n.DMin, n.DMax, n.DCur,
+		}
 	}
 	m.nodeLock.RUnlock()
 

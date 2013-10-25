@@ -2,6 +2,7 @@ package memberlist
 
 import (
 	"math/rand"
+	"fmt"
 	"net"
 	"reflect"
 	"sync/atomic"
@@ -333,6 +334,10 @@ func (m *Memberlist) pushPullNode(addr []byte) error {
 		return err
 	}
 
+	if err := m.verifyProtocol(remote); err != nil {
+		return err
+	}
+
 	// Merge the state
 	m.mergeState(remote)
 
@@ -340,6 +345,36 @@ func (m *Memberlist) pushPullNode(addr []byte) error {
 	if m.config.Delegate != nil {
 		m.config.Delegate.MergeRemoteState(userState)
 	}
+	return nil
+}
+
+// verifyProtocol verifies that all the remote nodes can speak with our
+// nodes and vice versa on both the core protocol as well as the
+// delegate protocol level.
+func (m *Memberlist) verifyProtocol(remote []pushNodeState) error {
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+
+	for _, rn := range remote {
+		for _, n := range m.nodes {
+			// Check if our protocol version is in range
+			if n.PCur < rn.Vsn[0] || n.PCur > rn.Vsn[1] {
+				return fmt.Errorf(
+					"Node '%s' protocol version (%d) is incompatible with "+
+						"remote node '%s': [%d, %d]",
+					n.Name, n.PCur, rn.Name, rn.Vsn[0], rn.Vsn[1])
+			}
+
+			// Check their protocol version is in range
+			if rn.Vsn[2] < n.PMin || rn.Vsn[2] > n.PMax {
+				return fmt.Errorf(
+					"Remote node '%s' protocol version (%d) is incompatible with "+
+						"node '%s': [%d, %d]",
+					rn.Name, rn.Vsn[2], n.Name, n.PMin, n.PMax)
+			}
+		}
+	}
+
 	return nil
 }
 

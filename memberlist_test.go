@@ -243,9 +243,6 @@ func TestMemberlist_Join(t *testing.T) {
 	}
 }
 
-func TestMemberlist_Join_protocolVersions(t *testing.T) {
-}
-
 func TestMemberlist_Leave(t *testing.T) {
 	m1 := GetMemberlist(t)
 	m1.setAlive()
