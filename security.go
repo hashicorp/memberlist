@@ -13,10 +13,11 @@ import (
 )
 
 const (
-	keySalt    = "\xb1\x94\x18k$\x9cc\xb4++of\x8e\xcd\x8c\x84\xf7\xf6F:\xd6d\x1e\x15\x82Mj\xd5~M\xa5<"
-	keyRounds  = 2048
-	keyLength  = aes.BlockSize
-	hmacLength = sha1.Size
+	keySalt           = "\xb1\x94\x18k$\x9cc\xb4++of\x8e\xcd\x8c\x84\xf7\xf6F:\xd6d\x1e\x15\x82Mj\xd5~M\xa5<"
+	keyRounds         = 2048
+	keyLength         = aes.BlockSize
+	hmacLength        = sha1.Size
+	encryptionVersion = 0
 )
 
 // deriveKey is used to generat the encryption key we use from the secret
@@ -53,11 +54,14 @@ func pkcs7decode(buf []byte, blockSize int) []byte {
 }
 
 // encryptPayload is used to encrypt a message with a given key.
-// We make use of AES-128 in CBC mode. New byte buffer is the
+// We make use of AES-128 in CBC mode. New byte buffer is the version,
 // IV, and encrypted text, aligned to 16byte block size
 func encryptPayload(key []byte, msg []byte) (*bytes.Buffer, error) {
 	// Create a buffer
 	buf := bytes.NewBuffer(nil)
+
+	// Write the encryption version
+	buf.WriteByte(byte(encryptionVersion))
 
 	// Add a random IV
 	io.CopyN(buf, rand.Reader, aes.BlockSize)
@@ -66,7 +70,7 @@ func encryptPayload(key []byte, msg []byte) (*bytes.Buffer, error) {
 	io.Copy(buf, bytes.NewReader(msg))
 
 	// Ensure we are correctly padded
-	pkcs7encode(buf, aes.BlockSize, aes.BlockSize)
+	pkcs7encode(buf, aes.BlockSize+1, aes.BlockSize)
 
 	// Get the AES block cipher
 	aesBlock, err := aes.NewCipher(key)
@@ -76,8 +80,8 @@ func encryptPayload(key []byte, msg []byte) (*bytes.Buffer, error) {
 
 	// Encrypt message using CBC
 	slice := buf.Bytes()
-	cbc := cipher.NewCBCEncrypter(aesBlock, slice[:aes.BlockSize])
-	cbc.CryptBlocks(slice[aes.BlockSize:], slice[aes.BlockSize:])
+	cbc := cipher.NewCBCEncrypter(aesBlock, slice[1:aes.BlockSize+1])
+	cbc.CryptBlocks(slice[aes.BlockSize+1:], slice[aes.BlockSize+1:])
 	return buf, nil
 }
 
@@ -86,6 +90,16 @@ func encryptPayload(key []byte, msg []byte) (*bytes.Buffer, error) {
 // removed, and a new slice is returned. Decryption is done
 // IN PLACE!
 func decryptPayload(key []byte, msg []byte) ([]byte, error) {
+	// Ensure the length is sane
+	if len(msg) <= 1+aes.BlockSize {
+		return nil, fmt.Errorf("Payload is too small to decrypt")
+	}
+
+	// Verify the version
+	if msg[0] != encryptionVersion {
+		return nil, fmt.Errorf("Unsupported encryption version %d", msg[0])
+	}
+
 	// Get the AES block cipher
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
@@ -93,11 +107,11 @@ func decryptPayload(key []byte, msg []byte) ([]byte, error) {
 	}
 
 	// Decrypt using CBC mode
-	cbc := cipher.NewCBCDecrypter(aesBlock, msg[:aes.BlockSize])
-	cbc.CryptBlocks(msg[aes.BlockSize:], msg[aes.BlockSize:])
+	cbc := cipher.NewCBCDecrypter(aesBlock, msg[1:aes.BlockSize+1])
+	cbc.CryptBlocks(msg[aes.BlockSize+1:], msg[aes.BlockSize+1:])
 
 	// Remove any padding
-	noPad := pkcs7decode(msg[aes.BlockSize:], aes.BlockSize)
+	noPad := pkcs7decode(msg[aes.BlockSize+1:], aes.BlockSize)
 	return noPad, err
 }
 

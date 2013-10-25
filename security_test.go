@@ -62,7 +62,7 @@ func TestEncryptDecrypt(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 
-	if buf.Len()%16 != 0 {
+	if (buf.Len()-1)%16 != 0 {
 		t.Fatalf("output should be 16 byte aligned")
 	}
 
