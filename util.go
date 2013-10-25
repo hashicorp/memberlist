@@ -13,6 +13,13 @@ import (
 	"time"
 )
 
+// pushPullScale is the minimum number of nodes
+// before we start scaling the push/pull timing. The scale
+// effect is the log2(Nodes) - log2(pushPullScale). This means
+// that the 33rd node will cause us to double the interval,
+// while the 65th will triple it.
+const pushPullScaleThreshold = 32
+
 /*
  * Contains an entry for each private block:
  * 10.0.0.0/8
@@ -93,6 +100,19 @@ func shuffleNodes(nodes []*nodeState) {
 		j := rand.Intn(i + 1)
 		nodes[i], nodes[j] = nodes[j], nodes[i]
 	}
+}
+
+// pushPushScale is used to scale the time interval at which push/pull
+// syncs take place. It is used to prevent network saturation as the
+// cluster size grows
+func pushPullScale(interval time.Duration, n int) time.Duration {
+	// Don't scale until we cross the threshold
+	if n <= pushPullScaleThreshold {
+		return interval
+	}
+
+	multiplier := math.Ceil(math.Log2(float64(n))-math.Log2(pushPullScaleThreshold)) + 1.0
+	return time.Duration(multiplier) * interval
 }
 
 // moveDeadNodes moves all the nodes in the dead state

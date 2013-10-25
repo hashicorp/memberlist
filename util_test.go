@@ -103,6 +103,25 @@ func TestShuffleNodes(t *testing.T) {
 	}
 }
 
+func TestPushPullScale(t *testing.T) {
+	sec := time.Second
+	for i := 0; i <= 32; i++ {
+		if s := pushPullScale(sec, i); s != sec {
+			t.Fatalf("Bad time scale: %v", s)
+		}
+	}
+	for i := 33; i <= 64; i++ {
+		if s := pushPullScale(sec, i); s != 2*sec {
+			t.Fatalf("Bad time scale: %v", s)
+		}
+	}
+	for i := 65; i <= 128; i++ {
+		if s := pushPullScale(sec, i); s != 3*sec {
+			t.Fatalf("Bad time scale: %v", s)
+		}
+	}
+}
+
 func TestMoveDeadNodes(t *testing.T) {
 	nodes := []*nodeState{
 		&nodeState{
