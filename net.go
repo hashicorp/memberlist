@@ -34,6 +34,7 @@ const (
 	compoundMsg
 	userMsg // User mesg, not handled by us
 	compressMsg
+	encryptMsg
 )
 
 // compressionType is used to specify the compression algorithm
@@ -217,9 +218,34 @@ func (m *Memberlist) udpListen() {
 		// Capture the current time
 		lastPacket = time.Now()
 
-		// Handle the command
-		m.handleCommand(buf[:n], addr)
+		// Ingest this packet
+		m.ingestPacket(buf[:n], addr)
 	}
+}
+
+func (m *Memberlist) ingestPacket(buf []byte, from net.Addr) {
+	// Check if encryption is enabled
+	if m.derivedKey != nil {
+		// Verify HMAC first
+		if err := hmacVerifyPayload(m.derivedKey, buf); err != nil {
+			m.logger.Printf("[WARN] Decode packet failed: %v", err)
+			return
+		}
+
+		// Decrypt the payload
+		n := len(buf) - HMACLength
+		plain, err := decryptPayload(m.derivedKey[:n], buf)
+		if err != nil {
+			m.logger.Printf("[ERR] Decrypt packet failed: %v", err)
+			return
+		}
+
+		// Continue processing the plaintext buffer
+		buf = plain
+	}
+
+	// Handle the command
+	m.handleCommand(buf, from)
 }
 
 func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
@@ -413,6 +439,24 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 		} else {
 			msg = buf.Bytes()
 		}
+	}
+
+	// Check if we have encryption enabled
+	if m.derivedKey != nil {
+		// Encrypt the payload
+		buf, err := encryptPayload(m.derivedKey, msg)
+		if err != nil {
+			m.logger.Printf("[ERR] Encryption of message failed: %v", err)
+			return err
+		}
+
+		// Append an HMAC signature
+		if err := hmacPayload(m.derivedKey, buf); err != nil {
+			m.logger.Printf("[ERR] HMAC signing of message failed: %v", err)
+			return err
+		}
+
+		msg = buf.Bytes()
 	}
 
 	_, err := m.udpListener.WriteTo(msg, to)

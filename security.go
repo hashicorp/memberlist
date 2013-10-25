@@ -114,7 +114,10 @@ func hmacPayload(key []byte, msg *bytes.Buffer) error {
 	hmacSum := mac.Sum(nil)
 
 	// Append the hmac to the bytes
-	msg.Write(hmacSum)
+	_, err = msg.Write(hmacSum)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -125,10 +125,6 @@ type Config struct {
 	// to provide message integrity.
 	SecretKey string
 
-	// derivedKey is the actual key we use for encryption and HMAC. It is
-	// generated using PBKDF2
-	derivedKey []byte
-
 	// Delegate and Events are delegates for receiving and providing
 	// data to memberlist via callback mechanisms. For Delegate, see
 	// the Delegate interface. For Events, see the EventDelegate interface.
@@ -176,6 +172,10 @@ type Memberlist struct {
 
 	startStopLock sync.Mutex
 
+	// derivedKey is the actual key we use for encryption and HMAC. It is
+	// generated using PBKDF2
+	derivedKey []byte
+
 	logger *log.Logger
 }
 
@@ -220,11 +220,6 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
 	}
 
-	// Generate the encryption key if we need one
-	if conf.SecretKey != "" {
-		conf.derivedKey = deriveKey([]byte(conf.SecretKey))
-	}
-
 	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.TCPPort)
 	tcpLn, err := net.Listen("tcp", tcpAddr)
 	if err != nil {
@@ -261,6 +256,12 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		logger:         log.New(conf.LogOutput, "", log.LstdFlags),
 	}
 	m.broadcasts.NumNodes = func() int { return len(m.nodes) }
+
+	// Generate the encryption key if we need one
+	if conf.SecretKey != "" {
+		m.derivedKey = deriveKey([]byte(conf.SecretKey))
+	}
+
 	go m.tcpListen()
 	go m.udpListen()
 	return m, nil
