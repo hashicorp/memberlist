@@ -235,7 +235,7 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr) {
 		}
 
 		// Decrypt the payload
-		n := len(buf) - HMACLength
+		n := len(buf) - hmacLength
 		plain, err := decryptPayload(m.derivedKey, buf[:n])
 		if err != nil {
 			m.logger.Printf("[ERR] Decrypt packet failed: %v", err)
@@ -585,7 +585,7 @@ func (m *Memberlist) encryptLocalState(sendBuf []byte) ([]byte, error) {
 
 	// Encode the length of the ciphertext
 	sizeBuf := make([]byte, 4)
-	msgLen := cipherText.Len() + HMACLength + 5
+	msgLen := cipherText.Len() + hmacLength + 5
 	binary.BigEndian.PutUint32(sizeBuf, uint32(msgLen))
 
 	// Prefix cipherText with msgType and length
@@ -630,7 +630,7 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 	}
 
 	// Decrypt the cipherText
-	n := cipherText.Len() - HMACLength
+	n := cipherText.Len() - hmacLength
 	cipherBytes := cipherText.Bytes()[5:n]
 	return decryptPayload(m.derivedKey, cipherBytes)
 }

@@ -13,16 +13,16 @@ import (
 )
 
 const (
-	KeySalt    = "\xb1\x94\x18k$\x9cc\xb4++of\x8e\xcd\x8c\x84\xf7\xf6F:\xd6d\x1e\x15\x82Mj\xd5~M\xa5<"
-	KeyRounds  = 2048
-	KeyLength  = aes.BlockSize
-	HMACLength = sha1.Size
+	keySalt    = "\xb1\x94\x18k$\x9cc\xb4++of\x8e\xcd\x8c\x84\xf7\xf6F:\xd6d\x1e\x15\x82Mj\xd5~M\xa5<"
+	keyRounds  = 2048
+	keyLength  = aes.BlockSize
+	hmacLength = sha1.Size
 )
 
 // deriveKey is used to generat the encryption key we use from the secret
 // that is provided. We use PBKDF2 to ensure the key is crypto worthy
 func deriveKey(secret []byte) []byte {
-	return pbkdf2.Key(secret, []byte(KeySalt), KeyRounds, KeyLength, sha1.New)
+	return pbkdf2.Key(secret, []byte(keySalt), keyRounds, keyLength, sha1.New)
 }
 
 // pkcs7encode is used to pad a byte buffer to a specific block size using
@@ -125,17 +125,17 @@ func hmacPayload(key []byte, msg *bytes.Buffer) error {
 }
 
 // hmacVerifyPayload is used to verify the HMAC of a payload.
-// It uses the last HMACLength bytes as the provided HMAC, and computes
+// It uses the last hmacLength bytes as the provided HMAC, and computes
 // the HMAC of the preceeding bytes.
 func hmacVerifyPayload(key []byte, buf []byte) error {
-	if len(buf) <= HMACLength {
+	if len(buf) <= hmacLength {
 		return fmt.Errorf("Buffer is too short for HMAC verification")
 	}
 
 	// Extract the hmac, and the message
 	n := len(buf)
-	providedHMAC := buf[n-HMACLength:]
-	msg := buf[:n-HMACLength]
+	providedHMAC := buf[n-hmacLength:]
+	msg := buf[:n-hmacLength]
 
 	// Compute the HMAC
 	mac := hmac.New(sha1.New, key)
