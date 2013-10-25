@@ -55,6 +55,7 @@ const (
 	userMsgOverhead        = 1
 	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
 	maxPushStateBytes      = 10 * 1024 * 1024
+	encryptOverhead        = 52 // IV: 16, Padding: 15, HMAC: 20, Version: 1
 )
 
 // ping request sent directly to node
@@ -412,6 +413,9 @@ func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType messageType, msg inte
 func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	// Check if we can piggy back any messages
 	bytesAvail := udpSendBuf - len(msg) - compoundHeaderOverhead
+	if m.derivedKey != nil {
+		bytesAvail -= encryptOverhead
+	}
 	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
 
 	// Fast path if nothing to piggypack
