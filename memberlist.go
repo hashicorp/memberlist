@@ -125,6 +125,10 @@ type Config struct {
 	// to provide message integrity.
 	SecretKey string
 
+	// derivedKey is the actual key we use for encryption and HMAC. It is
+	// generated using PBKDF2
+	derivedKey []byte
+
 	// Delegate and Events are delegates for receiving and providing
 	// data to memberlist via callback mechanisms. For Delegate, see
 	// the Delegate interface. For Events, see the EventDelegate interface.
@@ -214,6 +218,11 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	} else if conf.ProtocolVersion > ProtocolVersionMax {
 		return nil, fmt.Errorf("Protocol version '%d' too high. Must be in range: [%d, %d]",
 			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
+	}
+
+	// Generate the encryption key if we need one
+	if conf.SecretKey != "" {
+		conf.derivedKey = deriveKey([]byte(conf.SecretKey))
 	}
 
 	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.TCPPort)
