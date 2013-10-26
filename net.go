@@ -164,6 +164,11 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 		m.logger.Printf("[ERR] Failed to push local state: %s", err)
 	}
 
+	if err := m.verifyProtocol(remoteNodes); err != nil {
+		m.logger.Printf("[ERR] Push/pull verification failed: %s", err)
+		return
+	}
+
 	// Merge the membership state
 	m.mergeState(remoteNodes)
 
