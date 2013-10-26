@@ -27,6 +27,7 @@ func TestMemberlist_Integ(t *testing.T) {
 	num := 16
 	var members []*Memberlist
 
+	secret := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	eventCh := make(chan NodeEvent, num)
 
 	for i := 0; i < num; i++ {
@@ -38,7 +39,7 @@ func TestMemberlist_Integ(t *testing.T) {
 		c.ProbeTimeout = 100 * time.Millisecond
 		c.GossipInterval = 5 * time.Millisecond
 		c.PushPullInterval = 100 * time.Millisecond
-		c.SecretKey = "nobody knows!"
+		c.SecretKey = secret
 
 		if i == 0 {
 			c.Events = &ChannelEventDelegate{eventCh}

@@ -55,7 +55,7 @@ const (
 	userMsgOverhead        = 1
 	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
 	maxPushStateBytes      = 10 * 1024 * 1024
-	encryptOverhead        = 52 // IV: 16, Padding: 15, HMAC: 20, Version: 1
+	encryptOverhead        = 44 // Version: 1, IV: 12, Padding: 15, Tag: 16
 )
 
 // ping request sent directly to node
@@ -228,16 +228,9 @@ func (m *Memberlist) udpListen() {
 
 func (m *Memberlist) ingestPacket(buf []byte, from net.Addr) {
 	// Check if encryption is enabled
-	if m.derivedKey != nil {
-		// Verify HMAC first
-		if err := hmacVerifyPayload(m.derivedHMACKey, buf); err != nil {
-			m.logger.Printf("[WARN] Decode packet failed: %v", err)
-			return
-		}
-
+	if m.config.SecretKey != nil {
 		// Decrypt the payload
-		n := len(buf) - hmacLength
-		plain, err := decryptPayload(m.derivedKey, buf[:n])
+		plain, err := decryptPayload(m.config.SecretKey, buf, nil)
 		if err != nil {
 			m.logger.Printf("[ERR] Decrypt packet failed: %v", err)
 			return
@@ -413,7 +406,7 @@ func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType messageType, msg inte
 func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	// Check if we can piggy back any messages
 	bytesAvail := udpSendBuf - len(msg) - compoundHeaderOverhead
-	if m.derivedKey != nil {
+	if m.config.SecretKey != nil {
 		bytesAvail -= encryptOverhead
 	}
 	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
@@ -448,20 +441,14 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 	}
 
 	// Check if we have encryption enabled
-	if m.derivedKey != nil {
+	if m.config.SecretKey != nil {
 		// Encrypt the payload
-		buf, err := encryptPayload(m.derivedKey, msg)
+		var buf bytes.Buffer
+		err := encryptPayload(m.config.SecretKey, msg, nil, &buf)
 		if err != nil {
 			m.logger.Printf("[ERR] Encryption of message failed: %v", err)
 			return err
 		}
-
-		// Append an HMAC signature
-		if err := hmacPayload(m.derivedHMACKey, buf); err != nil {
-			m.logger.Printf("[ERR] HMAC signing of message failed: %v", err)
-			return err
-		}
-
 		msg = buf.Bytes()
 	}
 
@@ -564,7 +551,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 	}
 
 	// Check if encryption is enabled
-	if m.derivedKey != nil {
+	if m.config.SecretKey != nil {
 		crypt, err := m.encryptLocalState(sendBuf)
 		if err != nil {
 			m.logger.Printf("[ERROR] Failed to encrypt local state: %v", err)
@@ -582,24 +569,19 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 
 // encryptLocalState is used to help encrypt local state before sending
 func (m *Memberlist) encryptLocalState(sendBuf []byte) ([]byte, error) {
-	cipherText, err := encryptPayload(m.derivedKey, sendBuf)
-	if err != nil {
-		return nil, err
-	}
+	var buf bytes.Buffer
 
-	// Encode the length of the ciphertext
-	sizeBuf := make([]byte, 4)
-	msgLen := cipherText.Len() + hmacLength + 5
-	binary.BigEndian.PutUint32(sizeBuf, uint32(msgLen))
-
-	// Prefix cipherText with msgType and length
-	buf := bytes.NewBuffer(nil)
+	// Write the encryptMsg byte
 	buf.WriteByte(byte(encryptMsg))
-	buf.Write(sizeBuf)
-	buf.Write(cipherText.Bytes())
 
-	// Append an HMAC signature
-	if err := hmacPayload(m.derivedHMACKey, buf); err != nil {
+	// Write the size of the message
+	sizeBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(sizeBuf, uint32(encryptedLength(len(sendBuf))))
+	buf.Write(sizeBuf)
+
+	// Write the encrypted cipher text to the buffer
+	err := encryptPayload(m.config.SecretKey, sendBuf, buf.Bytes()[:5], &buf)
+	if err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -622,21 +604,16 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("Remote node state is larger than limit (%d)", moreBytes)
 	}
 
-	// Read in the rest of the payload, with the HMAC
-	_, err = io.CopyN(cipherText, bufConn, int64(moreBytes)-5)
+	// Read in the rest of the payload
+	_, err = io.CopyN(cipherText, bufConn, int64(moreBytes))
 	if err != nil {
 		return nil, err
 	}
 
-	// Verify the HMAC
-	if err := hmacVerifyPayload(m.derivedHMACKey, cipherText.Bytes()); err != nil {
-		return nil, err
-	}
-
 	// Decrypt the cipherText
-	n := cipherText.Len() - hmacLength
-	cipherBytes := cipherText.Bytes()[5:n]
-	return decryptPayload(m.derivedKey, cipherBytes)
+	dataBytes := cipherText.Bytes()[:5]
+	cipherBytes := cipherText.Bytes()[5:]
+	return decryptPayload(m.config.SecretKey, cipherBytes, dataBytes)
 }
 
 // recvRemoteState is used to read the remote state from a connection
@@ -653,7 +630,7 @@ func (m *Memberlist) readRemoteState(conn net.Conn) ([]pushNodeState, []byte, er
 
 	// Check if the message is encrypted
 	if msgType == encryptMsg {
-		if m.derivedKey == nil {
+		if m.config.SecretKey == nil {
 			return nil, nil,
 				fmt.Errorf("Remote state is encrypted and SecretKey is not configured")
 		}
@@ -666,7 +643,7 @@ func (m *Memberlist) readRemoteState(conn net.Conn) ([]pushNodeState, []byte, er
 		// Reset message type and bufConn
 		msgType = messageType(plain[0])
 		bufConn = bytes.NewReader(plain[1:])
-	} else if m.derivedKey != nil {
+	} else if m.config.SecretKey != nil {
 		return nil, nil,
 			fmt.Errorf("SecretKey is configured but remote state is not encrypted")
 	}

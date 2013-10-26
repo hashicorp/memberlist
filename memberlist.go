@@ -120,10 +120,8 @@ type Config struct {
 	EnableCompression bool
 
 	// SecretKey is provided if message level encryption and verification
-	// are to be used. The key is passed through a Key Derivation Function
-	// (PBKDF2) to ensure suitability. This key is also used for an HMAC-SHA1
-	// to provide message integrity.
-	SecretKey string
+	// are to be used. This key must be 16 bytes.
+	SecretKey []byte
 
 	// Delegate and Events are delegates for receiving and providing
 	// data to memberlist via callback mechanisms. For Delegate, see
@@ -172,12 +170,6 @@ type Memberlist struct {
 
 	startStopLock sync.Mutex
 
-	// derivedKey is the key we use for encryption. Generated using PBKDF2
-	derivedKey []byte
-
-	// derivedKey is the key we use for HMAC. Generated using PBKDF2
-	derivedHMACKey []byte
-
 	logger *log.Logger
 }
 
@@ -207,7 +199,7 @@ func DefaultConfig() *Config {
 		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly
 
 		EnableCompression: true, // Enable compression by default
-		SecretKey:         "",
+		SecretKey:         nil,
 	}
 }
 
@@ -220,6 +212,10 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	} else if conf.ProtocolVersion > ProtocolVersionMax {
 		return nil, fmt.Errorf("Protocol version '%d' too high. Must be in range: [%d, %d]",
 			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
+	}
+
+	if conf.SecretKey != nil && len(conf.SecretKey) != 16 {
+		return nil, fmt.Errorf("SecretKey must be 16 bytes in length")
 	}
 
 	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.TCPPort)
@@ -258,13 +254,6 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		logger:         log.New(conf.LogOutput, "", log.LstdFlags),
 	}
 	m.broadcasts.NumNodes = func() int { return len(m.nodes) }
-
-	// Generate the encryption key if we need one
-	if conf.SecretKey != "" {
-		m.derivedKey = deriveKey([]byte(conf.SecretKey), []byte(keySalt))
-		m.derivedHMACKey = deriveKey([]byte(conf.SecretKey), []byte(hmacSalt))
-	}
-
 	go m.tcpListen()
 	go m.udpListen()
 	return m, nil

@@ -2,35 +2,9 @@ package memberlist
 
 import (
 	"bytes"
-	"crypto/aes"
 	"reflect"
 	"testing"
 )
-
-func TestDeriveKey(t *testing.T) {
-	k1 := deriveKey([]byte("foobar"), []byte(keySalt))
-	k2 := deriveKey([]byte("foobar"), []byte(keySalt))
-	if bytes.Compare(k1, k2) != 0 {
-		t.Fatalf("not equal")
-	}
-
-	k3 := deriveKey([]byte("test"), []byte(keySalt))
-	if bytes.Compare(k1, k3) == 0 {
-		t.Fatalf("should not be equal")
-	}
-
-	k4 := deriveKey([]byte("foobar"), []byte(hmacSalt))
-	if bytes.Compare(k1, k4) == 0 {
-		t.Fatalf("should not be equal")
-	}
-
-	if len(k1) != aes.BlockSize {
-		t.Fatalf("bad len: %d", len(k1))
-	}
-	if len(k3) != aes.BlockSize {
-		t.Fatalf("bad len: %d", len(k1))
-	}
-}
 
 func TestPKCS7(t *testing.T) {
 	for i := 1; i <= 255; i++ {
@@ -59,55 +33,30 @@ func TestPKCS7(t *testing.T) {
 }
 
 func TestEncryptDecrypt(t *testing.T) {
-	k1 := deriveKey([]byte("foobar"), []byte(keySalt))
+	k1 := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	plaintext := []byte("this is a plain text message")
+	extra := []byte("random data")
 
-	buf, err := encryptPayload(k1, plaintext)
+	var buf bytes.Buffer
+	err := encryptPayload(k1, plaintext, extra, &buf)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
-	if (buf.Len()-1)%16 != 0 {
-		t.Fatalf("output should be 16 byte aligned")
+	expLen := encryptedLength(len(plaintext))
+	if buf.Len() != expLen {
+		t.Fatalf("output length is unexpected %d %d %d", len(plaintext), buf.Len(), expLen)
 	}
 
-	msg, err := decryptPayload(k1, buf.Bytes())
+	msg, err := decryptPayload(k1, buf.Bytes(), extra)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
-	if bytes.Compare(msg, plaintext) != 0 {
-		t.Fatalf("encrypt/decrypt failed! %v", msg)
-	}
-}
-
-func TestHMACVerify(t *testing.T) {
-	k1 := deriveKey([]byte("foobar"), []byte(hmacSalt))
-	plaintext := []byte("this is a plain text message")
-
-	buf := bytes.NewBuffer(nil)
-	buf.Write(plaintext)
-
-	if err := hmacPayload(k1, buf); err != nil {
-		t.Fatalf("err: %v", err)
-	}
-
-	if err := hmacVerifyPayload(k1, buf.Bytes()); err != nil {
-		t.Fatalf("err: %v", err)
-	}
-
-	// Try different key!
-	k1[0]++
-	err := hmacVerifyPayload(k1, buf.Bytes())
-	if err.Error() != "HMAC verification failed" {
-		t.Fatalf("err: %v", err)
-	}
-
-	// Try a different payload
-	k1[0]--
-	buf.Bytes()[0]++
-	err = hmacVerifyPayload(k1, buf.Bytes())
-	if err.Error() != "HMAC verification failed" {
-		t.Fatalf("err: %v", err)
+	cmp := bytes.Compare(msg, plaintext)
+	if cmp != 0 {
+		t.Errorf("len %d %v", len(msg), msg)
+		t.Errorf("len %d %v", len(plaintext), plaintext)
+		t.Fatalf("encrypt/decrypt failed! %d '%s' '%s'", cmp, msg, plaintext)
 	}
 }
