@@ -648,6 +648,10 @@ func (m *Memberlist) suspectNode(s *suspect) {
 			Node:        state.Name,
 			Addr:        state.Addr,
 			Meta:        state.Meta,
+			Vsn: []uint8{
+				state.PMin, state.PMax, state.PCur,
+				state.DMin, state.DMax, state.DCur,
+			},
 		}
 		m.encodeAndBroadcast(s.Node, aliveMsg, a)
 
@@ -714,7 +718,16 @@ func (m *Memberlist) deadNode(d *dead) {
 				inc = m.nextIncarnation()
 			}
 
-			a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr, Meta: state.Meta}
+			a := alive{
+				Incarnation: inc,
+				Node:        state.Name,
+				Addr:        state.Addr,
+				Meta:        state.Meta,
+				Vsn: []uint8{
+					state.PMin, state.PMax, state.PCur,
+					state.DMin, state.DMax, state.DCur,
+				},
+			}
 			m.encodeAndBroadcast(d.Node, aliveMsg, a)
 
 			state.Incarnation = inc
@@ -763,6 +776,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 				Node:        r.Name,
 				Addr:        r.Addr,
 				Meta:        r.Meta,
+				Vsn:         r.Vsn,
 			}
 			m.aliveNode(&a)
 

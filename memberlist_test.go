@@ -243,6 +243,43 @@ func TestMemberlist_Join(t *testing.T) {
 	}
 }
 
+func TestMemberlist_Join_protocolVersions(t *testing.T) {
+	c1 := testConfig()
+	c2 := testConfig()
+	c3 := testConfig()
+	c3.ProtocolVersion = ProtocolVersionMax
+
+	m1, err := Create(c1)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m1.Shutdown()
+
+	m2, err := Create(c2)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m2.Shutdown()
+
+	m3, err := Create(c3)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m3.Shutdown()
+
+	_, err = m1.Join([]string{c2.BindAddr})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	yield()
+
+	_, err = m1.Join([]string{c3.BindAddr})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+}
+
 func TestMemberlist_Leave(t *testing.T) {
 	m1 := GetMemberlist(t)
 	m1.setAlive()
