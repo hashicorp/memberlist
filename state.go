@@ -1,8 +1,8 @@
 package memberlist
 
 import (
-	"math/rand"
 	"fmt"
+	"math/rand"
 	"net"
 	"reflect"
 	"sync/atomic"
@@ -356,6 +356,12 @@ func (m *Memberlist) verifyProtocol(remote []pushNodeState) error {
 	defer m.nodeLock.RUnlock()
 
 	for _, rn := range remote {
+		// If the remote node has no version, which can happen if we're
+		// talking to an old memberlist node, then default it to zero.
+		if len(rn.Vsn) == 0 {
+			rn.Vsn = make([]uint8, 6)
+		}
+
 		for _, n := range m.nodes {
 			// Check if our protocol version is in range
 			if n.PCur < rn.Vsn[0] || n.PCur > rn.Vsn[1] {
