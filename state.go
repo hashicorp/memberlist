@@ -356,6 +356,11 @@ func (m *Memberlist) verifyProtocol(remote []pushNodeState) error {
 	defer m.nodeLock.RUnlock()
 
 	for _, rn := range remote {
+		// If the node isn't alive, then skip it
+		if rn.State != stateAlive {
+			continue
+		}
+
 		// If the remote node has no version, which can happen if we're
 		// talking to an old memberlist node, then default it to zero.
 		if len(rn.Vsn) == 0 {
@@ -363,6 +368,11 @@ func (m *Memberlist) verifyProtocol(remote []pushNodeState) error {
 		}
 
 		for _, n := range m.nodes {
+			// Ignore non-alive nodes
+			if n.State != stateAlive {
+				continue
+			}
+
 			// Check if our protocol version is in range
 			if n.PCur < rn.Vsn[0] || n.PCur > rn.Vsn[1] {
 				return fmt.Errorf(
