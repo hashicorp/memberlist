@@ -922,6 +922,6 @@ func testVerifyProtocolSingle(t *testing.T, A [][6]uint8, B [][6]uint8, expect b
 
 	err := m.verifyProtocol(remote)
 	if (err == nil) != expect {
-		t.Fatalf("bad: %#v %#v %s", A, B, err)
+		t.Fatalf("bad:\nA: %v\nB: %v\nErr: %s", A, B, err)
 	}
 }

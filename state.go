@@ -2,6 +2,7 @@ package memberlist
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"net"
 	"reflect"
@@ -355,55 +356,103 @@ func (m *Memberlist) verifyProtocol(remote []pushNodeState) error {
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
 
+	// Maximum minimum understood and minimum maximum understood for both
+	// the protocol and delegate versions. We use this to verify everyone
+	// can be understood.
+	var maxpmin, minpmax uint8
+	var maxdmin, mindmax uint8
+	minpmax = math.MaxUint8
+	mindmax = math.MaxUint8
+
 	for _, rn := range remote {
 		// If the node isn't alive, then skip it
 		if rn.State != stateAlive {
 			continue
 		}
 
-		// If the remote node has no version, which can happen if we're
-		// talking to an old memberlist node, then default it to zero.
+		// Skip nodes that don't have versions set, it just means
+		// their version is zero.
 		if len(rn.Vsn) == 0 {
-			rn.Vsn = make([]uint8, 6)
+			continue
 		}
 
-		for _, n := range m.nodes {
-			// Ignore non-alive nodes
-			if n.State != stateAlive {
-				continue
-			}
+		if rn.Vsn[0] > maxpmin {
+			maxpmin = rn.Vsn[0]
+		}
 
-			// Check if our protocol version is in range
-			if n.PCur < rn.Vsn[0] || n.PCur > rn.Vsn[1] {
-				return fmt.Errorf(
-					"Node '%s' protocol version (%d) is incompatible with "+
-						"remote node '%s': [%d, %d]",
-					n.Name, n.PCur, rn.Name, rn.Vsn[0], rn.Vsn[1])
-			}
+		if rn.Vsn[1] < minpmax {
+			minpmax = rn.Vsn[1]
+		}
 
-			// Check their protocol version is in range
-			if rn.Vsn[2] < n.PMin || rn.Vsn[2] > n.PMax {
-				return fmt.Errorf(
-					"Remote node '%s' protocol version (%d) is incompatible with "+
-						"node '%s': [%d, %d]",
-					rn.Name, rn.Vsn[2], n.Name, n.PMin, n.PMax)
-			}
+		if rn.Vsn[3] > maxdmin {
+			maxdmin = rn.Vsn[3]
+		}
 
-			// Check that our delegate protocol is in range
-			if n.DCur < rn.Vsn[3] || n.DCur > rn.Vsn[4] {
-				return fmt.Errorf(
-					"Node '%s' delegate version (%d) is incompatible with "+
-						"remote node '%s': [%d, %d]",
-					n.Name, n.DCur, rn.Name, rn.Vsn[3], rn.Vsn[4])
-			}
+		if rn.Vsn[4] < mindmax {
+			mindmax = rn.Vsn[4]
+		}
+	}
 
-			// Check their delegate protocol version is in range
-			if rn.Vsn[5] < n.DMin || rn.Vsn[5] > n.DMax {
-				return fmt.Errorf(
-					"Remote node '%s' delegate version (%d) is incompatible with "+
-						"node '%s': [%d, %d]",
-					rn.Name, rn.Vsn[5], n.Name, n.DMin, n.DMax)
-			}
+	for _, n := range m.nodes {
+		// Ignore non-alive nodes
+		if n.State != stateAlive {
+			continue
+		}
+
+		if n.PMin > maxpmin {
+			maxpmin = n.PMin
+		}
+
+		if n.PMax < minpmax {
+			minpmax = n.PMax
+		}
+
+		if n.DMin > maxdmin {
+			maxdmin = n.DMin
+		}
+
+		if n.DMax < mindmax {
+			mindmax = n.DMax
+		}
+	}
+
+	// Now that we definitively know the minimum and maximum understood
+	// version that satisfies the whole cluster, we verify that every
+	// node in the cluster satisifies this.
+	for _, n := range remote {
+		var nPCur, nDCur uint8
+		if len(n.Vsn) > 0 {
+			nPCur = n.Vsn[2]
+			nDCur = n.Vsn[5]
+		}
+
+		if nPCur < maxpmin || nPCur > minpmax {
+			return fmt.Errorf(
+				"Node '%s' protocol version (%d) is incompatible: [%d, %d]",
+				n.Name, nPCur, maxpmin, minpmax)
+		}
+
+		if nDCur < maxdmin || nDCur > mindmax {
+			return fmt.Errorf(
+				"Node '%s' delegate protocol version (%d) is incompatible: [%d, %d]",
+				n.Name, nDCur, maxdmin, mindmax)
+		}
+	}
+
+	for _, n := range m.nodes {
+		nPCur := n.PCur
+		nDCur := n.DCur
+
+		if nPCur < maxpmin || nPCur > minpmax {
+			return fmt.Errorf(
+				"Node '%s' protocol version (%d) is incompatible: [%d, %d]",
+				n.Name, nPCur, maxpmin, minpmax)
+		}
+
+		if nDCur < maxdmin || nDCur > mindmax {
+			return fmt.Errorf(
+				"Node '%s' delegate protocol version (%d) is incompatible: [%d, %d]",
+				n.Name, nDCur, maxdmin, mindmax)
 		}
 	}
 
