@@ -463,6 +463,15 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 	return nil
 }
 
+// ProtocolVersion returns the protocol version currently in use by
+// this memberlist.
+func (m *Memberlist) ProtocolVersion() uint8 {
+	// NOTE: This method exists so that in the future we can control
+	// any locking if necessary, if we change the protocol version at
+	// runtime, etc.
+	return m.config.ProtocolVersion
+}
+
 // Shutdown will stop any background maintanence of network activity
 // for this memberlist, causing it to appear "dead". A leave message
 // will not be broadcasted prior, so the cluster being left will have

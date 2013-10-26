@@ -467,3 +467,19 @@ func TestMemberlist_UserData(t *testing.T) {
 		t.Fatalf("bad state %s", d2.remoteState)
 	}
 }
+
+func TestMemberlistProtocolVersion(t *testing.T) {
+	c := DefaultConfig()
+	c.BindAddr = getBindAddr().String()
+	c.ProtocolVersion = ProtocolVersionMax
+	m, err := Create(c)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
+	result := m.ProtocolVersion()
+	if result != ProtocolVersionMax {
+		t.Fatalf("bad: %d", result)
+	}
+}
