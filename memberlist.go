@@ -214,8 +214,13 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
 	}
 
-	if conf.SecretKey != nil && len(conf.SecretKey) != 16 {
-		return nil, fmt.Errorf("SecretKey must be 16 bytes in length")
+	if conf.SecretKey != nil {
+		if conf.ProtocolVersion < 1 {
+			return nil, fmt.Errorf("Encryption is not supported before protocol version 1")
+		}
+		if len(conf.SecretKey) != 16 {
+			return nil, fmt.Errorf("SecretKey must be 16 bytes in length")
+		}
 	}
 
 	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.TCPPort)
