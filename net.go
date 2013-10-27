@@ -10,6 +10,14 @@ import (
 	"time"
 )
 
+// This is the minimum and maximum protocol version that we can
+// _understand_. We're allowed to speak at any version within this
+// range. This range is inclusive.
+const (
+	ProtocolVersionMin uint8 = 0
+	ProtocolVersionMax       = 1
+)
+
 // messageType is an integer ID of a type of message that can be received
 // on network channels from other members.
 type messageType uint8
@@ -75,6 +83,10 @@ type alive struct {
 	Node        string
 	Addr        []byte
 	Meta        []byte
+
+	// The versions of the protocol/delegate that are being spoken, order:
+	// pmin, pmax, pcur, dmin, dmax, dcur
+	Vsn []uint8
 }
 
 // dead is broadcast when we confirm a node is dead
@@ -99,6 +111,7 @@ type pushNodeState struct {
 	Meta        []byte
 	Incarnation uint32
 	State       nodeStateType
+	Vsn         []uint8 // Protocol versions
 }
 
 // compress is used to wrap an underlying payload
@@ -149,6 +162,11 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 
 	if err := m.sendLocalState(conn); err != nil {
 		m.logger.Printf("[ERR] Failed to push local state: %s", err)
+	}
+
+	if err := m.verifyProtocol(remoteNodes); err != nil {
+		m.logger.Printf("[ERR] Push/pull verification failed: %s", err)
+		return
 	}
 
 	// Merge the membership state
@@ -439,6 +457,10 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 		localNodes[idx].Incarnation = n.Incarnation
 		localNodes[idx].State = n.State
 		localNodes[idx].Meta = n.Meta
+		localNodes[idx].Vsn = []uint8{
+			n.PMin, n.PMax, n.PCur,
+			n.DMin, n.DMax, n.DCur,
+		}
 	}
 	m.nodeLock.RUnlock()
 

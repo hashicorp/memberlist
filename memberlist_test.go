@@ -102,6 +102,88 @@ func GetMemberlist(t *testing.T) *Memberlist {
 	return nil
 }
 
+func TestDefaultConfig_protocolVersion(t *testing.T) {
+	c := DefaultConfig()
+	if c.ProtocolVersion != ProtocolVersionMin {
+		t.Fatalf("should be min: %d", c.ProtocolVersion)
+	}
+}
+
+func TestCreate_protocolVersion(t *testing.T) {
+	cases := []struct {
+		version uint8
+		err     bool
+	}{
+		{ProtocolVersionMin, false},
+		{ProtocolVersionMax, false},
+		// TODO(mitchellh): uncommon when we're over 0
+		//{ProtocolVersionMin - 1, true},
+		{ProtocolVersionMax + 1, true},
+		{ProtocolVersionMax - 1, false},
+	}
+
+	for _, tc := range cases {
+		c := DefaultConfig()
+		c.BindAddr = getBindAddr().String()
+		c.ProtocolVersion = tc.version
+		m, err := Create(c)
+		if tc.err && err == nil {
+			t.Errorf("Should've failed with version: %d", tc.version)
+		} else if !tc.err && err != nil {
+			t.Errorf("Version '%d' error: %s", tc.version, err)
+		}
+
+		if err == nil {
+			m.Shutdown()
+		}
+	}
+}
+
+func TestCreate(t *testing.T) {
+	c := testConfig()
+	c.ProtocolVersion = ProtocolVersionMin
+	c.DelegateProtocolVersion = 13
+	c.DelegateProtocolMin = 12
+	c.DelegateProtocolMax = 24
+
+	m, err := Create(c)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
+	yield()
+
+	members := m.Members()
+	if len(members) != 1 {
+		t.Fatalf("bad number of members")
+	}
+
+	if members[0].PMin != ProtocolVersionMin {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
+	if members[0].PMax != ProtocolVersionMax {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
+	if members[0].PCur != c.ProtocolVersion {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
+	if members[0].DMin != c.DelegateProtocolMin {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
+	if members[0].DMax != c.DelegateProtocolMax {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
+	if members[0].DCur != c.DelegateProtocolVersion {
+		t.Fatalf("bad: %#v", members[0])
+	}
+}
+
 func TestMemberList_CreateShutdown(t *testing.T) {
 	m := GetMemberlist(t)
 	m.schedule()
@@ -158,6 +240,43 @@ func TestMemberlist_Join(t *testing.T) {
 	// Check the hosts
 	if len(m2.Members()) != 2 {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+}
+
+func TestMemberlist_Join_protocolVersions(t *testing.T) {
+	c1 := testConfig()
+	c2 := testConfig()
+	c3 := testConfig()
+	c3.ProtocolVersion = ProtocolVersionMax
+
+	m1, err := Create(c1)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m1.Shutdown()
+
+	m2, err := Create(c2)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m2.Shutdown()
+
+	m3, err := Create(c3)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m3.Shutdown()
+
+	_, err = m1.Join([]string{c2.BindAddr})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	yield()
+
+	_, err = m1.Join([]string{c3.BindAddr})
+	if err != nil {
+		t.Fatalf("err: %s", err)
 	}
 }
 
@@ -383,5 +502,21 @@ func TestMemberlist_UserData(t *testing.T) {
 	}
 	if !reflect.DeepEqual(d2.remoteState, []byte("something")) {
 		t.Fatalf("bad state %s", d2.remoteState)
+	}
+}
+
+func TestMemberlistProtocolVersion(t *testing.T) {
+	c := DefaultConfig()
+	c.BindAddr = getBindAddr().String()
+	c.ProtocolVersion = ProtocolVersionMax
+	m, err := Create(c)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
+	result := m.ProtocolVersion()
+	if result != ProtocolVersionMax {
+		t.Fatalf("bad: %d", result)
 	}
 }

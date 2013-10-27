@@ -1,6 +1,8 @@
 package memberlist
 
 import (
+	"fmt"
+	"math"
 	"math/rand"
 	"net"
 	"reflect"
@@ -21,6 +23,12 @@ type Node struct {
 	Name string
 	Addr net.IP
 	Meta []byte // Metadata from the delegate for this node.
+	PMin uint8  // Minimum protocol version this understands
+	PMax uint8  // Maximum protocol version this understands
+	PCur uint8  // Current version node is speaking
+	DMin uint8  // Min protocol version for the delegate to understand
+	DMax uint8  // Max protocol version for the delegate to understand
+	DCur uint8  // Current version delegate is speaking
 }
 
 // NodeState is used to manage our state view of another node
@@ -327,6 +335,10 @@ func (m *Memberlist) pushPullNode(addr []byte) error {
 		return err
 	}
 
+	if err := m.verifyProtocol(remote); err != nil {
+		return err
+	}
+
 	// Merge the state
 	m.mergeState(remote)
 
@@ -334,6 +346,125 @@ func (m *Memberlist) pushPullNode(addr []byte) error {
 	if m.config.Delegate != nil {
 		m.config.Delegate.MergeRemoteState(userState)
 	}
+	return nil
+}
+
+// verifyProtocol verifies that all the remote nodes can speak with our
+// nodes and vice versa on both the core protocol as well as the
+// delegate protocol level.
+//
+// The verification works by finding the maximum minimum and
+// minimum maximum understood protocol and delegate versions. In other words,
+// it finds the common denominator of protocol and delegate version ranges
+// for the entire cluster.
+//
+// After this, it goes through the entire cluster (local and remote) and
+// verifies that everyone's speaking protocol versions satisfy this range.
+// If this passes, it means that every node can understand each other.
+func (m *Memberlist) verifyProtocol(remote []pushNodeState) error {
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+
+	// Maximum minimum understood and minimum maximum understood for both
+	// the protocol and delegate versions. We use this to verify everyone
+	// can be understood.
+	var maxpmin, minpmax uint8
+	var maxdmin, mindmax uint8
+	minpmax = math.MaxUint8
+	mindmax = math.MaxUint8
+
+	for _, rn := range remote {
+		// If the node isn't alive, then skip it
+		if rn.State != stateAlive {
+			continue
+		}
+
+		// Skip nodes that don't have versions set, it just means
+		// their version is zero.
+		if len(rn.Vsn) == 0 {
+			continue
+		}
+
+		if rn.Vsn[0] > maxpmin {
+			maxpmin = rn.Vsn[0]
+		}
+
+		if rn.Vsn[1] < minpmax {
+			minpmax = rn.Vsn[1]
+		}
+
+		if rn.Vsn[3] > maxdmin {
+			maxdmin = rn.Vsn[3]
+		}
+
+		if rn.Vsn[4] < mindmax {
+			mindmax = rn.Vsn[4]
+		}
+	}
+
+	for _, n := range m.nodes {
+		// Ignore non-alive nodes
+		if n.State != stateAlive {
+			continue
+		}
+
+		if n.PMin > maxpmin {
+			maxpmin = n.PMin
+		}
+
+		if n.PMax < minpmax {
+			minpmax = n.PMax
+		}
+
+		if n.DMin > maxdmin {
+			maxdmin = n.DMin
+		}
+
+		if n.DMax < mindmax {
+			mindmax = n.DMax
+		}
+	}
+
+	// Now that we definitively know the minimum and maximum understood
+	// version that satisfies the whole cluster, we verify that every
+	// node in the cluster satisifies this.
+	for _, n := range remote {
+		var nPCur, nDCur uint8
+		if len(n.Vsn) > 0 {
+			nPCur = n.Vsn[2]
+			nDCur = n.Vsn[5]
+		}
+
+		if nPCur < maxpmin || nPCur > minpmax {
+			return fmt.Errorf(
+				"Node '%s' protocol version (%d) is incompatible: [%d, %d]",
+				n.Name, nPCur, maxpmin, minpmax)
+		}
+
+		if nDCur < maxdmin || nDCur > mindmax {
+			return fmt.Errorf(
+				"Node '%s' delegate protocol version (%d) is incompatible: [%d, %d]",
+				n.Name, nDCur, maxdmin, mindmax)
+		}
+	}
+
+	for _, n := range m.nodes {
+		nPCur := n.PCur
+		nDCur := n.DCur
+
+		if nPCur < maxpmin || nPCur > minpmax {
+			return fmt.Errorf(
+				"Node '%s' protocol version (%d) is incompatible: [%d, %d]",
+				n.Name, nPCur, maxpmin, minpmax)
+		}
+
+		if nDCur < maxdmin || nDCur > mindmax {
+			return fmt.Errorf(
+				"Node '%s' delegate protocol version (%d) is incompatible: [%d, %d]",
+				n.Name, nDCur, maxdmin, mindmax)
+		}
+	}
+
 	return nil
 }
 
@@ -462,6 +593,16 @@ func (m *Memberlist) aliveNode(a *alive) {
 		return
 	}
 
+	// Update our protocol versions if it arrived
+	if len(a.Vsn) > 0 {
+		state.PMin = a.Vsn[0]
+		state.PMax = a.Vsn[1]
+		state.PCur = a.Vsn[2]
+		state.DMin = a.Vsn[3]
+		state.DMax = a.Vsn[4]
+		state.DCur = a.Vsn[5]
+	}
+
 	// Re-Broadcast
 	m.encodeAndBroadcast(a.Node, aliveMsg, a)
 
@@ -516,6 +657,10 @@ func (m *Memberlist) suspectNode(s *suspect) {
 			Node:        state.Name,
 			Addr:        state.Addr,
 			Meta:        state.Meta,
+			Vsn: []uint8{
+				state.PMin, state.PMax, state.PCur,
+				state.DMin, state.DMax, state.DCur,
+			},
 		}
 		m.encodeAndBroadcast(s.Node, aliveMsg, a)
 
@@ -582,7 +727,16 @@ func (m *Memberlist) deadNode(d *dead) {
 				inc = m.nextIncarnation()
 			}
 
-			a := alive{Incarnation: inc, Node: state.Name, Addr: state.Addr, Meta: state.Meta}
+			a := alive{
+				Incarnation: inc,
+				Node:        state.Name,
+				Addr:        state.Addr,
+				Meta:        state.Meta,
+				Vsn: []uint8{
+					state.PMin, state.PMax, state.PCur,
+					state.DMin, state.DMax, state.DCur,
+				},
+			}
 			m.encodeAndBroadcast(d.Node, aliveMsg, a)
 
 			state.Incarnation = inc
@@ -631,6 +785,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 				Node:        r.Name,
 				Addr:        r.Addr,
 				Meta:        r.Meta,
+				Vsn:         r.Vsn,
 			}
 			m.aliveNode(&a)
 

@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -800,5 +801,127 @@ func TestMemberlist_PushPull(t *testing.T) {
 		case <-time.After(10 * time.Millisecond):
 			t.Fatalf("timeout")
 		}
+	}
+}
+
+func TestVerifyProtocol(t *testing.T) {
+	cases := []struct {
+		Anodes   [][3]uint8
+		Bnodes   [][3]uint8
+		expected bool
+	}{
+		// Both running identical everything
+		{
+			Anodes: [][3]uint8{
+				{0, 0, 0},
+			},
+			Bnodes: [][3]uint8{
+				{0, 0, 0},
+			},
+			expected: true,
+		},
+
+		// One can understand newer, but speaking same protocol
+		{
+			Anodes: [][3]uint8{
+				{0, 0, 0},
+			},
+			Bnodes: [][3]uint8{
+				{0, 1, 0},
+			},
+			expected: true,
+		},
+
+		// One is speaking outside the range
+		{
+			Anodes: [][3]uint8{
+				{0, 0, 0},
+			},
+			Bnodes: [][3]uint8{
+				{1, 1, 1},
+			},
+			expected: false,
+		},
+
+		// Transitively outside the range
+		{
+			Anodes: [][3]uint8{
+				{0, 1, 0},
+				{0, 2, 1},
+			},
+			Bnodes: [][3]uint8{
+				{1, 3, 1},
+			},
+			expected: false,
+		},
+
+		// Multi-node
+		{
+			Anodes: [][3]uint8{
+				{0, 3, 2},
+				{0, 2, 0},
+			},
+			Bnodes: [][3]uint8{
+				{0, 2, 1},
+				{0, 5, 0},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range cases {
+		aCore := make([][6]uint8, len(tc.Anodes))
+		aApp := make([][6]uint8, len(tc.Anodes))
+		for i, n := range tc.Anodes {
+			aCore[i] = [6]uint8{n[0], n[1], n[2], 0, 0, 0}
+			aApp[i] = [6]uint8{0, 0, 0, n[0], n[1], n[2]}
+		}
+
+		bCore := make([][6]uint8, len(tc.Bnodes))
+		bApp := make([][6]uint8, len(tc.Bnodes))
+		for i, n := range tc.Bnodes {
+			bCore[i] = [6]uint8{n[0], n[1], n[2], 0, 0, 0}
+			bApp[i] = [6]uint8{0, 0, 0, n[0], n[1], n[2]}
+		}
+
+		// Test core protocol verification
+		testVerifyProtocolSingle(t, aCore, bCore, tc.expected)
+		testVerifyProtocolSingle(t, bCore, aCore, tc.expected)
+
+		//  Test app protocol verification
+		testVerifyProtocolSingle(t, aApp, bApp, tc.expected)
+		testVerifyProtocolSingle(t, bApp, aApp, tc.expected)
+	}
+}
+
+func testVerifyProtocolSingle(t *testing.T, A [][6]uint8, B [][6]uint8, expect bool) {
+	m := GetMemberlist(t)
+	defer m.Shutdown()
+
+	m.nodes = make([]*nodeState, len(A))
+	for i, n := range A {
+		m.nodes[i] = &nodeState{
+			Node: Node{
+				PMin: n[0],
+				PMax: n[1],
+				PCur: n[2],
+				DMin: n[3],
+				DMax: n[4],
+				DCur: n[5],
+			},
+		}
+	}
+
+	remote := make([]pushNodeState, len(B))
+	for i, n := range B {
+		remote[i] = pushNodeState{
+			Name: fmt.Sprintf("node %d", i),
+			Vsn:  []uint8{n[0], n[1], n[2], n[3], n[4], n[5]},
+		}
+	}
+
+	err := m.verifyProtocol(remote)
+	if (err == nil) != expect {
+		t.Fatalf("bad:\nA: %v\nB: %v\nErr: %s", A, B, err)
 	}
 }

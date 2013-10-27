@@ -35,6 +35,11 @@ type Config struct {
 	UDPPort  int
 	TCPPort  int
 
+	// ProtocolVersion is the configured protocol version that we
+	// will _speak_. This must be between ProtocolVersionMin and
+	// ProtocolVersionMax.
+	ProtocolVersion uint8
+
 	// TCPTimeout is the timeout for establishing a TCP connection with
 	// a remote node for a full state sync.
 	TCPTimeout time.Duration
@@ -123,8 +128,16 @@ type Config struct {
 	// Delegate and Events are delegates for receiving and providing
 	// data to memberlist via callback mechanisms. For Delegate, see
 	// the Delegate interface. For Events, see the EventDelegate interface.
-	Delegate Delegate
-	Events   EventDelegate
+	//
+	// The DelegateProtocolMin/Max are used to guarantee protocol-compatibility
+	// for any custom messages that the delegate might do (broadcasts,
+	// local/remote state, etc.). If you don't set these, then the protocol
+	// versions will just be zero, and version compliance won't be done.
+	Delegate                Delegate
+	DelegateProtocolVersion uint8
+	DelegateProtocolMin     uint8
+	DelegateProtocolMax     uint8
+	Events                  EventDelegate
 
 	// LogOutput is the writer where logs should be sent. If this is not
 	// set, logging will go to stderr by default.
@@ -175,6 +188,7 @@ func DefaultConfig() *Config {
 		BindAddr:         "0.0.0.0",
 		UDPPort:          7946,
 		TCPPort:          7946,
+		ProtocolVersion:  ProtocolVersionMax,
 		TCPTimeout:       10 * time.Second,       // Timeout after 10 seconds
 		IndirectChecks:   3,                      // Use 3 nodes for the indirect ping
 		RetransmitMult:   4,                      // Retransmit a message 4 * log(N+1) nodes
@@ -194,6 +208,14 @@ func DefaultConfig() *Config {
 // newMemberlist creates the network listeners.
 // Does not schedule execution of background maintenence.
 func newMemberlist(conf *Config) (*Memberlist, error) {
+	if conf.ProtocolVersion < ProtocolVersionMin {
+		return nil, fmt.Errorf("Protocol version '%d' too low. Must be in range: [%d, %d]",
+			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
+	} else if conf.ProtocolVersion > ProtocolVersionMax {
+		return nil, fmt.Errorf("Protocol version '%d' too high. Must be in range: [%d, %d]",
+			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
+	}
+
 	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.TCPPort)
 	tcpLn, err := net.Listen("tcp", tcpAddr)
 	if err != nil {
@@ -337,6 +359,11 @@ func (m *Memberlist) setAlive() error {
 		Node:        m.config.Name,
 		Addr:        ipAddr,
 		Meta:        meta,
+		Vsn: []uint8{
+			ProtocolVersionMin, ProtocolVersionMax, m.config.ProtocolVersion,
+			m.config.DelegateProtocolMin, m.config.DelegateProtocolMax,
+			m.config.DelegateProtocolVersion,
+		},
 	}
 	m.aliveNode(&a)
 
@@ -434,6 +461,15 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 	}
 
 	return nil
+}
+
+// ProtocolVersion returns the protocol version currently in use by
+// this memberlist.
+func (m *Memberlist) ProtocolVersion() uint8 {
+	// NOTE: This method exists so that in the future we can control
+	// any locking if necessary, if we change the protocol version at
+	// runtime, etc.
+	return m.config.ProtocolVersion
 }
 
 // Shutdown will stop any background maintanence of network activity
