@@ -116,7 +116,7 @@ type Config struct {
 
 	// EnableCompression is used to control message compression. This can
 	// be used to reduce bandwidth usage at the cost of slightly more CPU
-	// utilization.
+	// utilization. This is only available starting at protocol version 1.
 	EnableCompression bool
 
 	// SecretKey is provided if message level encryption and verification
@@ -234,6 +234,11 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 
 	if conf.LogOutput == nil {
 		conf.LogOutput = os.Stderr
+	}
+
+	// Warn if compression is enabled with bad protocol version
+	if conf.EnableCompression && conf.ProtocolVersion < 1 {
+		log.Printf("[WARN] Compression is enabled with an unsupported protocol")
 	}
 
 	m := &Memberlist{
