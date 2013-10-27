@@ -352,6 +352,15 @@ func (m *Memberlist) pushPullNode(addr []byte) error {
 // verifyProtocol verifies that all the remote nodes can speak with our
 // nodes and vice versa on both the core protocol as well as the
 // delegate protocol level.
+//
+// The verification works by finding the maximum minimum and
+// minimum maximum understood protocol and delegate versions. In other words,
+// it finds the common denominator of protocol and delegate version ranges
+// for the entire cluster.
+//
+// After this, it goes through the entire cluster (local and remote) and
+// verifies that everyone's speaking protocol versions satisfy this range.
+// If this passes, it means that every node can understand each other.
 func (m *Memberlist) verifyProtocol(remote []pushNodeState) error {
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
