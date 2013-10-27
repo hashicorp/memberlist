@@ -104,8 +104,8 @@ func GetMemberlist(t *testing.T) *Memberlist {
 
 func TestDefaultConfig_protocolVersion(t *testing.T) {
 	c := DefaultConfig()
-	if c.ProtocolVersion != ProtocolVersionMin {
-		t.Fatalf("should be min: %d", c.ProtocolVersion)
+	if c.ProtocolVersion != ProtocolVersionMax {
+		t.Fatalf("should be max: %d", c.ProtocolVersion)
 	}
 }
 
