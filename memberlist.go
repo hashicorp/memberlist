@@ -188,7 +188,7 @@ func DefaultConfig() *Config {
 		BindAddr:         "0.0.0.0",
 		UDPPort:          7946,
 		TCPPort:          7946,
-		ProtocolVersion:  ProtocolVersionMin,
+		ProtocolVersion:  ProtocolVersionMax,
 		TCPTimeout:       10 * time.Second,       // Timeout after 10 seconds
 		IndirectChecks:   3,                      // Use 3 nodes for the indirect ping
 		RetransmitMult:   4,                      // Retransmit a message 4 * log(N+1) nodes
