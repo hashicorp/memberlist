@@ -302,7 +302,7 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 			continue
 		}
 
-		if err := m.pushPullNode(addr.IP); err != nil {
+		if err := m.pushPullNode(addr.IP, true); err != nil {
 			retErr = err
 			continue
 		}

@@ -24,11 +24,13 @@ type Delegate interface {
 
 	// LocalState is used for a TCP Push/Pull. This is sent to
 	// the remote side in addition to the membership information. Any
-	// data can be sent here. See MergeRemoteState as well.
-	LocalState() []byte
+	// data can be sent here. See MergeRemoteState as well. The `join`
+	// boolean indicates this is for a join instead of a push/pull.
+	LocalState(join bool) []byte
 
 	// MergeRemoteState is invoked after a TCP Push/Pull. This is the
 	// state received from the remote side and is the result of the
-	// remote side's LocalState call.
-	MergeRemoteState([]byte)
+	// remote side's LocalState call. The 'join'
+	// boolean indicates this is for a join instead of a push/pull.
+	MergeRemoteState(buf []byte, join bool)
 }

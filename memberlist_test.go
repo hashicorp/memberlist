@@ -57,11 +57,11 @@ func (m *MockDelegate) GetBroadcasts(overhead, limit int) [][]byte {
 	return b
 }
 
-func (m *MockDelegate) LocalState() []byte {
+func (m *MockDelegate) LocalState(join bool) []byte {
 	return m.state
 }
 
-func (m *MockDelegate) MergeRemoteState(s []byte) {
+func (m *MockDelegate) MergeRemoteState(s []byte, join bool) {
 	m.remoteState = s
 }
 

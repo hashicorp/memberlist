@@ -322,15 +322,15 @@ func (m *Memberlist) pushPull() {
 	node := nodes[0]
 
 	// Attempt a push pull
-	if err := m.pushPullNode(node.Addr); err != nil {
+	if err := m.pushPullNode(node.Addr, false); err != nil {
 		m.logger.Printf("[ERR] Push/Pull with %s failed: %s", node.Name, err)
 	}
 }
 
 // pushPullNode does a complete state exchange with a specific node.
-func (m *Memberlist) pushPullNode(addr []byte) error {
+func (m *Memberlist) pushPullNode(addr []byte, join bool) error {
 	// Attempt to send and receive with the node
-	remote, userState, err := m.sendAndReceiveState(addr)
+	remote, userState, err := m.sendAndReceiveState(addr, join)
 	if err != nil {
 		return err
 	}
@@ -344,7 +344,7 @@ func (m *Memberlist) pushPullNode(addr []byte) error {
 
 	// Invoke the delegate
 	if m.config.Delegate != nil {
-		m.config.Delegate.MergeRemoteState(userState)
+		m.config.Delegate.MergeRemoteState(userState, join)
 	}
 	return nil
 }

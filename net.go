@@ -104,7 +104,8 @@ type dead struct {
 // otherside how many states we are transfering
 type pushPullHeader struct {
 	Nodes        int
-	UserStateLen int // Encodes the byte lengh of user state
+	UserStateLen int  // Encodes the byte lengh of user state
+	Join         bool // Is this a join request or a anti-entropy run
 }
 
 // pushNodeState is used for pushPullReq when we are
@@ -158,13 +159,13 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	m.logger.Printf("[INFO] Responding to push/pull sync with: %s", conn.RemoteAddr())
 	defer conn.Close()
 
-	remoteNodes, userState, err := m.readRemoteState(conn)
+	join, remoteNodes, userState, err := m.readRemoteState(conn)
 	if err != nil {
 		m.logger.Printf("[ERR] Failed to receive remote state: %s", err)
 		return
 	}
 
-	if err := m.sendLocalState(conn); err != nil {
+	if err := m.sendLocalState(conn, join); err != nil {
 		m.logger.Printf("[ERR] Failed to push local state: %s", err)
 	}
 
@@ -178,7 +179,7 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 
 	// Invoke the delegate for user state
 	if m.config.Delegate != nil {
-		m.config.Delegate.MergeRemoteState(userState)
+		m.config.Delegate.MergeRemoteState(userState, join)
 	}
 }
 
@@ -457,7 +458,7 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 }
 
 // sendState is used to initiate a push/pull over TCP with a remote node
-func (m *Memberlist) sendAndReceiveState(addr []byte) ([]pushNodeState, []byte, error) {
+func (m *Memberlist) sendAndReceiveState(addr []byte, join bool) ([]pushNodeState, []byte, error) {
 	// Attempt to connect
 	dialer := net.Dialer{Timeout: m.config.TCPTimeout}
 	dest := net.TCPAddr{IP: addr, Port: m.config.TCPPort}
@@ -469,12 +470,12 @@ func (m *Memberlist) sendAndReceiveState(addr []byte) ([]pushNodeState, []byte, 
 	m.logger.Printf("[INFO] Initiating push/pull sync with: %s", conn.RemoteAddr())
 
 	// Send our state
-	if err := m.sendLocalState(conn); err != nil {
+	if err := m.sendLocalState(conn, join); err != nil {
 		return nil, nil, err
 	}
 
 	// Read remote state
-	remote, userState, err := m.readRemoteState(conn)
+	_, remote, userState, err := m.readRemoteState(conn)
 	if err != nil {
 		err := fmt.Errorf("Reading remote state failed: %v", err)
 		return nil, nil, err
@@ -485,7 +486,7 @@ func (m *Memberlist) sendAndReceiveState(addr []byte) ([]pushNodeState, []byte, 
 }
 
 // sendLocalState is invoked to send our local state over a tcp connection
-func (m *Memberlist) sendLocalState(conn net.Conn) error {
+func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 	// Prepare the local node state
 	m.nodeLock.RLock()
 	localNodes := make([]pushNodeState, len(m.nodes))
@@ -505,14 +506,14 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 	// Get the delegate state
 	var userData []byte
 	if m.config.Delegate != nil {
-		userData = m.config.Delegate.LocalState()
+		userData = m.config.Delegate.LocalState(join)
 	}
 
 	// Create a bytes buffer writer
 	bufConn := bytes.NewBuffer(nil)
 
 	// Send our node state
-	header := pushPullHeader{Nodes: len(localNodes), UserStateLen: len(userData)}
+	header := pushPullHeader{Nodes: len(localNodes), UserStateLen: len(userData), Join: join}
 	hd := codec.MsgpackHandle{}
 	enc := codec.NewEncoder(bufConn, &hd)
 
@@ -617,34 +618,34 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 }
 
 // recvRemoteState is used to read the remote state from a connection
-func (m *Memberlist) readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
+func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []byte, error) {
 	// Created a buffered reader
 	var bufConn io.Reader = bufio.NewReader(conn)
 
 	// Read the message type
 	buf := [1]byte{0}
 	if _, err := bufConn.Read(buf[:]); err != nil {
-		return nil, nil, err
+		return false, nil, nil, err
 	}
 	msgType := messageType(buf[0])
 
 	// Check if the message is encrypted
 	if msgType == encryptMsg {
 		if m.config.SecretKey == nil {
-			return nil, nil,
+			return false, nil, nil,
 				fmt.Errorf("Remote state is encrypted and SecretKey is not configured")
 		}
 
 		plain, err := m.decryptRemoteState(bufConn)
 		if err != nil {
-			return nil, nil, err
+			return false, nil, nil, err
 		}
 
 		// Reset message type and bufConn
 		msgType = messageType(plain[0])
 		bufConn = bytes.NewReader(plain[1:])
 	} else if m.config.SecretKey != nil {
-		return nil, nil,
+		return false, nil, nil,
 			fmt.Errorf("SecretKey is configured but remote state is not encrypted")
 	}
 
@@ -656,11 +657,11 @@ func (m *Memberlist) readRemoteState(conn net.Conn) ([]pushNodeState, []byte, er
 	if msgType == compressMsg {
 		var c compress
 		if err := dec.Decode(&c); err != nil {
-			return nil, nil, err
+			return false, nil, nil, err
 		}
 		decomp, err := decompressBuffer(&c)
 		if err != nil {
-			return nil, nil, err
+			return false, nil, nil, err
 		}
 
 		// Reset the message type
@@ -676,13 +677,13 @@ func (m *Memberlist) readRemoteState(conn net.Conn) ([]pushNodeState, []byte, er
 	// Quit if not push/pull
 	if msgType != pushPullMsg {
 		err := fmt.Errorf("received invalid msgType (%d)", msgType)
-		return nil, nil, err
+		return false, nil, nil, err
 	}
 
 	// Read the push/pull header
 	var header pushPullHeader
 	if err := dec.Decode(&header); err != nil {
-		return nil, nil, err
+		return false, nil, nil, err
 	}
 
 	// Allocate space for the transfer
@@ -691,7 +692,7 @@ func (m *Memberlist) readRemoteState(conn net.Conn) ([]pushNodeState, []byte, er
 	// Try to decode all the states
 	for i := 0; i < header.Nodes; i++ {
 		if err := dec.Decode(&remoteNodes[i]); err != nil {
-			return remoteNodes, nil, err
+			return false, remoteNodes, nil, err
 		}
 	}
 
@@ -706,9 +707,9 @@ func (m *Memberlist) readRemoteState(conn net.Conn) ([]pushNodeState, []byte, er
 				bytes, header.UserStateLen)
 		}
 		if err != nil {
-			return remoteNodes, nil, err
+			return false, remoteNodes, nil, err
 		}
 	}
 
-	return remoteNodes, userBuf, nil
+	return header.Join, remoteNodes, userBuf, nil
 }
