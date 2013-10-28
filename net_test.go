@@ -7,6 +7,7 @@ import (
 	"github.com/ugorji/go/codec"
 	"io"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -396,5 +397,32 @@ func TestSendMsg_Piggyback(t *testing.T) {
 
 	if aliveout.Node != "rand" || aliveout.Incarnation != 10 {
 		t.Fatalf("bad mesg")
+	}
+}
+
+func TestEncryptDecryptState(t *testing.T) {
+	state := []byte("this is our internal state...")
+	m := &Memberlist{
+		config: &Config{
+			SecretKey: []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		},
+	}
+
+	crypt, err := m.encryptLocalState(state)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	// Create reader, seek past the type byte
+	buf := bytes.NewReader(crypt)
+	buf.Seek(1, 0)
+
+	plain, err := m.decryptRemoteState(buf)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	if !reflect.DeepEqual(state, plain) {
+		t.Fatalf("Decrypt failed: %v", plain)
 	}
 }

@@ -3,6 +3,7 @@ package memberlist
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"github.com/ugorji/go/codec"
 	"io"
@@ -34,6 +35,7 @@ const (
 	compoundMsg
 	userMsg // User mesg, not handled by us
 	compressMsg
+	encryptMsg
 )
 
 // compressionType is used to specify the compression algorithm
@@ -52,6 +54,8 @@ const (
 	udpSendBuf             = 1400
 	userMsgOverhead        = 1
 	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
+	maxPushStateBytes      = 10 * 1024 * 1024
+	encryptOverhead        = 44 // Version: 1, IV: 12, Padding: 15, Tag: 16
 )
 
 // ping request sent directly to node
@@ -154,7 +158,7 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	m.logger.Printf("[INFO] Responding to push/pull sync with: %s", conn.RemoteAddr())
 	defer conn.Close()
 
-	remoteNodes, userState, err := readRemoteState(conn)
+	remoteNodes, userState, err := m.readRemoteState(conn)
 	if err != nil {
 		m.logger.Printf("[ERR] Failed to receive remote state: %s", err)
 		return
@@ -217,9 +221,27 @@ func (m *Memberlist) udpListen() {
 		// Capture the current time
 		lastPacket = time.Now()
 
-		// Handle the command
-		m.handleCommand(buf[:n], addr)
+		// Ingest this packet
+		m.ingestPacket(buf[:n], addr)
 	}
+}
+
+func (m *Memberlist) ingestPacket(buf []byte, from net.Addr) {
+	// Check if encryption is enabled
+	if m.config.SecretKey != nil {
+		// Decrypt the payload
+		plain, err := decryptPayload(m.config.SecretKey, buf, nil)
+		if err != nil {
+			m.logger.Printf("[ERR] Decrypt packet failed: %v", err)
+			return
+		}
+
+		// Continue processing the plaintext buffer
+		buf = plain
+	}
+
+	// Handle the command
+	m.handleCommand(buf, from)
 }
 
 func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
@@ -384,6 +406,9 @@ func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType messageType, msg inte
 func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	// Check if we can piggy back any messages
 	bytesAvail := udpSendBuf - len(msg) - compoundHeaderOverhead
+	if m.config.SecretKey != nil {
+		bytesAvail -= encryptOverhead
+	}
 	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
 
 	// Fast path if nothing to piggypack
@@ -415,6 +440,18 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 		}
 	}
 
+	// Check if we have encryption enabled
+	if m.config.SecretKey != nil {
+		// Encrypt the payload
+		var buf bytes.Buffer
+		err := encryptPayload(m.config.SecretKey, msg, nil, &buf)
+		if err != nil {
+			m.logger.Printf("[ERR] Encryption of message failed: %v", err)
+			return err
+		}
+		msg = buf.Bytes()
+	}
+
 	_, err := m.udpListener.WriteTo(msg, to)
 	return err
 }
@@ -437,8 +474,9 @@ func (m *Memberlist) sendAndReceiveState(addr []byte) ([]pushNodeState, []byte, 
 	}
 
 	// Read remote state
-	remote, userState, err := readRemoteState(conn)
+	remote, userState, err := m.readRemoteState(conn)
 	if err != nil {
+		err := fmt.Errorf("Reading remote state failed: %v", err)
 		return nil, nil, err
 	}
 
@@ -512,6 +550,16 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 		}
 	}
 
+	// Check if encryption is enabled
+	if m.config.SecretKey != nil {
+		crypt, err := m.encryptLocalState(sendBuf)
+		if err != nil {
+			m.logger.Printf("[ERROR] Failed to encrypt local state: %v", err)
+			return err
+		}
+		sendBuf = crypt
+	}
+
 	// Write out the entire send buffer
 	if _, err := conn.Write(sendBuf); err != nil {
 		return err
@@ -519,8 +567,57 @@ func (m *Memberlist) sendLocalState(conn net.Conn) error {
 	return nil
 }
 
+// encryptLocalState is used to help encrypt local state before sending
+func (m *Memberlist) encryptLocalState(sendBuf []byte) ([]byte, error) {
+	var buf bytes.Buffer
+
+	// Write the encryptMsg byte
+	buf.WriteByte(byte(encryptMsg))
+
+	// Write the size of the message
+	sizeBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(sizeBuf, uint32(encryptedLength(len(sendBuf))))
+	buf.Write(sizeBuf)
+
+	// Write the encrypted cipher text to the buffer
+	err := encryptPayload(m.config.SecretKey, sendBuf, buf.Bytes()[:5], &buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// decryptRemoteState is used to help decrypt the remote state
+func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
+	// Read in enough to determine message length
+	cipherText := bytes.NewBuffer(nil)
+	cipherText.WriteByte(byte(encryptMsg))
+	_, err := io.CopyN(cipherText, bufConn, 4)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure we aren't asked to download too much. This is to guard against
+	// an attack vector where a huge amount of state is sent
+	moreBytes := binary.BigEndian.Uint32(cipherText.Bytes()[1:5])
+	if moreBytes > maxPushStateBytes {
+		return nil, fmt.Errorf("Remote node state is larger than limit (%d)", moreBytes)
+	}
+
+	// Read in the rest of the payload
+	_, err = io.CopyN(cipherText, bufConn, int64(moreBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	// Decrypt the cipherText
+	dataBytes := cipherText.Bytes()[:5]
+	cipherBytes := cipherText.Bytes()[5:]
+	return decryptPayload(m.config.SecretKey, cipherBytes, dataBytes)
+}
+
 // recvRemoteState is used to read the remote state from a connection
-func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
+func (m *Memberlist) readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 	// Created a buffered reader
 	var bufConn io.Reader = bufio.NewReader(conn)
 
@@ -530,6 +627,26 @@ func readRemoteState(conn net.Conn) ([]pushNodeState, []byte, error) {
 		return nil, nil, err
 	}
 	msgType := messageType(buf[0])
+
+	// Check if the message is encrypted
+	if msgType == encryptMsg {
+		if m.config.SecretKey == nil {
+			return nil, nil,
+				fmt.Errorf("Remote state is encrypted and SecretKey is not configured")
+		}
+
+		plain, err := m.decryptRemoteState(bufConn)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Reset message type and bufConn
+		msgType = messageType(plain[0])
+		bufConn = bytes.NewReader(plain[1:])
+	} else if m.config.SecretKey != nil {
+		return nil, nil,
+			fmt.Errorf("SecretKey is configured but remote state is not encrypted")
+	}
 
 	// Get the msgPack decoders
 	hd := codec.MsgpackHandle{}
