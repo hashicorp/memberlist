@@ -139,6 +139,33 @@ func TestCreate_protocolVersion(t *testing.T) {
 	}
 }
 
+func TestCreate_secretKey(t *testing.T) {
+	cases := []struct {
+		key []byte
+		err bool
+	}{
+		{make([]byte, 0), false},
+		{[]byte("abc"), true},
+		{make([]byte, 16), false},
+	}
+
+	for _, tc := range cases {
+		c := DefaultConfig()
+		c.BindAddr = getBindAddr().String()
+		c.SecretKey = tc.key
+		m, err := Create(c)
+		if tc.err && err == nil {
+			t.Errorf("Should've failed with key: %#v", tc.key)
+		} else if !tc.err && err != nil {
+			t.Errorf("Key '%#v' error: %s", tc.key, err)
+		}
+
+		if err == nil {
+			m.Shutdown()
+		}
+	}
+}
+
 func TestCreate(t *testing.T) {
 	c := testConfig()
 	c.ProtocolVersion = ProtocolVersionMin

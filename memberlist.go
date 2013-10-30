@@ -214,7 +214,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
 	}
 
-	if conf.SecretKey != nil {
+	if len(conf.SecretKey) > 0 {
 		if conf.ProtocolVersion < 1 {
 			return nil, fmt.Errorf("Encryption is not supported before protocol version 1")
 		}
