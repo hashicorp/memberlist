@@ -166,6 +166,21 @@ func TestCreate_secretKey(t *testing.T) {
 	}
 }
 
+func TestCreate_secretKeyEmpty(t *testing.T) {
+	c := DefaultConfig()
+	c.BindAddr = getBindAddr().String()
+	c.SecretKey = make([]byte, 0)
+	m, err := Create(c)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
+	if m.config.SecretKey != nil {
+		t.Fatalf("bad: %#v", m.config.SecretKey)
+	}
+}
+
 func TestCreate(t *testing.T) {
 	c := testConfig()
 	c.ProtocolVersion = ProtocolVersionMin

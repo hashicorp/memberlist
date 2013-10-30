@@ -221,6 +221,8 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		if len(conf.SecretKey) != 16 {
 			return nil, fmt.Errorf("SecretKey must be 16 bytes in length")
 		}
+	} else {
+		conf.SecretKey = nil
 	}
 
 	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.TCPPort)
