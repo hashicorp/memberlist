@@ -2,7 +2,7 @@ package memberlist
 
 import (
 	"bytes"
-	"compress/flate"
+	"compress/lzw"
 	"encoding/binary"
 	"fmt"
 	"github.com/ugorji/go/codec"
@@ -29,8 +29,8 @@ const pushPullScaleThreshold = 32
 var privateBlocks []*net.IPNet
 
 const (
-	// Constant compression level, between 1-9
-	flateCompressLevel = 3
+	// Constant litWidth 2-8
+	lzwLitWidth = 8
 )
 
 func init() {
@@ -256,27 +256,21 @@ func isPrivateIP(ip_str string) bool {
 // and wraps it in a compress{} message that is encoded.
 func compressPayload(inp []byte) (*bytes.Buffer, error) {
 	var buf bytes.Buffer
-	compressor, err := flate.NewWriter(&buf, flateCompressLevel)
-	if err != nil {
-		return nil, err
-	}
+	compressor := lzw.NewWriter(&buf, lzw.LSB, lzwLitWidth)
 
-	_, err = compressor.Write(inp)
+	_, err := compressor.Write(inp)
 	if err != nil {
 		return nil, err
 	}
 
 	// Ensure we flush everything out
-	if err := compressor.Flush(); err != nil {
-		return nil, err
-	}
 	if err := compressor.Close(); err != nil {
 		return nil, err
 	}
 
 	// Create a compressed message
 	c := compress{
-		Algo: deflateAlgo,
+		Algo: lzwAlgo,
 		Buf:  buf.Bytes(),
 	}
 	return encode(compressMsg, &c)
@@ -297,12 +291,12 @@ func decompressPayload(msg []byte) ([]byte, error) {
 // a single compress message, handling multiple algorithms
 func decompressBuffer(c *compress) ([]byte, error) {
 	// Verify the algorithm
-	if c.Algo != deflateAlgo {
+	if c.Algo != lzwAlgo {
 		return nil, fmt.Errorf("Cannot decompress unknown algorithm %d", c.Algo)
 	}
 
 	// Create a uncompressor
-	uncomp := flate.NewReader(bytes.NewReader(c.Buf))
+	uncomp := lzw.NewReader(bytes.NewReader(c.Buf), lzw.LSB, lzwLitWidth)
 	defer uncomp.Close()
 
 	// Read all the data

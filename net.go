@@ -42,7 +42,7 @@ const (
 type compressionType uint8
 
 const (
-	deflateAlgo compressionType = iota
+	lzwAlgo compressionType = iota
 )
 
 const (
@@ -437,7 +437,10 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 		if err != nil {
 			m.logger.Printf("[WARN] Failed to compress payload: %v", err)
 		} else {
-			msg = buf.Bytes()
+			// Only use compression if it reduced the size
+			if buf.Len() < len(msg) {
+				msg = buf.Bytes()
+			}
 		}
 	}
 

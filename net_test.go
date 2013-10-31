@@ -359,14 +359,8 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	in = in[0:n]
 
 	msgType := messageType(in[0])
-	if msgType != compressMsg {
+	if msgType != compoundMsg {
 		t.Fatalf("bad response %v", in)
-	}
-
-	// Decompress first
-	in, err = decompressPayload(in[1:])
-	if err != nil {
-		t.Fatalf("unexpected err %s", err)
 	}
 
 	// get the parts
