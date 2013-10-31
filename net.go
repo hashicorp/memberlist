@@ -55,7 +55,7 @@ const (
 	userMsgOverhead        = 1
 	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
 	maxPushStateBytes      = 10 * 1024 * 1024
-	encryptOverhead        = 44 // Version: 1, IV: 12, Padding: 15, Tag: 16
+	encryptOverhead        = 45 // Version: 1, IV: 12, Padding: 16, Tag: 16
 )
 
 // ping request sent directly to node
