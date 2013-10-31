@@ -14,7 +14,7 @@ const (
 	versionSize       = 1
 	nonceSize         = 12
 	tagSize           = 16
-	maxPadOverhead    = 15
+	maxPadOverhead    = 16
 	blockSize         = aes.BlockSize
 )
 
@@ -23,9 +23,6 @@ const (
 func pkcs7encode(buf *bytes.Buffer, ignore, blockSize int) {
 	n := buf.Len() - ignore
 	more := blockSize - (n % blockSize)
-	if more == blockSize {
-		return
-	}
 	for i := 0; i < more; i++ {
 		buf.WriteByte(byte(more))
 	}
@@ -37,11 +34,8 @@ func pkcs7decode(buf []byte, blockSize int) []byte {
 		panic("Cannot decode a PKCS7 buffer of zero length")
 	}
 	n := len(buf)
-	last := int(buf[n-1])
-	if last == 0 || last >= blockSize {
-		return buf
-	}
-	n -= (last % blockSize)
+	last := buf[n-1]
+	n -= int(last)
 	return buf[:n]
 }
 
@@ -50,9 +44,6 @@ func pkcs7decode(buf []byte, blockSize int) []byte {
 func encryptedLength(inp int) int {
 	// Determine the padding size
 	padding := blockSize - (inp % blockSize)
-	if padding == blockSize {
-		padding = 0
-	}
 
 	// Sum the extra parts to get total size
 	return versionSize + nonceSize + inp + padding + tagSize
