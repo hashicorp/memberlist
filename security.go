@@ -99,8 +99,8 @@ func encryptPayload(key []byte, msg []byte, data []byte, dst *bytes.Buffer) erro
 // slice to the plaintext is returned. Decryption is done IN PLACE!
 func decryptPayload(key []byte, msg []byte, data []byte) ([]byte, error) {
 	// Ensure the length is sane
-	if len(msg) <= encryptedLength(0) {
-		return nil, fmt.Errorf("Payload is too small to decrypt")
+	if len(msg) < encryptedLength(0) {
+		return nil, fmt.Errorf("Payload is too small to decrypt: %d", len(msg))
 	}
 
 	// Verify the version
