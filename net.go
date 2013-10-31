@@ -700,7 +700,7 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 	var userBuf []byte
 	if header.UserStateLen > 0 {
 		userBuf = make([]byte, header.UserStateLen)
-		bytes, err := bufConn.Read(userBuf)
+		bytes, err := io.ReadAtLeast(bufConn, userBuf, header.UserStateLen)
 		if err == nil && bytes != header.UserStateLen {
 			err = fmt.Errorf(
 				"Failed to read full user state (%d / %d)",
