@@ -609,9 +609,8 @@ func (m *Memberlist) aliveNode(a *alive) {
 	// Update the state and incarnation number
 	oldState := state.State
 	state.Incarnation = a.Incarnation
+	state.Meta = a.Meta
 	if state.State != stateAlive {
-		state.Addr = a.Addr
-		state.Meta = a.Meta
 		state.State = stateAlive
 		state.StateChange = time.Now()
 	}

@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 	"time"
@@ -357,6 +358,35 @@ func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 	// Check a broad cast is queued
 	if m.broadcasts.NumQueued() != 1 {
 		t.Fatalf("expected only one queued message")
+	}
+}
+
+// Serf Bug: GH-58, Meta data does not update
+func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
+	ch := make(chan NodeEvent, 1)
+	m := GetMemberlist(t)
+
+	a := alive{
+		Node:        "test",
+		Addr:        []byte{127, 0, 0, 1},
+		Meta:        []byte("val1"),
+		Incarnation: 1}
+	m.aliveNode(&a)
+
+	// Listen only after first join
+	m.config.Events = &ChannelEventDelegate{ch}
+
+	// Make suspect
+	state := m.nodeMap["test"]
+
+	// Should reset to alive now
+	a.Incarnation = 2
+	a.Meta = []byte("val2")
+	m.aliveNode(&a)
+
+	// Check updates
+	if bytes.Compare(state.Meta, a.Meta) != 0 {
+		t.Fatalf("meta did not update")
 	}
 }
 
