@@ -46,7 +46,7 @@ Memberlist provides a default configuration that offers a good starting point,
 but errs on the side of caution, choosing values that are optimized for
 higher convergence at the cost of higher bandwidth usage.
 
-For complete documentation, see the associated [Godoc](#).
+For complete documentation, see the associated [Godoc](http://godoc.org/github.com/hashicorp/memberlist).
 
 ## Protocol
 
