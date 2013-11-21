@@ -224,21 +224,21 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		conf.SecretKey = nil
 	}
 
-	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.Port)
-	tcpLn, err := net.Listen("tcp", tcpAddr)
+	tcpAddr := &net.TCPAddr{IP: net.ParseIP(conf.BindAddr), Port: conf.Port}
+	tcpLn, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to start TCP listener. Err: %s", err)
 	}
 
-	udpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.Port)
-	udpLn, err := net.ListenPacket("udp", udpAddr)
+	udpAddr := &net.UDPAddr{IP: net.ParseIP(conf.BindAddr), Port: conf.Port}
+	udpLn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
 		tcpLn.Close()
 		return nil, fmt.Errorf("Failed to start UDP listener. Err: %s", err)
 	}
 
 	// Set the UDP receive window size
-	setUDPRecvBuf(udpLn.(*net.UDPConn))
+	setUDPRecvBuf(udpLn)
 
 	if conf.LogOutput == nil {
 		conf.LogOutput = os.Stderr
@@ -253,8 +253,8 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	m := &Memberlist{
 		config:         conf,
 		leaveBroadcast: make(chan struct{}, 1),
-		udpListener:    udpLn.(*net.UDPConn),
-		tcpListener:    tcpLn.(*net.TCPListener),
+		udpListener:    udpLn,
+		tcpListener:    tcpLn,
 		nodeMap:        make(map[string]*nodeState),
 		ackHandlers:    make(map[uint32]*ackHandler),
 		broadcasts:     &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
