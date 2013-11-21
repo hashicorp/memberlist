@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"fmt"
 	"net"
 	"reflect"
 	"sync"
@@ -560,5 +561,36 @@ func TestMemberlistProtocolVersion(t *testing.T) {
 	result := m.ProtocolVersion()
 	if result != ProtocolVersionMax {
 		t.Fatalf("bad: %d", result)
+	}
+}
+
+func TestMemberlist_Join_DeadNode(t *testing.T) {
+	m1 := GetMemberlist(t)
+	m1.config.TCPTimeout = 50 * time.Millisecond
+	m1.setAlive()
+	m1.schedule()
+	defer m1.Shutdown()
+
+	// Create a second "node", which is just a TCP listener that
+	// does not ever respond. This is to test our deadliens
+	addr1 := getBindAddr()
+	list, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr1.String(), m1.config.TCPPort))
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	defer list.Close()
+
+	// Ensure we don't hang forever
+	timer := time.AfterFunc(100*time.Millisecond, func() {
+		panic("should have timed out by now")
+	})
+	defer timer.Stop()
+
+	num, err := m1.Join([]string{addr1.String()})
+	if num != 0 {
+		t.Fatal("unexpected 0: %d", num)
+	}
+	if err == nil {
+		t.Fatal("expect err")
 	}
 }

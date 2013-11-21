@@ -490,6 +490,9 @@ func (m *Memberlist) sendAndReceiveState(addr []byte, join bool) ([]pushNodeStat
 
 // sendLocalState is invoked to send our local state over a tcp connection
 func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
+	// Setup a deadline
+	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
+
 	// Prepare the local node state
 	m.nodeLock.RLock()
 	localNodes := make([]pushNodeState, len(m.nodes))
@@ -622,6 +625,9 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 
 // recvRemoteState is used to read the remote state from a connection
 func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []byte, error) {
+	// Setup a deadline
+	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
+
 	// Created a buffered reader
 	var bufConn io.Reader = bufio.NewReader(conn)
 
