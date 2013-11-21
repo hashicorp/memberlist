@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"testing"
@@ -30,11 +31,12 @@ func TestMemberlist_Integ(t *testing.T) {
 	secret := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	eventCh := make(chan NodeEvent, num)
 
+	addr := "127.0.0.1"
 	for i := 0; i < num; i++ {
-		addr := getBindAddr()
 		c := DefaultConfig()
-		c.Name = addr.String()
-		c.BindAddr = addr.String()
+		c.Name = fmt.Sprintf("%s:%d", addr, 12345+i)
+		c.BindAddr = addr
+		c.Port = 12345 + i
 		c.ProbeInterval = 10 * time.Millisecond
 		c.ProbeTimeout = 100 * time.Millisecond
 		c.GossipInterval = 5 * time.Millisecond
