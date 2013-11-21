@@ -448,7 +448,7 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 // rawSendMsg is used to send a UDP message to another host without modification
 func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 	// Check if we have compression enabled
-	if m.config.EnableCompression && m.ProtocolVersion() >= 1 {
+	if m.config.EnableCompression {
 		buf, err := compressPayload(msg)
 		if err != nil {
 			m.logger.Printf("[WARN] Failed to compress payload: %v", err)
@@ -565,7 +565,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 	sendBuf := bufConn.Bytes()
 
 	// Check if compresion is enabled
-	if m.config.EnableCompression && m.ProtocolVersion() >= 1 {
+	if m.config.EnableCompression {
 		compBuf, err := compressPayload(bufConn.Bytes())
 		if err != nil {
 			m.logger.Printf("[ERROR] Failed to compress local state: %v", err)

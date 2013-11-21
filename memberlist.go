@@ -247,6 +247,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	// Warn if compression is enabled with bad protocol version
 	if conf.EnableCompression && conf.ProtocolVersion < 1 {
 		log.Printf("[WARN] Compression is enabled with an unsupported protocol")
+		conf.EnableCompression = false
 	}
 
 	m := &Memberlist{
