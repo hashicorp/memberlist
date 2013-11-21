@@ -31,9 +31,19 @@ func TestMemberList_Probe(t *testing.T) {
 	})
 	m2 := HostMemberlist(addr2.String(), t, nil)
 
-	a1 := alive{Node: addr1.String(), Addr: []byte(addr1), Incarnation: 1}
+	a1 := alive{
+		Node:        addr1.String(),
+		Addr:        []byte(addr1),
+		Port:        uint16(m1.config.Port),
+		Incarnation: 1,
+	}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: addr2.String(), Addr: []byte(addr2), Incarnation: 1}
+	a2 := alive{
+		Node:        addr2.String(),
+		Addr:        []byte(addr2),
+		Port:        uint16(m2.config.Port),
+		Incarnation: 1,
+	}
 	m1.aliveNode(&a2)
 
 	// should ping addr2
@@ -68,13 +78,13 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	m2 := HostMemberlist(addr2.String(), t, nil)
 	m3 := HostMemberlist(addr3.String(), t, nil)
 
-	a1 := alive{Node: addr1.String(), Addr: ip1, Incarnation: 1}
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: addr2.String(), Addr: ip2, Incarnation: 1}
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a2)
-	a3 := alive{Node: addr3.String(), Addr: ip3, Incarnation: 1}
+	a3 := alive{Node: addr3.String(), Addr: ip3, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a3)
-	a4 := alive{Node: addr4.String(), Addr: ip4, Incarnation: 1}
+	a4 := alive{Node: addr4.String(), Addr: ip4, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a4)
 
 	n := m1.nodeMap[addr4.String()]
@@ -107,9 +117,9 @@ func TestMemberList_ProbeNode(t *testing.T) {
 	})
 	m2 := HostMemberlist(addr2.String(), t, nil)
 
-	a1 := alive{Node: addr1.String(), Addr: ip1, Incarnation: 1}
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: addr2.String(), Addr: ip2, Incarnation: 1}
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a2)
 
 	n := m1.nodeMap[addr2.String()]
@@ -778,9 +788,9 @@ func TestMemberlist_Gossip(t *testing.T) {
 	defer m1.Shutdown()
 	defer m2.Shutdown()
 
-	a1 := alive{Node: addr1.String(), Addr: ip1, Incarnation: 1}
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: addr2.String(), Addr: ip2, Incarnation: 1}
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a2)
 	a3 := alive{Node: "172.0.0.1", Addr: []byte{172, 0, 0, 1}, Incarnation: 1}
 	m1.aliveNode(&a3)
@@ -817,9 +827,9 @@ func TestMemberlist_PushPull(t *testing.T) {
 	defer m1.Shutdown()
 	defer m2.Shutdown()
 
-	a1 := alive{Node: addr1.String(), Addr: ip1, Incarnation: 1}
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a1)
-	a2 := alive{Node: addr2.String(), Addr: ip2, Incarnation: 1}
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a2)
 
 	// Gossip should send all this to m2
