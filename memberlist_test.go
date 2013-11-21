@@ -588,3 +588,44 @@ func TestMemberlist_Join_DeadNode(t *testing.T) {
 		t.Fatal("expect err")
 	}
 }
+
+func TestMemberlist_Join_Proto1And2(t *testing.T) {
+	// Create first node, protocol 2
+	m1 := GetMemberlist(t)
+	m1.setAlive()
+	m1.schedule()
+	defer m1.Shutdown()
+	if m1.config.ProtocolVersion != 2 {
+		t.Fatalf("expected version 2")
+	}
+
+	// Create a second node, lower protocol!
+	c := DefaultConfig()
+	addr1 := getBindAddr()
+	c.Name = addr1.String()
+	c.BindAddr = addr1.String()
+	c.Port = m1.config.Port
+	c.ProtocolVersion = 1
+
+	m2, err := Create(c)
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+	num, err := m2.Join([]string{m1.config.BindAddr})
+	if num != 1 {
+		t.Fatal("unexpected 1: %d", num)
+	}
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+
+	// Check the hosts
+	if len(m2.Members()) != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+
+	// Check the hosts
+	if len(m1.Members()) != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+}

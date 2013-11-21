@@ -16,7 +16,7 @@ import (
 // range. This range is inclusive.
 const (
 	ProtocolVersionMin uint8 = 0
-	ProtocolVersionMax       = 1
+	ProtocolVersionMax       = 2
 )
 
 // messageType is an integer ID of a type of message that can be received
@@ -316,6 +316,12 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 		return
 	}
 
+	// For proto versions < 2, there is no port provided. Mask old
+	// behavior by using the configured port
+	if m.ProtocolVersion() < 2 {
+		ind.Port = uint16(m.config.Port)
+	}
+
 	// Send a ping to the correct host
 	localSeqNo := m.nextSeqNo()
 	ping := ping{SeqNo: localSeqNo}
@@ -360,6 +366,13 @@ func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 		m.logger.Printf("[ERR] Failed to decode alive message: %s", err)
 		return
 	}
+
+	// For proto versions < 2, there is no port provided. Mask old
+	// behavior by using the configured port
+	if m.ProtocolVersion() < 2 {
+		live.Port = uint16(m.config.Port)
+	}
+
 	m.aliveNode(&live)
 }
 
@@ -721,6 +734,14 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 		}
 		if err != nil {
 			return false, remoteNodes, nil, err
+		}
+	}
+
+	// For proto versions < 2, there is no port provided. Mask old
+	// behavior by using the configured port
+	if m.ProtocolVersion() < 2 {
+		for idx := range remoteNodes {
+			remoteNodes[idx].Port = uint16(m.config.Port)
 		}
 	}
 
