@@ -269,6 +269,8 @@ func TestMemberlist_Join(t *testing.T) {
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
+	defer m2.Shutdown()
+
 	num, err := m2.Join([]string{m1.config.BindAddr})
 	if num != 1 {
 		t.Fatal("unexpected 1: %d", num)
@@ -338,6 +340,8 @@ func TestMemberlist_Leave(t *testing.T) {
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
+	defer m2.Shutdown()
+
 	num, err := m2.Join([]string{m1.config.BindAddr})
 	if num != 1 {
 		t.Fatal("unexpected 1: %d", num)
@@ -388,6 +392,8 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
+	defer m2.Shutdown()
+
 	num, err := m2.Join([]string{m1.config.BindAddr})
 	if num != 1 {
 		t.Fatal("unexpected 1: %d", num)
@@ -611,6 +617,8 @@ func TestMemberlist_Join_Proto1And2(t *testing.T) {
 	if err != nil {
 		t.Fatal("unexpected err: %s", err)
 	}
+	defer m2.Shutdown()
+
 	num, err := m2.Join([]string{m1.config.BindAddr})
 	if num != 1 {
 		t.Fatal("unexpected 1: %d", num)
@@ -625,6 +633,59 @@ func TestMemberlist_Join_Proto1And2(t *testing.T) {
 	}
 
 	// Check the hosts
+	if len(m1.Members()) != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+}
+
+func TestMemberlist_Join_IPv6(t *testing.T) {
+	c1 := DefaultConfig()
+	c1.Name = "A"
+	c1.BindAddr = "[::1]"
+	var m1 *Memberlist
+	var err error
+	for i := 0; i < 100; i++ {
+		c1.Port = 23456 + i
+		m1, err = Create(c1)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+	defer m1.Shutdown()
+
+	// Create a second node
+	c2 := DefaultConfig()
+	c2.Name = "B"
+	c2.BindAddr = "[::1]"
+	var m2 *Memberlist
+	for i := 0; i < 100; i++ {
+		c2.Port = c1.Port + 1 + i
+		m2, err = Create(c2)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+	defer m2.Shutdown()
+
+	num, err := m2.Join([]string{fmt.Sprintf("%s:%d", m1.config.BindAddr, 23456)})
+	if num != 1 {
+		t.Fatal("unexpected 1: %d", num)
+	}
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+
+	// Check the hosts
+	if len(m2.Members()) != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+
 	if len(m1.Members()) != 2 {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
 	}
