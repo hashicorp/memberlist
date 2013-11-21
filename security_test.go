@@ -32,18 +32,26 @@ func TestPKCS7(t *testing.T) {
 
 }
 
-func TestEncryptDecrypt(t *testing.T) {
+func TestEncryptDecrypt_V0(t *testing.T) {
+	encryptDecryptVersioned(0, t)
+}
+
+func TestEncryptDecrypt_V1(t *testing.T) {
+	encryptDecryptVersioned(1, t)
+}
+
+func encryptDecryptVersioned(vsn encryptionVersion, t *testing.T) {
 	k1 := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	plaintext := []byte("this is a plain text message")
 	extra := []byte("random data")
 
 	var buf bytes.Buffer
-	err := encryptPayload(k1, plaintext, extra, &buf)
+	err := encryptPayload(vsn, k1, plaintext, extra, &buf)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
-	expLen := encryptedLength(len(plaintext))
+	expLen := encryptedLength(vsn, len(plaintext))
 	if buf.Len() != expLen {
 		t.Fatalf("output length is unexpected %d %d %d", len(plaintext), buf.Len(), expLen)
 	}
@@ -59,4 +67,5 @@ func TestEncryptDecrypt(t *testing.T) {
 		t.Errorf("len %d %v", len(plaintext), plaintext)
 		t.Fatalf("encrypt/decrypt failed! %d '%s' '%s'", cmp, msg, plaintext)
 	}
+
 }

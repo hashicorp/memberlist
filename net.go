@@ -55,7 +55,6 @@ const (
 	userMsgOverhead        = 1
 	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
 	maxPushStateBytes      = 10 * 1024 * 1024
-	encryptOverhead        = 45 // Version: 1, IV: 12, Padding: 16, Tag: 16
 )
 
 // ping request sent directly to node
@@ -127,6 +126,18 @@ type pushNodeState struct {
 type compress struct {
 	Algo compressionType
 	Buf  []byte
+}
+
+// encryptionVersion returns the encryption version to use
+func (m *Memberlist) encryptionVersion() encryptionVersion {
+	switch m.ProtocolVersion() {
+	case 0:
+		panic("encryption not supported")
+	case 1:
+		return 0
+	default:
+		return 1
+	}
 }
 
 // setUDPRecvBuf is used to resize the UDP receive window. The function
@@ -424,7 +435,7 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	// Check if we can piggy back any messages
 	bytesAvail := udpSendBuf - len(msg) - compoundHeaderOverhead
 	if m.config.SecretKey != nil {
-		bytesAvail -= encryptOverhead
+		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
 	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
 
@@ -464,7 +475,7 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 	if m.config.SecretKey != nil {
 		// Encrypt the payload
 		var buf bytes.Buffer
-		err := encryptPayload(m.config.SecretKey, msg, nil, &buf)
+		err := encryptPayload(m.encryptionVersion(), m.config.SecretKey, msg, nil, &buf)
 		if err != nil {
 			m.logger.Printf("[ERR] Encryption of message failed: %v", err)
 			return err
@@ -600,11 +611,13 @@ func (m *Memberlist) encryptLocalState(sendBuf []byte) ([]byte, error) {
 
 	// Write the size of the message
 	sizeBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(sizeBuf, uint32(encryptedLength(len(sendBuf))))
+	encVsn := m.encryptionVersion()
+	encLen := encryptedLength(encVsn, len(sendBuf))
+	binary.BigEndian.PutUint32(sizeBuf, uint32(encLen))
 	buf.Write(sizeBuf)
 
 	// Write the encrypted cipher text to the buffer
-	err := encryptPayload(m.config.SecretKey, sendBuf, buf.Bytes()[:5], &buf)
+	err := encryptPayload(encVsn, m.config.SecretKey, sendBuf, buf.Bytes()[:5], &buf)
 	if err != nil {
 		return nil, err
 	}

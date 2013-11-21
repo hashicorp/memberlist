@@ -9,13 +9,29 @@ import (
 	"io"
 )
 
+/*
+
+Encrypted messages are prefixed with an encryptionVersion byte
+that is used for us to be able to properly encode/decode. We
+currently support the following versions:
+
+ 0 - AES-GCM 128, using PKCS7 padding
+ 1 - AES-GCM 128, no padding. Padding not needed, caused bloat.
+
+*/
+type encryptionVersion uint8
+
 const (
-	encryptionVersion = 0
-	versionSize       = 1
-	nonceSize         = 12
-	tagSize           = 16
-	maxPadOverhead    = 16
-	blockSize         = aes.BlockSize
+	minEncryptionVersion encryptionVersion = 0
+	maxEncryptionVersion encryptionVersion = 1
+)
+
+const (
+	versionSize    = 1
+	nonceSize      = 12
+	tagSize        = 16
+	maxPadOverhead = 16
+	blockSize      = aes.BlockSize
 )
 
 // pkcs7encode is used to pad a byte buffer to a specific block size using
@@ -39,9 +55,26 @@ func pkcs7decode(buf []byte, blockSize int) []byte {
 	return buf[:n]
 }
 
+// encryptOverhead returns the maximum possible overhead of encryption by version
+func encryptOverhead(vsn encryptionVersion) int {
+	switch vsn {
+	case 0:
+		return 45 // Version: 1, IV: 12, Padding: 16, Tag: 16
+	case 1:
+		return 29 // Version: 1, IV: 12, Tag: 16
+	default:
+		panic("unsupported version")
+	}
+}
+
 // encryptedLength is used to compute the buffer size needed
 // for a message of given length
-func encryptedLength(inp int) int {
+func encryptedLength(vsn encryptionVersion, inp int) int {
+	// If we are on version 1, there is no padding
+	if vsn >= 1 {
+		return versionSize + nonceSize + inp + tagSize
+	}
+
 	// Determine the padding size
 	padding := blockSize - (inp % blockSize)
 
@@ -52,24 +85,7 @@ func encryptedLength(inp int) int {
 // encryptPayload is used to encrypt a message with a given key.
 // We make use of AES-128 in GCM mode. New byte buffer is the version,
 // nonce, ciphertext and tag
-func encryptPayload(key []byte, msg []byte, data []byte, dst *bytes.Buffer) error {
-	// Grow the buffer to make room for everything
-	offset := dst.Len()
-	dst.Grow(encryptedLength(len(msg)))
-
-	// Write the encryption version
-	dst.WriteByte(byte(encryptionVersion))
-
-	// Add a random nonce
-	io.CopyN(dst, rand.Reader, nonceSize)
-	afterNonce := dst.Len()
-
-	// Copy the message
-	io.Copy(dst, bytes.NewReader(msg))
-
-	// Ensure we are correctly padded
-	pkcs7encode(dst, offset+versionSize+nonceSize, aes.BlockSize)
-
+func encryptPayload(vsn encryptionVersion, key []byte, msg []byte, data []byte, dst *bytes.Buffer) error {
 	// Get the AES block cipher
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
@@ -82,10 +98,35 @@ func encryptPayload(key []byte, msg []byte, data []byte, dst *bytes.Buffer) erro
 		return err
 	}
 
+	// Grow the buffer to make room for everything
+	offset := dst.Len()
+	dst.Grow(encryptedLength(vsn, len(msg)))
+
+	// Write the encryption version
+	dst.WriteByte(byte(vsn))
+
+	// Add a random nonce
+	io.CopyN(dst, rand.Reader, nonceSize)
+	afterNonce := dst.Len()
+
+	// Ensure we are correctly padded (only version 0)
+	if vsn == 0 {
+		io.Copy(dst, bytes.NewReader(msg))
+		pkcs7encode(dst, offset+versionSize+nonceSize, aes.BlockSize)
+	}
+
 	// Encrypt message using GCM
 	slice := dst.Bytes()[offset:]
 	nonce := slice[versionSize : versionSize+nonceSize]
-	src := slice[versionSize+nonceSize:]
+
+	// Message source depends on the encryption version.
+	// Version 0 uses padding, version 1 does not
+	var src []byte
+	if vsn == 0 {
+		src = slice[versionSize+nonceSize:]
+	} else {
+		src = msg
+	}
 	out := gcm.Seal(nil, nonce, src, data)
 
 	// Truncate the plaintext, and write the cipher text
@@ -99,12 +140,13 @@ func encryptPayload(key []byte, msg []byte, data []byte, dst *bytes.Buffer) erro
 // slice to the plaintext is returned. Decryption is done IN PLACE!
 func decryptPayload(key []byte, msg []byte, data []byte) ([]byte, error) {
 	// Ensure the length is sane
-	if len(msg) < encryptedLength(0) {
+	if len(msg) < encryptedLength(minEncryptionVersion, 0) {
 		return nil, fmt.Errorf("Payload is too small to decrypt: %d", len(msg))
 	}
 
 	// Verify the version
-	if msg[0] != encryptionVersion {
+	vsn := encryptionVersion(msg[0])
+	if vsn > maxEncryptionVersion {
 		return nil, fmt.Errorf("Unsupported encryption version %d", msg[0])
 	}
 
@@ -128,6 +170,10 @@ func decryptPayload(key []byte, msg []byte, data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Remove the PKCS7 padding
-	return pkcs7decode(plain, aes.BlockSize), nil
+	// Remove the PKCS7 padding for vsn 0
+	if vsn == 0 {
+		return pkcs7decode(plain, aes.BlockSize), nil
+	} else {
+		return plain, nil
+	}
 }
