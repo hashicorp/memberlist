@@ -79,8 +79,7 @@ func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
 		if err == nil {
 			return m, d
 		}
-		c.TCPPort++
-		c.UDPPort++
+		c.Port++
 	}
 	t.Fatalf("failed to start: %v", err)
 	return nil, nil
@@ -96,8 +95,7 @@ func GetMemberlist(t *testing.T) *Memberlist {
 		if err == nil {
 			return m
 		}
-		c.TCPPort++
-		c.UDPPort++
+		c.Port++
 	}
 	t.Fatalf("failed to start: %v", err)
 	return nil
@@ -265,8 +263,7 @@ func TestMemberlist_Join(t *testing.T) {
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
-	c.UDPPort = m1.config.UDPPort
-	c.TCPPort = m1.config.TCPPort
+	c.Port = m1.config.Port
 
 	m2, err := Create(c)
 	if err != nil {
@@ -334,8 +331,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
-	c.UDPPort = m1.config.UDPPort
-	c.TCPPort = m1.config.TCPPort
+	c.Port = m1.config.Port
 	c.GossipInterval = time.Millisecond
 
 	m2, err := Create(c)
@@ -384,8 +380,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
-	c.UDPPort = m1.config.UDPPort
-	c.TCPPort = m1.config.TCPPort
+	c.Port = m1.config.Port
 	c.ProbeInterval = time.Millisecond
 	c.ProbeTimeout = 100 * time.Microsecond
 
@@ -501,8 +496,7 @@ func TestMemberlist_UserData(t *testing.T) {
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
-	c.UDPPort = m1.config.UDPPort
-	c.TCPPort = m1.config.TCPPort
+	c.Port = m1.config.Port
 	c.GossipInterval = time.Millisecond
 	c.PushPullInterval = time.Millisecond
 	c.Delegate = d2
@@ -574,7 +568,7 @@ func TestMemberlist_Join_DeadNode(t *testing.T) {
 	// Create a second "node", which is just a TCP listener that
 	// does not ever respond. This is to test our deadliens
 	addr1 := getBindAddr()
-	list, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr1.String(), m1.config.TCPPort))
+	list, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr1.String(), m1.config.Port))
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}

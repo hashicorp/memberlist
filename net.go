@@ -67,6 +67,7 @@ type ping struct {
 type indirectPingReq struct {
 	SeqNo  uint32
 	Target []byte
+	Port   uint16
 }
 
 // ack response is sent for a ping
@@ -86,6 +87,7 @@ type alive struct {
 	Incarnation uint32
 	Node        string
 	Addr        []byte
+	Port        uint16
 	Meta        []byte
 
 	// The versions of the protocol/delegate that are being spoken, order:
@@ -113,6 +115,7 @@ type pushPullHeader struct {
 type pushNodeState struct {
 	Name        string
 	Addr        []byte
+	Port        uint16
 	Meta        []byte
 	Incarnation uint32
 	State       nodeStateType
@@ -316,7 +319,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 	// Send a ping to the correct host
 	localSeqNo := m.nextSeqNo()
 	ping := ping{SeqNo: localSeqNo}
-	destAddr := &net.UDPAddr{IP: ind.Target, Port: m.config.UDPPort}
+	destAddr := &net.UDPAddr{IP: ind.Target, Port: int(ind.Port)}
 
 	// Setup a response handler to relay the ack
 	respHandler := func() {
@@ -461,10 +464,10 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 }
 
 // sendState is used to initiate a push/pull over TCP with a remote node
-func (m *Memberlist) sendAndReceiveState(addr []byte, join bool) ([]pushNodeState, []byte, error) {
+func (m *Memberlist) sendAndReceiveState(addr []byte, port uint16, join bool) ([]pushNodeState, []byte, error) {
 	// Attempt to connect
 	dialer := net.Dialer{Timeout: m.config.TCPTimeout}
-	dest := net.TCPAddr{IP: addr, Port: m.config.TCPPort}
+	dest := net.TCPAddr{IP: addr, Port: int(port)}
 	conn, err := dialer.Dial("tcp", dest.String())
 	if err != nil {
 		return nil, nil, err
@@ -499,6 +502,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 	for idx, n := range m.nodes {
 		localNodes[idx].Name = n.Name
 		localNodes[idx].Addr = n.Addr
+		localNodes[idx].Port = n.Port
 		localNodes[idx].Incarnation = n.Incarnation
 		localNodes[idx].State = n.State
 		localNodes[idx].Meta = n.Meta

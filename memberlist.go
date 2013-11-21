@@ -29,11 +29,11 @@ type Config struct {
 	Name string
 
 	// Configuration related to what address to bind to and ports to
-	// listen on. The ports used must match every node in the cluster,
-	// since they'll be used for connecting as well as listening.
+	// listen on. The port is used for both UDP and TCP gossip.
+	// It is assumed other nodes are running on this port, but they
+	// do not need to.
 	BindAddr string
-	UDPPort  int
-	TCPPort  int
+	Port     int
 
 	// ProtocolVersion is the configured protocol version that we
 	// will _speak_. This must be between ProtocolVersionMin and
@@ -184,8 +184,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Name:             hostname,
 		BindAddr:         "0.0.0.0",
-		UDPPort:          7946,
-		TCPPort:          7946,
+		Port:             7946,
 		ProtocolVersion:  ProtocolVersionMax,
 		TCPTimeout:       10 * time.Second,       // Timeout after 10 seconds
 		IndirectChecks:   3,                      // Use 3 nodes for the indirect ping
@@ -225,13 +224,13 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		conf.SecretKey = nil
 	}
 
-	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.TCPPort)
+	tcpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.Port)
 	tcpLn, err := net.Listen("tcp", tcpAddr)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to start TCP listener. Err: %s", err)
 	}
 
-	udpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.UDPPort)
+	udpAddr := fmt.Sprintf("%s:%d", conf.BindAddr, conf.Port)
 	udpLn, err := net.ListenPacket("udp", udpAddr)
 	if err != nil {
 		tcpLn.Close()
@@ -298,13 +297,14 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 	numSuccess := 0
 	var retErr error
 	for _, exist := range existing {
-		addr, err := net.ResolveIPAddr("ip", exist)
+		addr, port, err := m.resolveAddr(exist)
 		if err != nil {
+			log.Printf("[WARN] Failed to resolve %s: %v", exist, err)
 			retErr = err
 			continue
 		}
 
-		if err := m.pushPullNode(addr.IP, true); err != nil {
+		if err := m.pushPullNode(addr, port, true); err != nil {
 			retErr = err
 			continue
 		}
@@ -317,6 +317,30 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 	}
 
 	return numSuccess, retErr
+}
+
+// resolveAddr is used to resolve the address into an address,
+// port, and error. If no port is given, use the default
+func (m *Memberlist) resolveAddr(hostStr string) ([]byte, uint16, error) {
+	// Add the port if none
+START:
+	_, _, err := net.SplitHostPort(hostStr)
+	if ae, ok := err.(*net.AddrError); ok && ae.Err == "missing port in address" {
+		hostStr = fmt.Sprintf("%s:%d", hostStr, m.config.Port)
+		goto START
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get the address
+	addr, err := net.ResolveTCPAddr("tcp", hostStr)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Return IP/Port
+	return addr.IP, uint16(addr.Port), nil
 }
 
 // setAlive is used to mark this node as being alive. This is the same
@@ -372,6 +396,7 @@ func (m *Memberlist) setAlive() error {
 		Incarnation: m.nextIncarnation(),
 		Node:        m.config.Name,
 		Addr:        ipAddr,
+		Port:        uint16(m.config.Port),
 		Meta:        meta,
 		Vsn: []uint8{
 			ProtocolVersionMin, ProtocolVersionMax, m.config.ProtocolVersion,

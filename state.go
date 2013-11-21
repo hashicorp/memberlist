@@ -22,6 +22,7 @@ const (
 type Node struct {
 	Name string
 	Addr net.IP
+	Port uint16
 	Meta []byte // Metadata from the delegate for this node.
 	PMin uint8  // Minimum protocol version this understands
 	PMax uint8  // Maximum protocol version this understands
@@ -198,7 +199,7 @@ START:
 func (m *Memberlist) probeNode(node *nodeState) {
 	// Send a ping to the node
 	ping := ping{SeqNo: m.nextSeqNo()}
-	destAddr := &net.UDPAddr{IP: node.Addr, Port: m.config.UDPPort}
+	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
 
 	// Setup an ack handler
 	ackCh := make(chan bool, m.config.IndirectChecks+1)
@@ -232,9 +233,9 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	m.nodeLock.RUnlock()
 
 	// Attempt an indirect ping
-	ind := indirectPingReq{SeqNo: ping.SeqNo, Target: node.Addr}
+	ind := indirectPingReq{SeqNo: ping.SeqNo, Target: node.Addr, Port: node.Port}
 	for _, peer := range kNodes {
-		destAddr := &net.UDPAddr{IP: peer.Addr, Port: m.config.UDPPort}
+		destAddr := &net.UDPAddr{IP: peer.Addr, Port: int(peer.Port)}
 		if err := m.encodeAndSendMsg(destAddr, indirectPingMsg, &ind); err != nil {
 			m.logger.Printf("[ERR] Failed to send indirect ping: %s", err)
 		}
@@ -297,7 +298,7 @@ func (m *Memberlist) gossip() {
 		compound := makeCompoundMessage(msgs)
 
 		// Send the compound message
-		destAddr := &net.UDPAddr{IP: node.Addr, Port: m.config.UDPPort}
+		destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
 		if err := m.rawSendMsg(destAddr, compound.Bytes()); err != nil {
 			m.logger.Printf("[ERR] Failed to send gossip to %s: %s", destAddr, err)
 		}
@@ -322,15 +323,15 @@ func (m *Memberlist) pushPull() {
 	node := nodes[0]
 
 	// Attempt a push pull
-	if err := m.pushPullNode(node.Addr, false); err != nil {
+	if err := m.pushPullNode(node.Addr, node.Port, false); err != nil {
 		m.logger.Printf("[ERR] Push/Pull with %s failed: %s", node.Name, err)
 	}
 }
 
 // pushPullNode does a complete state exchange with a specific node.
-func (m *Memberlist) pushPullNode(addr []byte, join bool) error {
+func (m *Memberlist) pushPullNode(addr []byte, port uint16, join bool) error {
 	// Attempt to send and receive with the node
-	remote, userState, err := m.sendAndReceiveState(addr, join)
+	remote, userState, err := m.sendAndReceiveState(addr, port, join)
 	if err != nil {
 		return err
 	}
@@ -561,6 +562,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 			Node: Node{
 				Name: a.Node,
 				Addr: a.Addr,
+				Port: a.Port,
 				Meta: a.Meta,
 			},
 			State: stateDead,
@@ -582,9 +584,9 @@ func (m *Memberlist) aliveNode(a *alive) {
 	}
 
 	// Check if this address is different than the existing node
-	if !reflect.DeepEqual([]byte(state.Addr), a.Addr) {
-		m.logger.Printf("[ERR] Conflicting address for %s. Mine: %v Theirs: %v",
-			state.Name, state.Addr, net.IP(a.Addr))
+	if !reflect.DeepEqual([]byte(state.Addr), a.Addr) || state.Port != a.Port {
+		m.logger.Printf("[ERR] Conflicting address for %s. Mine: %v:%d Theirs: %v:%d",
+			state.Name, state.Addr, state.Port, net.IP(a.Addr), a.Port)
 		return
 	}
 
@@ -657,6 +659,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 			Incarnation: inc,
 			Node:        state.Name,
 			Addr:        state.Addr,
+			Port:        state.Port,
 			Meta:        state.Meta,
 			Vsn: []uint8{
 				state.PMin, state.PMax, state.PCur,
@@ -732,6 +735,7 @@ func (m *Memberlist) deadNode(d *dead) {
 				Incarnation: inc,
 				Node:        state.Name,
 				Addr:        state.Addr,
+				Port:        state.Port,
 				Meta:        state.Meta,
 				Vsn: []uint8{
 					state.PMin, state.PMax, state.PCur,
@@ -785,6 +789,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 				Incarnation: r.Incarnation,
 				Node:        r.Name,
 				Addr:        r.Addr,
+				Port:        r.Port,
 				Meta:        r.Meta,
 				Vsn:         r.Vsn,
 			}
