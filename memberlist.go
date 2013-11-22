@@ -382,6 +382,12 @@ func (m *Memberlist) setAlive() error {
 		ipAddr = addr.IP
 	}
 
+	// Check if this is a public address without encryption
+	addrStr := net.IP(ipAddr).String()
+	if !isPrivateIP(addrStr) && !isLoopbackIP(addrStr) && m.config.SecretKey == nil {
+		log.Printf("[WARN] Binding to public address without encryption!")
+	}
+
 	// Get the node meta data
 	var meta []byte
 	if m.config.Delegate != nil {

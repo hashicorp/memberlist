@@ -28,6 +28,8 @@ const pushPullScaleThreshold = 32
  */
 var privateBlocks []*net.IPNet
 
+var loopbackBlock *net.IPNet
+
 const (
 	// Constant litWidth 2-8
 	lzwLitWidth = 8
@@ -56,6 +58,12 @@ func init() {
 		panic(fmt.Sprintf("Bad cidr. Got %v", err))
 	}
 	privateBlocks[2] = block
+
+	_, block, err = net.ParseCIDR("127.0.0.0/8")
+	if err != nil {
+		panic(fmt.Sprintf("Bad cidr. Got %v", err))
+	}
+	loopbackBlock = block
 }
 
 // Decode reverses the encode operation on a byte slice input
@@ -250,6 +258,12 @@ func isPrivateIP(ip_str string) bool {
 		}
 	}
 	return false
+}
+
+// Returns if the given IP is in a loopback block
+func isLoopbackIP(ip_str string) bool {
+	ip := net.ParseIP(ip_str)
+	return loopbackBlock.Contains(ip)
 }
 
 // compressPayload takes an opaque input buffer, compresses it
