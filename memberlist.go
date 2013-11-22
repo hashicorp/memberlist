@@ -375,7 +375,9 @@ func (m *Memberlist) setAlive() error {
 		}
 
 		// Failed to find private IP, error
-		return fmt.Errorf("No private IP address found, and explicit IP not provided")
+		if ipAddr == nil {
+			return fmt.Errorf("No private IP address found, and explicit IP not provided")
+		}
 	} else {
 		// Use the IP that we're bound to.
 		addr := m.tcpListener.Addr().(*net.TCPAddr)
