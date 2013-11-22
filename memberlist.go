@@ -243,10 +243,11 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	if conf.LogOutput == nil {
 		conf.LogOutput = os.Stderr
 	}
+	logger := log.New(conf.LogOutput, "", log.LstdFlags)
 
 	// Warn if compression is enabled with bad protocol version
 	if conf.EnableCompression && conf.ProtocolVersion < 1 {
-		log.Printf("[WARN] Compression is enabled with an unsupported protocol")
+		logger.Printf("[WARN] Compression is enabled with an unsupported protocol")
 		conf.EnableCompression = false
 	}
 
@@ -258,7 +259,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		nodeMap:        make(map[string]*nodeState),
 		ackHandlers:    make(map[uint32]*ackHandler),
 		broadcasts:     &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
-		logger:         log.New(conf.LogOutput, "", log.LstdFlags),
+		logger:         logger,
 	}
 	m.broadcasts.NumNodes = func() int { return len(m.nodes) }
 	go m.tcpListen()
@@ -300,7 +301,7 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 	for _, exist := range existing {
 		addr, port, err := m.resolveAddr(exist)
 		if err != nil {
-			log.Printf("[WARN] Failed to resolve %s: %v", exist, err)
+			m.logger.Printf("[WARN] Failed to resolve %s: %v", exist, err)
 			retErr = err
 			continue
 		}
@@ -387,7 +388,7 @@ func (m *Memberlist) setAlive() error {
 	// Check if this is a public address without encryption
 	addrStr := net.IP(ipAddr).String()
 	if !isPrivateIP(addrStr) && !isLoopbackIP(addrStr) && m.config.SecretKey == nil {
-		log.Printf("[WARN] Binding to public address without encryption!")
+		m.logger.Printf("[WARN] Binding to public address without encryption!")
 	}
 
 	// Get the node meta data
