@@ -95,6 +95,45 @@ func TestTransmitLimited_GetBroadcasts_Limit(t *testing.T) {
 	}
 }
 
+func TestTransmitLimited_Prune(t *testing.T) {
+	q := &TransmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 10 }}
+
+	ch1 := make(chan struct{}, 1)
+	ch2 := make(chan struct{}, 1)
+
+	// 18 bytes per message
+	q.QueueBroadcast(&memberlistBroadcast{"test", []byte("1. this is a test."), ch1})
+	q.QueueBroadcast(&memberlistBroadcast{"foo", []byte("2. this is a test."), ch2})
+	q.QueueBroadcast(&memberlistBroadcast{"bar", []byte("3. this is a test."), nil})
+	q.QueueBroadcast(&memberlistBroadcast{"baz", []byte("4. this is a test."), nil})
+
+	// Keep only 2
+	q.Prune(2)
+
+	if q.NumQueued() != 2 {
+		t.Fatalf("bad len")
+	}
+
+	// Should notify the first two
+	select {
+	case <-ch1:
+	default:
+		t.Fatalf("expected invalidation")
+	}
+	select {
+	case <-ch2:
+	default:
+		t.Fatalf("expected invalidation")
+	}
+
+	if q.bcQueue[0].b.(*memberlistBroadcast).node != "bar" {
+		t.Fatalf("missing bar")
+	}
+	if q.bcQueue[1].b.(*memberlistBroadcast).node != "baz" {
+		t.Fatalf("missing baz")
+	}
+}
+
 func TestLimitedBroadcastSort(t *testing.T) {
 	bc := limitedBroadcasts([]*limitedBroadcast{
 		&limitedBroadcast{

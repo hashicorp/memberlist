@@ -128,6 +128,28 @@ func (q *TransmitLimitedQueue) Reset() {
 	q.bcQueue = nil
 }
 
+// Prune will retain the maxRetain latest messages, and the rest
+// will be discarded. This can be used to prevent unbounded queue sizes
+func (q *TransmitLimitedQueue) Prune(maxRetain int) {
+	q.Lock()
+	defer q.Unlock()
+
+	// Do nothing if queue size is less than the limit
+	n := len(q.bcQueue)
+	if n < maxRetain {
+		return
+	}
+
+	// Invalidate the messages we will be removing
+	for i := 0; i < n-maxRetain; i++ {
+		q.bcQueue[i].b.Finished()
+	}
+
+	// Move the messages, and retain only the last maxRetain
+	copy(q.bcQueue[0:], q.bcQueue[n-maxRetain:])
+	q.bcQueue = q.bcQueue[:maxRetain]
+}
+
 func (b limitedBroadcasts) Len() int {
 	return len(b)
 }
