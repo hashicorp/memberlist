@@ -33,7 +33,7 @@ func TestMemberlist_Integ(t *testing.T) {
 
 	addr := "127.0.0.1"
 	for i := 0; i < num; i++ {
-		c := DefaultConfig()
+		c := DefaultLANConfig()
 		c.Name = fmt.Sprintf("%s:%d", addr, 12345+i)
 		c.BindAddr = addr
 		c.Port = 12345 + i

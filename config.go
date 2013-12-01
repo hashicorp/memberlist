@@ -124,13 +124,13 @@ type Config struct {
 	LogOutput io.Writer
 }
 
-// DefaultConfig returns a sane set of configurations for Memberlist.
+// DefaultLANConfig returns a sane set of configurations for Memberlist.
 // It uses the hostname as the node name, and otherwise sets very conservative
 // values that are sane for most LAN environments. The default configuration
 // errs on the side on the side of caution, choosing values that are optimized
 // for higher convergence at the cost of higher bandwidth usage. Regardless,
 // these values are a good starting point when getting started with memberlist.
-func DefaultConfig() *Config {
+func DefaultLANConfig() *Config {
 	hostname, _ := os.Hostname()
 	return &Config{
 		Name:             hostname,
@@ -157,7 +157,7 @@ func DefaultConfig() *Config {
 // that is optimized for most WAN environments. The default configuration is
 // still very conservative and errs on the side of caution.
 func DefaultWANConfig() *Config {
-	conf := DefaultConfig()
+	conf := DefaultLANConfig()
 	conf.TCPTimeout = 30 * time.Second
 	conf.SuspicionMult = 6
 	conf.PushPullInterval = 60 * time.Second
@@ -172,7 +172,7 @@ func DefaultWANConfig() *Config {
 // that is optimized for a local loopback environments. The default configuration is
 // still very conservative and errs on the side of caution.
 func DefaultLocalConfig() *Config {
-	conf := DefaultConfig()
+	conf := DefaultLANConfig()
 	conf.TCPTimeout = time.Second
 	conf.IndirectChecks = 1
 	conf.RetransmitMult = 2

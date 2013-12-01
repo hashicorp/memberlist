@@ -8,7 +8,7 @@ import (
 )
 
 func HostMemberlist(host string, t *testing.T, f func(*Config)) *Memberlist {
-	c := DefaultConfig()
+	c := DefaultLANConfig()
 	c.Name = host
 	c.BindAddr = host
 	if f != nil {

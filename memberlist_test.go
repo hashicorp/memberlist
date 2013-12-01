@@ -26,7 +26,7 @@ func getBindAddr() net.IP {
 }
 
 func testConfig() *Config {
-	config := DefaultConfig()
+	config := DefaultLANConfig()
 	config.BindAddr = getBindAddr().String()
 	config.Name = config.BindAddr
 	return config
@@ -101,8 +101,8 @@ func GetMemberlist(t *testing.T) *Memberlist {
 	return nil
 }
 
-func TestDefaultConfig_protocolVersion(t *testing.T) {
-	c := DefaultConfig()
+func TestDefaultLANConfig_protocolVersion(t *testing.T) {
+	c := DefaultLANConfig()
 	if c.ProtocolVersion != ProtocolVersionMax {
 		t.Fatalf("should be max: %d", c.ProtocolVersion)
 	}
@@ -122,7 +122,7 @@ func TestCreate_protocolVersion(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		c := DefaultConfig()
+		c := DefaultLANConfig()
 		c.BindAddr = getBindAddr().String()
 		c.ProtocolVersion = tc.version
 		m, err := Create(c)
@@ -149,7 +149,7 @@ func TestCreate_secretKey(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		c := DefaultConfig()
+		c := DefaultLANConfig()
 		c.BindAddr = getBindAddr().String()
 		c.SecretKey = tc.key
 		m, err := Create(c)
@@ -166,7 +166,7 @@ func TestCreate_secretKey(t *testing.T) {
 }
 
 func TestCreate_secretKeyEmpty(t *testing.T) {
-	c := DefaultConfig()
+	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
 	c.SecretKey = make([]byte, 0)
 	m, err := Create(c)
@@ -259,7 +259,7 @@ func TestMemberlist_Join(t *testing.T) {
 	defer m1.Shutdown()
 
 	// Create a second node
-	c := DefaultConfig()
+	c := DefaultLANConfig()
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
@@ -329,7 +329,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	defer m1.Shutdown()
 
 	// Create a second node
-	c := DefaultConfig()
+	c := DefaultLANConfig()
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
@@ -380,7 +380,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	m1.schedule()
 
 	// Create a second node
-	c := DefaultConfig()
+	c := DefaultLANConfig()
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
@@ -498,7 +498,7 @@ func TestMemberlist_UserData(t *testing.T) {
 	d2.state = []byte("my state")
 
 	// Create a second node
-	c := DefaultConfig()
+	c := DefaultLANConfig()
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
@@ -549,7 +549,7 @@ func TestMemberlist_UserData(t *testing.T) {
 }
 
 func TestMemberlistProtocolVersion(t *testing.T) {
-	c := DefaultConfig()
+	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
 	c.ProtocolVersion = ProtocolVersionMax
 	m, err := Create(c)
@@ -606,7 +606,7 @@ func TestMemberlist_Join_Proto1And2(t *testing.T) {
 	}
 
 	// Create a second node, lower protocol!
-	c := DefaultConfig()
+	c := DefaultLANConfig()
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
@@ -639,7 +639,7 @@ func TestMemberlist_Join_Proto1And2(t *testing.T) {
 }
 
 func TestMemberlist_Join_IPv6(t *testing.T) {
-	c1 := DefaultConfig()
+	c1 := DefaultLANConfig()
 	c1.Name = "A"
 	c1.BindAddr = "[::1]"
 	var m1 *Memberlist
@@ -657,7 +657,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	defer m1.Shutdown()
 
 	// Create a second node
-	c2 := DefaultConfig()
+	c2 := DefaultLANConfig()
 	c2.Name = "B"
 	c2.BindAddr = "[::1]"
 	var m2 *Memberlist
