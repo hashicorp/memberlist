@@ -139,15 +139,20 @@ func encryptPayload(vsn encryptionVersion, key []byte, msg []byte, data []byte, 
 // and verify it's contents. Any padding will be removed, and a
 // slice to the plaintext is returned. Decryption is done IN PLACE!
 func decryptPayload(key []byte, msg []byte, data []byte) ([]byte, error) {
-	// Ensure the length is sane
-	if len(msg) < encryptedLength(minEncryptionVersion, 0) {
-		return nil, fmt.Errorf("Payload is too small to decrypt: %d", len(msg))
+	// Ensure we have at least one byte
+	if len(msg) == 0 {
+		return nil, fmt.Errorf("Cannot decrypt empty payload")
 	}
 
 	// Verify the version
 	vsn := encryptionVersion(msg[0])
 	if vsn > maxEncryptionVersion {
 		return nil, fmt.Errorf("Unsupported encryption version %d", msg[0])
+	}
+
+	// Ensure the length is sane
+	if len(msg) < encryptedLength(vsn, 0) {
+		return nil, fmt.Errorf("Payload is too small to decrypt: %d", len(msg))
 	}
 
 	// Get the AES block cipher
