@@ -329,7 +329,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 
 	// For proto versions < 2, there is no port provided. Mask old
 	// behavior by using the configured port
-	if m.ProtocolVersion() < 2 {
+	if m.ProtocolVersion() < 2 || ind.Port == 0 {
 		ind.Port = uint16(m.config.Port)
 	}
 
@@ -380,7 +380,7 @@ func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 
 	// For proto versions < 2, there is no port provided. Mask old
 	// behavior by using the configured port
-	if m.ProtocolVersion() < 2 {
+	if m.ProtocolVersion() < 2 || live.Port == 0 {
 		live.Port = uint16(m.config.Port)
 	}
 
@@ -752,8 +752,8 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 
 	// For proto versions < 2, there is no port provided. Mask old
 	// behavior by using the configured port
-	if m.ProtocolVersion() < 2 {
-		for idx := range remoteNodes {
+	for idx := range remoteNodes {
+		if m.ProtocolVersion() < 2 || remoteNodes[idx].Port == 0 {
 			remoteNodes[idx].Port = uint16(m.config.Port)
 		}
 	}
