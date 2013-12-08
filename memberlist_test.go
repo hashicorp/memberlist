@@ -79,7 +79,7 @@ func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
 		if err == nil {
 			return m, d
 		}
-		c.Port++
+		c.BindPort++
 	}
 	t.Fatalf("failed to start: %v", err)
 	return nil, nil
@@ -95,7 +95,7 @@ func GetMemberlist(t *testing.T) *Memberlist {
 		if err == nil {
 			return m
 		}
-		c.Port++
+		c.BindPort++
 	}
 	t.Fatalf("failed to start: %v", err)
 	return nil
@@ -263,7 +263,7 @@ func TestMemberlist_Join(t *testing.T) {
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
-	c.Port = m1.config.Port
+	c.BindPort = m1.config.BindPort
 
 	m2, err := Create(c)
 	if err != nil {
@@ -333,7 +333,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
-	c.Port = m1.config.Port
+	c.BindPort = m1.config.BindPort
 	c.GossipInterval = time.Millisecond
 
 	m2, err := Create(c)
@@ -384,7 +384,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
-	c.Port = m1.config.Port
+	c.BindPort = m1.config.BindPort
 	c.ProbeInterval = time.Millisecond
 	c.ProbeTimeout = 100 * time.Microsecond
 
@@ -502,7 +502,7 @@ func TestMemberlist_UserData(t *testing.T) {
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
-	c.Port = m1.config.Port
+	c.BindPort = m1.config.BindPort
 	c.GossipInterval = time.Millisecond
 	c.PushPullInterval = time.Millisecond
 	c.Delegate = d2
@@ -574,7 +574,7 @@ func TestMemberlist_Join_DeadNode(t *testing.T) {
 	// Create a second "node", which is just a TCP listener that
 	// does not ever respond. This is to test our deadliens
 	addr1 := getBindAddr()
-	list, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr1.String(), m1.config.Port))
+	list, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr1.String(), m1.config.BindPort))
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -610,7 +610,7 @@ func TestMemberlist_Join_Proto1And2(t *testing.T) {
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
-	c.Port = m1.config.Port
+	c.BindPort = m1.config.BindPort
 	c.ProtocolVersion = 1
 
 	m2, err := Create(c)
@@ -645,7 +645,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	var m1 *Memberlist
 	var err error
 	for i := 0; i < 100; i++ {
-		c1.Port = 23456 + i
+		c1.BindPort = 23456 + i
 		m1, err = Create(c1)
 		if err == nil {
 			break
@@ -662,7 +662,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	c2.BindAddr = "[::1]"
 	var m2 *Memberlist
 	for i := 0; i < 100; i++ {
-		c2.Port = c1.Port + 1 + i
+		c2.BindPort = c1.BindPort + 1 + i
 		m2, err = Create(c2)
 		if err == nil {
 			break
