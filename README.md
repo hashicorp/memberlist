@@ -13,6 +13,16 @@ on the protocol. Node failures are detected and network partitions are partially
 tolerated by attempting to communicate to potentially dead nodes through
 multiple routes.
 
+## Building
+
+If you wish to build memberlist you'll need Go version 1.2+ installed.
+
+Please check your installation with:
+
+```
+go version
+```
+
 ## Usage
 
 Memberlist is surprisingly simple to use. An example is shown below:
