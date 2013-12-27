@@ -201,18 +201,24 @@ START:
 // as if we received an alive notification our own network channel for
 // ourself.
 func (m *Memberlist) setAlive() error {
-	
+
 	var advertiseAddr []byte
 	var advertisePort int
 	if m.config.AdvertiseAddr != "" {
 		// If AdvertiseAddr is not empty, then advertise
 		// the given address and port.
 		ip := net.ParseIP(m.config.AdvertiseAddr)
+
+		// Ensure IPv4 conversion if necessary
+		if ip.To4() != nil {
+			ip = ip.To4()
+		}
+
 		advertiseAddr = ip
 		advertisePort = m.config.AdvertisePort
 	} else {
 		if m.config.BindAddr == "0.0.0.0" {
-			// Otherwise, if we're not bound to a specific IP, 
+			// Otherwise, if we're not bound to a specific IP,
 			//let's list the interfaces on this machine and use
 			// the first private IP we find.
 			addresses, err := net.InterfaceAddrs()
@@ -236,12 +242,11 @@ func (m *Memberlist) setAlive() error {
 				break
 			}
 
-
 			// Failed to find private IP, error
 			if advertiseAddr == nil {
 				return fmt.Errorf("No private IP address found, and explicit IP not provided")
 			}
-		
+
 		} else {
 			// Use the IP that we're bound to.
 			addr := m.tcpListener.Addr().(*net.TCPAddr)
@@ -249,7 +254,7 @@ func (m *Memberlist) setAlive() error {
 		}
 		advertisePort = m.config.BindPort
 	}
-	
+
 	// Check if this is a public address without encryption
 	addrStr := net.IP(advertiseAddr).String()
 	if !isPrivateIP(addrStr) && !isLoopbackIP(addrStr) && m.config.SecretKey == nil {
