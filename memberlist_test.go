@@ -1,6 +1,7 @@
 package memberlist
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"reflect"
@@ -688,5 +689,32 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 
 	if len(m1.Members()) != 2 {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+}
+
+func TestAdvertiseAddr(t *testing.T) {
+	c := testConfig()
+	c.AdvertiseAddr = "127.0.1.100"
+	c.AdvertisePort = 23456
+
+	m, err := Create(c)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
+	yield()
+
+	members := m.Members()
+	if len(members) != 1 {
+		t.Fatalf("bad number of members")
+	}
+
+	if bytes.Compare(members[0].Addr, []byte{127, 0, 1, 100}) != 0 {
+		t.Fatalf("bad: %#v", members[0])
+	}
+
+	if members[0].Port != 23456 {
+		t.Fatalf("bad: %#v", members[0])
 	}
 }
