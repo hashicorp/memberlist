@@ -208,10 +208,13 @@ func (m *Memberlist) setAlive() error {
 		// If AdvertiseAddr is not empty, then advertise
 		// the given address and port.
 		ip := net.ParseIP(m.config.AdvertiseAddr)
+		if ip == nil {
+			return fmt.Errorf("Failed to parse advertise address!")
+		}
 
 		// Ensure IPv4 conversion if necessary
-		if ip.To4() != nil {
-			ip = ip.To4()
+		if ip4 := ip.To4(); ip4 != nil {
+			ip = ip4
 		}
 
 		advertiseAddr = ip
