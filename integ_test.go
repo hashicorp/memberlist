@@ -36,7 +36,7 @@ func TestMemberlist_Integ(t *testing.T) {
 		c := DefaultLANConfig()
 		c.Name = fmt.Sprintf("%s:%d", addr, 12345+i)
 		c.BindAddr = addr
-		c.Port = 12345 + i
+		c.BindPort = 12345 + i
 		c.ProbeInterval = 10 * time.Millisecond
 		c.ProbeTimeout = 100 * time.Millisecond
 		c.GossipInterval = 5 * time.Millisecond

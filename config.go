@@ -15,7 +15,12 @@ type Config struct {
 	// It is assumed other nodes are running on this port, but they
 	// do not need to.
 	BindAddr string
-	Port     int
+	BindPort int
+
+	// Configuration related to what address to advertise to other
+	// cluster members. Used for nat traversal.
+	AdvertiseAddr string
+	AdvertisePort int
 
 	// ProtocolVersion is the configured protocol version that we
 	// will _speak_. This must be between ProtocolVersionMin and
@@ -135,7 +140,9 @@ func DefaultLANConfig() *Config {
 	return &Config{
 		Name:             hostname,
 		BindAddr:         "0.0.0.0",
-		Port:             7946,
+		BindPort:         7946,
+		AdvertiseAddr:    "",
+		AdvertisePort:    7946,
 		ProtocolVersion:  ProtocolVersionMax,
 		TCPTimeout:       10 * time.Second,       // Timeout after 10 seconds
 		IndirectChecks:   3,                      // Use 3 nodes for the indirect ping

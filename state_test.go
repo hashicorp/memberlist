@@ -34,14 +34,14 @@ func TestMemberList_Probe(t *testing.T) {
 	a1 := alive{
 		Node:        addr1.String(),
 		Addr:        []byte(addr1),
-		Port:        uint16(m1.config.Port),
+		Port:        uint16(m1.config.BindPort),
 		Incarnation: 1,
 	}
 	m1.aliveNode(&a1)
 	a2 := alive{
 		Node:        addr2.String(),
 		Addr:        []byte(addr2),
-		Port:        uint16(m2.config.Port),
+		Port:        uint16(m2.config.BindPort),
 		Incarnation: 1,
 	}
 	m1.aliveNode(&a2)

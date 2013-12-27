@@ -76,13 +76,13 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		conf.SecretKey = nil
 	}
 
-	tcpAddr := &net.TCPAddr{IP: net.ParseIP(conf.BindAddr), Port: conf.Port}
+	tcpAddr := &net.TCPAddr{IP: net.ParseIP(conf.BindAddr), Port: conf.BindPort}
 	tcpLn, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to start TCP listener. Err: %s", err)
 	}
 
-	udpAddr := &net.UDPAddr{IP: net.ParseIP(conf.BindAddr), Port: conf.Port}
+	udpAddr := &net.UDPAddr{IP: net.ParseIP(conf.BindAddr), Port: conf.BindPort}
 	udpLn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
 		tcpLn.Close()
@@ -180,7 +180,7 @@ func (m *Memberlist) resolveAddr(hostStr string) ([]byte, uint16, error) {
 START:
 	_, _, err := net.SplitHostPort(hostStr)
 	if ae, ok := err.(*net.AddrError); ok && ae.Err == "missing port in address" {
-		hostStr = fmt.Sprintf("%s:%d", hostStr, m.config.Port)
+		hostStr = fmt.Sprintf("%s:%d", hostStr, m.config.BindPort)
 		goto START
 	}
 	if err != nil {
@@ -201,44 +201,57 @@ START:
 // as if we received an alive notification our own network channel for
 // ourself.
 func (m *Memberlist) setAlive() error {
-	// Pick a private IP address
-	var ipAddr []byte
-	if m.config.BindAddr == "0.0.0.0" {
-		// We're not bound to a specific IP, so let's list the interfaces
-		// on this machine and use the first private IP we find.
-		addresses, err := net.InterfaceAddrs()
-		if err != nil {
-			return fmt.Errorf("Failed to get interface addresses! Err: %vn", err)
-		}
-
-		// Find private IPv4 address
-		for _, addr := range addresses {
-			ip, ok := addr.(*net.IPNet)
-			if !ok {
-				continue
-			}
-			if ip.IP.To4() == nil {
-				continue
-			}
-			if !isPrivateIP(ip.IP.String()) {
-				continue
-			}
-			ipAddr = ip.IP
-			break
-		}
-
-		// Failed to find private IP, error
-		if ipAddr == nil {
-			return fmt.Errorf("No private IP address found, and explicit IP not provided")
-		}
+	
+	var advertiseAddr []byte
+	var advertisePort int
+	if m.config.AdvertiseAddr != "" {
+		// If AdvertiseAddr is not empty, then advertise
+		// the given address and port.
+		ip := net.ParseIP(m.config.AdvertiseAddr)
+		advertiseAddr = ip
+		advertisePort = m.config.AdvertisePort
 	} else {
-		// Use the IP that we're bound to.
-		addr := m.tcpListener.Addr().(*net.TCPAddr)
-		ipAddr = addr.IP
-	}
+		if m.config.BindAddr == "0.0.0.0" {
+			// Otherwise, if we're not bound to a specific IP, 
+			//let's list the interfaces on this machine and use
+			// the first private IP we find.
+			addresses, err := net.InterfaceAddrs()
+			if err != nil {
+				return fmt.Errorf("Failed to get interface addresses! Err: %vn", err)
+			}
 
+			// Find private IPv4 address
+			for _, addr := range addresses {
+				ip, ok := addr.(*net.IPNet)
+				if !ok {
+					continue
+				}
+				if ip.IP.To4() == nil {
+					continue
+				}
+				if !isPrivateIP(ip.IP.String()) {
+					continue
+				}
+				advertiseAddr = ip.IP
+				break
+			}
+
+
+			// Failed to find private IP, error
+			if advertiseAddr == nil {
+				return fmt.Errorf("No private IP address found, and explicit IP not provided")
+			}
+		
+		} else {
+			// Use the IP that we're bound to.
+			addr := m.tcpListener.Addr().(*net.TCPAddr)
+			advertiseAddr = addr.IP
+		}
+		advertisePort = m.config.BindPort
+	}
+	
 	// Check if this is a public address without encryption
-	addrStr := net.IP(ipAddr).String()
+	addrStr := net.IP(advertiseAddr).String()
 	if !isPrivateIP(addrStr) && !isLoopbackIP(addrStr) && m.config.SecretKey == nil {
 		m.logger.Printf("[WARN] Binding to public address without encryption!")
 	}
@@ -255,8 +268,8 @@ func (m *Memberlist) setAlive() error {
 	a := alive{
 		Incarnation: m.nextIncarnation(),
 		Node:        m.config.Name,
-		Addr:        ipAddr,
-		Port:        uint16(m.config.Port),
+		Addr:        advertiseAddr,
+		Port:        uint16(advertisePort),
 		Meta:        meta,
 		Vsn: []uint8{
 			ProtocolVersionMin, ProtocolVersionMax, m.config.ProtocolVersion,
