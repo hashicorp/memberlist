@@ -226,7 +226,7 @@ func (m *Memberlist) setAlive() error {
 			// the first private IP we find.
 			addresses, err := net.InterfaceAddrs()
 			if err != nil {
-				return fmt.Errorf("Failed to get interface addresses! Err: %vn", err)
+				return fmt.Errorf("Failed to get interface addresses! Err: %v", err)
 			}
 
 			// Find private IPv4 address
