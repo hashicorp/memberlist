@@ -28,8 +28,11 @@ go version
 Memberlist is surprisingly simple to use. An example is shown below:
 
 ```go
-// Create the initial memberlist from a safe configuration.
-list, err := memberlist.Create(memberlist.DefaultConfig())
+/* Create the initial memberlist from a safe configuration.
+   Please reference the godoc for other default config types.
+   http://godoc.org/github.com/hashicorp/memberlist#Config
+*/
+list, err := memberlist.Create(memberlist.DefaultLocalConfig())
 if err != nil {
 	panic("Failed to create memberlist: " + err.Error())
 }
