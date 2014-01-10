@@ -207,7 +207,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 
 	// Send the ping message
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
-		m.logger.Printf("[ERR] Failed to send ping: %s", err)
+		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
 		return
 	}
 
@@ -237,7 +237,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	for _, peer := range kNodes {
 		destAddr := &net.UDPAddr{IP: peer.Addr, Port: int(peer.Port)}
 		if err := m.encodeAndSendMsg(destAddr, indirectPingMsg, &ind); err != nil {
-			m.logger.Printf("[ERR] Failed to send indirect ping: %s", err)
+			m.logger.Printf("[ERR] memberlist: Failed to send indirect ping: %s", err)
 		}
 	}
 
@@ -300,7 +300,7 @@ func (m *Memberlist) gossip() {
 		// Send the compound message
 		destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
 		if err := m.rawSendMsg(destAddr, compound.Bytes()); err != nil {
-			m.logger.Printf("[ERR] Failed to send gossip to %s: %s", destAddr, err)
+			m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
 		}
 	}
 }
@@ -324,7 +324,7 @@ func (m *Memberlist) pushPull() {
 
 	// Attempt a push pull
 	if err := m.pushPullNode(node.Addr, node.Port, false); err != nil {
-		m.logger.Printf("[ERR] Push/Pull with %s failed: %s", node.Name, err)
+		m.logger.Printf("[ERR] memberlist: Push/Pull with %s failed: %s", node.Name, err)
 	}
 }
 
@@ -585,7 +585,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 
 	// Check if this address is different than the existing node
 	if !reflect.DeepEqual([]byte(state.Addr), a.Addr) || state.Port != a.Port {
-		m.logger.Printf("[ERR] Conflicting address for %s. Mine: %v:%d Theirs: %v:%d",
+		m.logger.Printf("[ERR] memberlist: Conflicting address for %s. Mine: %v:%d Theirs: %v:%d",
 			state.Name, state.Addr, state.Port, net.IP(a.Addr), a.Port)
 		return
 	}
