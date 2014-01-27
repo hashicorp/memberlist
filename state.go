@@ -542,7 +542,7 @@ func (m *Memberlist) invokeAckHandler(seqNo uint32) {
 
 // aliveNode is invoked by the network layer when we get a message about a
 // live node.
-func (m *Memberlist) aliveNode(a *alive) {
+func (m *Memberlist) aliveNode(a *alive, notify chan struct{}) {
 	m.nodeLock.Lock()
 	defer m.nodeLock.Unlock()
 	state, ok := m.nodeMap[a.Node]
@@ -606,7 +606,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 	}
 
 	// Re-Broadcast
-	m.encodeAndBroadcast(a.Node, aliveMsg, a)
+	m.encodeBroadcastNotify(a.Node, aliveMsg, a, notify)
 
 	// Update the state and incarnation number
 	oldState := state.State
@@ -799,7 +799,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 				Meta:        r.Meta,
 				Vsn:         r.Vsn,
 			}
-			m.aliveNode(&a)
+			m.aliveNode(&a, nil)
 
 		case stateDead:
 			// If the remote node belives a node is dead, we prefer to

@@ -276,15 +276,17 @@ func (m *Memberlist) setAlive() error {
 			m.config.DelegateProtocolVersion,
 		},
 	}
-	m.aliveNode(&a)
+	m.aliveNode(&a, nil)
 
 	return nil
 }
 
 // UpdateNode is used to trigger re-advertising the local node. This is
 // primarily used with a Delegate to support dynamic updates to the local
-// meta data.
-func (m *Memberlist) UpdateNode() error {
+// meta data.  This will block until the update message is successfully
+// broadcasted to a member of the cluster, if any exist or until a specified
+// timeout is reached.
+func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 	// Get the node meta data
 	var meta []byte
 	if m.config.Delegate != nil {
@@ -312,7 +314,19 @@ func (m *Memberlist) UpdateNode() error {
 			m.config.DelegateProtocolVersion,
 		},
 	}
-	m.aliveNode(&a)
+	notifyCh := make(chan struct{})
+	m.aliveNode(&a, notifyCh)
+
+	// Wait for the broadcast or a timeout
+	var timeoutCh <-chan time.Time
+	if timeout > 0 {
+		timeoutCh = time.After(timeout)
+	}
+	select {
+	case <-notifyCh:
+	case <-timeoutCh:
+		return fmt.Errorf("timeout waiting for update broadcast")
+	}
 	return nil
 }
 
