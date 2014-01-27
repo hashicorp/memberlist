@@ -207,7 +207,7 @@ func (m *Memberlist) udpListen() {
 		if !lastPacket.IsZero() && time.Now().Sub(lastPacket) > blockingWarning {
 			diff := time.Now().Sub(lastPacket)
 			m.logger.Printf(
-				"[WARN] memberlist: Potential blocking operation. Last command took %v",
+				"[DEBUG] memberlist: Potential blocking operation. Last command took %v",
 				diff)
 		}
 
