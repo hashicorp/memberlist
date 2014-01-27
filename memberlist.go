@@ -258,8 +258,8 @@ func (m *Memberlist) setAlive() error {
 	// Get the node meta data
 	var meta []byte
 	if m.config.Delegate != nil {
-		meta = m.config.Delegate.NodeMeta(metaMaxSize)
-		if len(meta) > metaMaxSize {
+		meta = m.config.Delegate.NodeMeta(MetaMaxSize)
+		if len(meta) > MetaMaxSize {
 			panic("Node meta data provided is longer than the limit")
 		}
 	}
@@ -290,8 +290,8 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 	// Get the node meta data
 	var meta []byte
 	if m.config.Delegate != nil {
-		meta = m.config.Delegate.NodeMeta(metaMaxSize)
-		if len(meta) > metaMaxSize {
+		meta = m.config.Delegate.NodeMeta(MetaMaxSize)
+		if len(meta) > MetaMaxSize {
 			panic("Node meta data provided is longer than the limit")
 		}
 	}
