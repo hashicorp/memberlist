@@ -15,7 +15,7 @@ import (
 // _understand_. We're allowed to speak at any version within this
 // range. This range is inclusive.
 const (
-	ProtocolVersionMin uint8 = 0
+	ProtocolVersionMin uint8 = 1
 	ProtocolVersionMax       = 2
 )
 
@@ -131,8 +131,6 @@ type compress struct {
 // encryptionVersion returns the encryption version to use
 func (m *Memberlist) encryptionVersion() encryptionVersion {
 	switch m.ProtocolVersion() {
-	case 0:
-		panic("encryption not supported")
 	case 1:
 		return 0
 	default:

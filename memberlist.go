@@ -66,9 +66,6 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	}
 
 	if len(conf.SecretKey) > 0 {
-		if conf.ProtocolVersion < 1 {
-			return nil, fmt.Errorf("Encryption is not supported before protocol version 1")
-		}
 		if len(conf.SecretKey) != 16 {
 			return nil, fmt.Errorf("SecretKey must be 16 bytes in length")
 		}
@@ -96,12 +93,6 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		conf.LogOutput = os.Stderr
 	}
 	logger := log.New(conf.LogOutput, "", log.LstdFlags)
-
-	// Warn if compression is enabled with bad protocol version
-	if conf.EnableCompression && conf.ProtocolVersion < 1 {
-		logger.Printf("[WARN] memberlist: Compression is enabled with an unsupported protocol")
-		conf.EnableCompression = false
-	}
 
 	m := &Memberlist{
 		config:         conf,
