@@ -12,6 +12,11 @@ type EventDelegate interface {
 	// NotifyLeave is invoked when a node is detected to have left.
 	// The Node argument must not be modified.
 	NotifyLeave(*Node)
+
+	// NotifyUpdate is invoked when a node is detected to have
+	// updated, usually involving the meta data. The Node argument
+	// must not be modified.
+	NotifyUpdate(*Node)
 }
 
 // ChannelEventDelegate is used to enable an application to receive
@@ -31,6 +36,7 @@ type NodeEventType int
 const (
 	NodeJoin NodeEventType = iota
 	NodeLeave
+	NodeUpdate
 )
 
 // NodeEvent is a single event related to node activity in the memberlist.
@@ -48,4 +54,8 @@ func (c *ChannelEventDelegate) NotifyJoin(n *Node) {
 
 func (c *ChannelEventDelegate) NotifyLeave(n *Node) {
 	c.Ch <- NodeEvent{NodeLeave, n}
+}
+
+func (c *ChannelEventDelegate) NotifyUpdate(n *Node) {
+	c.Ch <- NodeEvent{NodeUpdate, n}
 }

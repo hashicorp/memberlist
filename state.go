@@ -1,11 +1,11 @@
 package memberlist
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/rand"
 	"net"
-	"reflect"
 	"sync/atomic"
 	"time"
 )
@@ -584,7 +584,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 	}
 
 	// Check if this address is different than the existing node
-	if !reflect.DeepEqual([]byte(state.Addr), a.Addr) || state.Port != a.Port {
+	if !bytes.Equal([]byte(state.Addr), a.Addr) || state.Port != a.Port {
 		m.logger.Printf("[ERR] memberlist: Conflicting address for %s. Mine: %v:%d Theirs: %v:%d",
 			state.Name, state.Addr, state.Port, net.IP(a.Addr), a.Port)
 		return
@@ -610,6 +610,7 @@ func (m *Memberlist) aliveNode(a *alive) {
 
 	// Update the state and incarnation number
 	oldState := state.State
+	oldMeta := state.Meta
 	state.Incarnation = a.Incarnation
 	state.Meta = a.Meta
 	if state.State != stateAlive {
@@ -617,10 +618,15 @@ func (m *Memberlist) aliveNode(a *alive) {
 		state.StateChange = time.Now()
 	}
 
-	// if Dead -> Alive, notify of join
-	if oldState == stateDead {
-		if m.config.Events != nil {
+	// Notify the delegate of any relevant updates
+	if m.config.Events != nil {
+		if oldState == stateDead {
+			// if Dead -> Alive, notify of join
 			m.config.Events.NotifyJoin(&state.Node)
+
+		} else if !bytes.Equal(oldMeta, state.Meta) {
+			// if Meta changed, trigger an update notification
+			m.config.Events.NotifyUpdate(&state.Node)
 		}
 	}
 }

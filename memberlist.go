@@ -281,6 +281,41 @@ func (m *Memberlist) setAlive() error {
 	return nil
 }
 
+// UpdateNode is used to trigger re-advertising the local node. This is
+// primarily used with a Delegate to support dynamic updates to the local
+// meta data.
+func (m *Memberlist) UpdateNode() error {
+	// Get the node meta data
+	var meta []byte
+	if m.config.Delegate != nil {
+		meta = m.config.Delegate.NodeMeta(metaMaxSize)
+		if len(meta) > metaMaxSize {
+			panic("Node meta data provided is longer than the limit")
+		}
+	}
+
+	// Get the existing node
+	m.nodeLock.Lock()
+	state := m.nodeMap[m.config.Name]
+	m.nodeLock.Unlock()
+
+	// Format a new alive message
+	a := alive{
+		Incarnation: m.nextIncarnation(),
+		Node:        m.config.Name,
+		Addr:        state.Addr,
+		Port:        state.Port,
+		Meta:        meta,
+		Vsn: []uint8{
+			ProtocolVersionMin, ProtocolVersionMax, m.config.ProtocolVersion,
+			m.config.DelegateProtocolMin, m.config.DelegateProtocolMax,
+			m.config.DelegateProtocolVersion,
+		},
+	}
+	m.aliveNode(&a)
+	return nil
+}
+
 // Members returns a list of all known live nodes. The node structures
 // returned must not be modified. If you wish to modify a Node, make a
 // copy first.
