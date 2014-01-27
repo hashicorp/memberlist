@@ -483,6 +483,83 @@ func TestMemberlist_delegateMeta(t *testing.T) {
 	}
 }
 
+func TestMemberlist_delegateMeta_Update(t *testing.T) {
+	c1 := testConfig()
+	c2 := testConfig()
+	mock1 := &MockDelegate{meta: []byte("web")}
+	mock2 := &MockDelegate{meta: []byte("lb")}
+	c1.Delegate = mock1
+	c2.Delegate = mock2
+
+	m1, err := Create(c1)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m1.Shutdown()
+
+	m2, err := Create(c2)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m2.Shutdown()
+
+	_, err = m1.Join([]string{c2.BindAddr})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	yield()
+
+	// Update the meta data roles
+	mock1.meta = []byte("api")
+	mock2.meta = []byte("db")
+
+	m1.UpdateNode(0)
+	m2.UpdateNode(0)
+	yield()
+
+	// Check the updates have propagated
+	var roles map[string]string
+
+	// Check the roles of members of m1
+	m1m := m1.Members()
+	if len(m1m) != 2 {
+		t.Fatalf("bad: %#v", m1m)
+	}
+
+	roles = make(map[string]string)
+	for _, m := range m1m {
+		roles[m.Name] = string(m.Meta)
+	}
+
+	if r := roles[c1.Name]; r != "api" {
+		t.Fatalf("bad role for %s: %s", c1.Name, r)
+	}
+
+	if r := roles[c2.Name]; r != "db" {
+		t.Fatalf("bad role for %s: %s", c2.Name, r)
+	}
+
+	// Check the roles of members of m2
+	m2m := m2.Members()
+	if len(m2m) != 2 {
+		t.Fatalf("bad: %#v", m2m)
+	}
+
+	roles = make(map[string]string)
+	for _, m := range m2m {
+		roles[m.Name] = string(m.Meta)
+	}
+
+	if r := roles[c1.Name]; r != "api" {
+		t.Fatalf("bad role for %s: %s", c1.Name, r)
+	}
+
+	if r := roles[c2.Name]; r != "db" {
+		t.Fatalf("bad role for %s: %s", c2.Name, r)
+	}
+}
+
 func TestMemberlist_UserData(t *testing.T) {
 	m1, d1 := GetMemberlistDelegate(t)
 	d1.state = []byte("something")
