@@ -297,9 +297,9 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 	}
 
 	// Get the existing node
-	m.nodeLock.Lock()
+	m.nodeLock.RLock()
 	state := m.nodeMap[m.config.Name]
-	m.nodeLock.Unlock()
+	m.nodeLock.RUnlock()
 
 	// Format a new alive message
 	a := alive{
@@ -318,14 +318,16 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 	m.aliveNode(&a, notifyCh)
 
 	// Wait for the broadcast or a timeout
-	var timeoutCh <-chan time.Time
-	if timeout > 0 {
-		timeoutCh = time.After(timeout)
-	}
-	select {
-	case <-notifyCh:
-	case <-timeoutCh:
-		return fmt.Errorf("timeout waiting for update broadcast")
+	if m.anyAlive() {
+		var timeoutCh <-chan time.Time
+		if timeout > 0 {
+			timeoutCh = time.After(timeout)
+		}
+		select {
+		case <-notifyCh:
+		case <-timeoutCh:
+			return fmt.Errorf("timeout waiting for update broadcast")
+		}
 	}
 	return nil
 }
@@ -397,17 +399,8 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 		}
 		m.deadNode(&d)
 
-		// Check for any other alive node
-		anyAlive := false
-		for _, n := range m.nodes {
-			if n.State != stateDead {
-				anyAlive = true
-				break
-			}
-		}
-
 		// Block until the broadcast goes out
-		if anyAlive {
+		if m.anyAlive() {
 			var timeoutCh <-chan time.Time
 			if timeout > 0 {
 				timeoutCh = time.After(timeout)
@@ -421,6 +414,18 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 	}
 
 	return nil
+}
+
+// Check for any other alive node.
+func (m *Memberlist) anyAlive() bool {
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	for _, n := range m.nodes {
+		if n.State != stateDead && n.Name != m.config.Name {
+			return true
+		}
+	}
+	return false
 }
 
 // ProtocolVersion returns the protocol version currently in use by
