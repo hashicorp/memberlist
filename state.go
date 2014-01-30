@@ -201,7 +201,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	defer metrics.MeasureSince([]string{"memberlist", "probeNode"}, time.Now())
 
 	// Send a ping to the node
-	ping := ping{SeqNo: m.nextSeqNo()}
+	ping := ping{SeqNo: m.nextSeqNo(), Node: node.Name}
 	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
 
 	// Setup an ack handler
@@ -236,7 +236,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	m.nodeLock.RUnlock()
 
 	// Attempt an indirect ping
-	ind := indirectPingReq{SeqNo: ping.SeqNo, Target: node.Addr, Port: node.Port}
+	ind := indirectPingReq{SeqNo: ping.SeqNo, Target: node.Addr, Port: node.Port, Node: node.Name}
 	for _, peer := range kNodes {
 		destAddr := &net.UDPAddr{IP: peer.Addr, Port: int(peer.Port)}
 		if err := m.encodeAndSendMsg(destAddr, indirectPingMsg, &ind); err != nil {
