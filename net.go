@@ -61,6 +61,11 @@ const (
 // ping request sent directly to node
 type ping struct {
 	SeqNo uint32
+
+	// Node is sent so the target can verify they are
+	// the intended recipient. This is to protect again an agent
+	// restart with a new name.
+	Node string
 }
 
 // indirect ping sent to an indirect ndoe
@@ -68,6 +73,7 @@ type indirectPingReq struct {
 	SeqNo  uint32
 	Target []byte
 	Port   uint16
+	Node   string
 }
 
 // ack response is sent for a ping
@@ -315,6 +321,11 @@ func (m *Memberlist) handlePing(buf []byte, from net.Addr) {
 		m.logger.Printf("[ERR] memberlist: Failed to decode ping request: %s", err)
 		return
 	}
+	// If node is provided, verify that it is for us
+	if p.Node != "" && p.Node != m.config.Name {
+		m.logger.Printf("[WARN] memberlist: Got ping for unexpected node '%s'", p.Node)
+		return
+	}
 	ack := ackResp{p.SeqNo}
 	if err := m.encodeAndSendMsg(from, ackRespMsg, &ack); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ack: %s", err)
@@ -336,7 +347,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 
 	// Send a ping to the correct host
 	localSeqNo := m.nextSeqNo()
-	ping := ping{SeqNo: localSeqNo}
+	ping := ping{SeqNo: localSeqNo, Node: ind.Node}
 	destAddr := &net.UDPAddr{IP: ind.Target, Port: int(ind.Port)}
 
 	// Setup a response handler to relay the ack

@@ -133,6 +133,47 @@ func TestHandlePing(t *testing.T) {
 	}
 }
 
+func TestHandlePing_WrongNode(t *testing.T) {
+	m := GetMemberlist(t)
+	m.config.EnableCompression = false
+	defer m.Shutdown()
+
+	var udp *net.UDPConn
+	for port := 60000; port < 61000; port++ {
+		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
+		udpLn, err := net.ListenPacket("udp", udpAddr)
+		if err == nil {
+			udp = udpLn.(*net.UDPConn)
+			break
+		}
+	}
+
+	if udp == nil {
+		t.Fatalf("no udp listener")
+	}
+
+	// Encode a ping, wrong node!
+	ping := ping{SeqNo: 42, Node: m.config.Name + "-bad"}
+	buf, err := encode(pingMsg, ping)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	// Send
+	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.BindPort}
+	udp.WriteTo(buf.Bytes(), addr)
+
+	// Wait for response
+	udp.SetDeadline(time.Now().Add(50 * time.Millisecond))
+	in := make([]byte, 1500)
+	_, _, err = udp.ReadFrom(in)
+
+	// Should get an i/o timeout
+	if err == nil {
+		t.Fatalf("expected err %s", err)
+	}
+}
+
 func TestHandleIndirectPing(t *testing.T) {
 	m := GetMemberlist(t)
 	m.config.EnableCompression = false
