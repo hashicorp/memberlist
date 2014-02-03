@@ -795,3 +795,50 @@ func TestAdvertiseAddr(t *testing.T) {
 		t.Fatalf("bad: %#v", members[0])
 	}
 }
+
+type MockConflict struct {
+	existing *Node
+	other    *Node
+}
+
+func (m *MockConflict) NotifyConflict(existing, other *Node) {
+	m.existing = existing
+	m.other = other
+}
+
+func TestMemberlist_conflictDelegate(t *testing.T) {
+	c1 := testConfig()
+	c2 := testConfig()
+	mock := &MockConflict{}
+	c1.Conflict = mock
+
+	// Ensure name conflict
+	c2.Name = c1.Name
+
+	m1, err := Create(c1)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m1.Shutdown()
+
+	m2, err := Create(c2)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m2.Shutdown()
+
+	_, err = m1.Join([]string{c2.BindAddr})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	yield()
+
+	// Ensure we were notified
+	if mock.existing == nil || mock.other == nil {
+		t.Fatalf("should get notified")
+	}
+	if mock.existing.Name != mock.other.Name {
+		t.Fatalf("bad: %v %v", mock.existing, mock.other)
+	}
+}

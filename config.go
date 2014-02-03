@@ -123,6 +123,7 @@ type Config struct {
 	DelegateProtocolMin     uint8
 	DelegateProtocolMax     uint8
 	Events                  EventDelegate
+	Conflict                ConflictDelegate
 
 	// LogOutput is the writer where logs should be sent. If this is not
 	// set, logging will go to stderr by default.

@@ -594,6 +594,17 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}) {
 	if !bytes.Equal([]byte(state.Addr), a.Addr) || state.Port != a.Port {
 		m.logger.Printf("[ERR] memberlist: Conflicting address for %s. Mine: %v:%d Theirs: %v:%d",
 			state.Name, state.Addr, state.Port, net.IP(a.Addr), a.Port)
+
+		// Inform the conflict delegate if provided
+		if m.config.Conflict != nil {
+			other := Node{
+				Name: a.Node,
+				Addr: a.Addr,
+				Port: a.Port,
+				Meta: a.Meta,
+			}
+			m.config.Conflict.NotifyConflict(&state.Node, &other)
+		}
 		return
 	}
 
