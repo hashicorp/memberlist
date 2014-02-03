@@ -281,6 +281,14 @@ func (m *Memberlist) setAlive() error {
 	return nil
 }
 
+// LocalNode is used to return the local Node
+func (m *Memberlist) LocalNode() *Node {
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	state := m.nodeMap[m.config.Name]
+	return &state.Node
+}
+
 // UpdateNode is used to trigger re-advertising the local node. This is
 // primarily used with a Delegate to support dynamic updates to the local
 // meta data.  This will block until the update message is successfully
