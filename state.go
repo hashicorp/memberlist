@@ -95,7 +95,11 @@ func (m *Memberlist) schedule() {
 func (m *Memberlist) triggerFunc(stagger time.Duration, C <-chan time.Time, stop <-chan struct{}, f func()) {
 	// Use a random stagger to avoid syncronizing
 	randStagger := time.Duration(uint64(rand.Int63()) % uint64(stagger))
-	time.Sleep(randStagger)
+	select {
+	case <-time.After(randStagger):
+	case <-stop:
+		return
+	}
 	for {
 		select {
 		case <-C:
@@ -115,7 +119,11 @@ func (m *Memberlist) pushPullTrigger(stop <-chan struct{}) {
 
 	// Use a random stagger to avoid syncronizing
 	randStagger := time.Duration(uint64(rand.Int63()) % uint64(interval))
-	time.Sleep(randStagger)
+	select {
+	case <-time.After(randStagger):
+	case <-stop:
+		return
+	}
 
 	// Tick using a dynamic timer
 	for {
