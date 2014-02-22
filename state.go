@@ -813,17 +813,6 @@ func (m *Memberlist) deadNode(d *dead) {
 // state transfer
 func (m *Memberlist) mergeState(remote []pushNodeState) {
 	for _, r := range remote {
-		// Look for a matching local node
-		m.nodeLock.RLock()
-		local, ok := m.nodeMap[r.Name]
-		sameState := ok && local.State == r.State && r.Name != m.config.Name
-		m.nodeLock.RUnlock()
-
-		// Skip if we agree on states
-		if sameState {
-			continue
-		}
-
 		switch r.State {
 		case stateAlive:
 			a := alive{
