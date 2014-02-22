@@ -648,6 +648,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 			},
 		}
 		m.encodeBroadcastNotify(a.Node, aliveMsg, a, notify)
+		m.logger.Printf("[WARN] memberlist: Refuting an alive message")
 	} else {
 		m.encodeBroadcastNotify(a.Node, aliveMsg, a, notify)
 
@@ -725,7 +726,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 			},
 		}
 		m.encodeAndBroadcast(s.Node, aliveMsg, a)
-
+		m.logger.Printf("[WARN] memberlist: Refuting a suspect message")
 		return // Do not mark ourself suspect
 	} else {
 		m.encodeAndBroadcast(s.Node, suspectMsg, s)
@@ -791,6 +792,7 @@ func (m *Memberlist) deadNode(d *dead) {
 			for d.Incarnation >= inc {
 				inc = m.nextIncarnation()
 			}
+			state.Incarnation = inc
 
 			a := alive{
 				Incarnation: inc,
@@ -804,8 +806,7 @@ func (m *Memberlist) deadNode(d *dead) {
 				},
 			}
 			m.encodeAndBroadcast(d.Node, aliveMsg, a)
-
-			state.Incarnation = inc
+			m.logger.Printf("[WARN] memberlist: Refuting a dead message")
 			return // Do not mark ourself dead
 		}
 
