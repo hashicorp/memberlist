@@ -276,7 +276,7 @@ func (m *Memberlist) setAlive() error {
 			m.config.DelegateProtocolVersion,
 		},
 	}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, true)
 
 	return nil
 }
@@ -323,7 +323,7 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 		},
 	}
 	notifyCh := make(chan struct{})
-	m.aliveNode(&a, notifyCh)
+	m.aliveNode(&a, notifyCh, true)
 
 	// Wait for the broadcast or a timeout
 	if m.anyAlive() {

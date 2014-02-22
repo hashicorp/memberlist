@@ -557,7 +557,7 @@ func (m *Memberlist) invokeAckHandler(seqNo uint32) {
 
 // aliveNode is invoked by the network layer when we get a message about a
 // live node.
-func (m *Memberlist) aliveNode(a *alive, notify chan struct{}) {
+func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 	m.nodeLock.Lock()
 	defer m.nodeLock.Unlock()
 	state, ok := m.nodeMap[a.Node]
@@ -621,30 +621,53 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}) {
 		return
 	}
 
-	// Update our protocol versions if it arrived
-	if len(a.Vsn) > 0 {
-		state.PMin = a.Vsn[0]
-		state.PMax = a.Vsn[1]
-		state.PCur = a.Vsn[2]
-		state.DMin = a.Vsn[3]
-		state.DMax = a.Vsn[4]
-		state.DCur = a.Vsn[5]
-	}
-
 	// Update metrics
 	metrics.IncrCounter([]string{"memberlist", "msg", "alive"}, 1)
 
-	// Re-Broadcast
-	m.encodeBroadcastNotify(a.Node, aliveMsg, a, notify)
-
-	// Update the state and incarnation number
+	// Store the old state and meta data
 	oldState := state.State
 	oldMeta := state.Meta
-	state.Incarnation = a.Incarnation
-	state.Meta = a.Meta
-	if state.State != stateAlive {
-		state.State = stateAlive
-		state.StateChange = time.Now()
+
+	// If this is us we need to refute, otherwise re-broadcast
+	if !bootstrap && state.Name == m.config.Name {
+		inc := m.nextIncarnation()
+		for a.Incarnation >= inc {
+			inc = m.nextIncarnation()
+		}
+		state.Incarnation = inc
+
+		a := alive{
+			Incarnation: inc,
+			Node:        state.Name,
+			Addr:        state.Addr,
+			Port:        state.Port,
+			Meta:        state.Meta,
+			Vsn: []uint8{
+				state.PMin, state.PMax, state.PCur,
+				state.DMin, state.DMax, state.DCur,
+			},
+		}
+		m.encodeBroadcastNotify(a.Node, aliveMsg, a, notify)
+	} else {
+		m.encodeBroadcastNotify(a.Node, aliveMsg, a, notify)
+
+		// Update protocol versions if it arrived
+		if len(a.Vsn) > 0 {
+			state.PMin = a.Vsn[0]
+			state.PMax = a.Vsn[1]
+			state.PCur = a.Vsn[2]
+			state.DMin = a.Vsn[3]
+			state.DMax = a.Vsn[4]
+			state.DCur = a.Vsn[5]
+		}
+
+		// Update the state and incarnation number
+		state.Incarnation = a.Incarnation
+		state.Meta = a.Meta
+		if state.State != stateAlive {
+			state.State = stateAlive
+			state.StateChange = time.Now()
+		}
 	}
 
 	// Notify the delegate of any relevant updates
@@ -823,7 +846,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 				Meta:        r.Meta,
 				Vsn:         r.Vsn,
 			}
-			m.aliveNode(&a, nil)
+			m.aliveNode(&a, nil, false)
 
 		case stateDead:
 			// If the remote node belives a node is dead, we prefer to

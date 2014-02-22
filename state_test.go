@@ -37,14 +37,14 @@ func TestMemberList_Probe(t *testing.T) {
 		Port:        uint16(m1.config.BindPort),
 		Incarnation: 1,
 	}
-	m1.aliveNode(&a1, nil)
+	m1.aliveNode(&a1, nil, true)
 	a2 := alive{
 		Node:        addr2.String(),
 		Addr:        []byte(addr2),
 		Port:        uint16(m2.config.BindPort),
 		Incarnation: 1,
 	}
-	m1.aliveNode(&a2, nil)
+	m1.aliveNode(&a2, nil, false)
 
 	// should ping addr2
 	m1.probe()
@@ -79,13 +79,13 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	m3 := HostMemberlist(addr3.String(), t, nil)
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
-	m1.aliveNode(&a1, nil)
+	m1.aliveNode(&a1, nil, true)
 	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
-	m1.aliveNode(&a2, nil)
+	m1.aliveNode(&a2, nil, false)
 	a3 := alive{Node: addr3.String(), Addr: ip3, Port: 7946, Incarnation: 1}
-	m1.aliveNode(&a3, nil)
+	m1.aliveNode(&a3, nil, false)
 	a4 := alive{Node: addr4.String(), Addr: ip4, Port: 7946, Incarnation: 1}
-	m1.aliveNode(&a4, nil)
+	m1.aliveNode(&a4, nil, false)
 
 	n := m1.nodeMap[addr4.String()]
 	m1.probeNode(n)
@@ -94,7 +94,7 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	if n.State != stateSuspect {
 		t.Fatalf("Expect node to be suspect")
 	}
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	// Should increment seqno
 	if m2.sequenceNum != 1 {
@@ -118,9 +118,9 @@ func TestMemberList_ProbeNode(t *testing.T) {
 	m2 := HostMemberlist(addr2.String(), t, nil)
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
-	m1.aliveNode(&a1, nil)
+	m1.aliveNode(&a1, nil, true)
 	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
-	m1.aliveNode(&a2, nil)
+	m1.aliveNode(&a2, nil, false)
 
 	n := m1.nodeMap[addr2.String()]
 	m1.probeNode(n)
@@ -139,11 +139,11 @@ func TestMemberList_ProbeNode(t *testing.T) {
 func TestMemberList_ResetNodes(t *testing.T) {
 	m := GetMemberlist(t)
 	a1 := alive{Node: "test1", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a1, nil)
+	m.aliveNode(&a1, nil, false)
 	a2 := alive{Node: "test2", Addr: []byte{127, 0, 0, 2}, Incarnation: 1}
-	m.aliveNode(&a2, nil)
+	m.aliveNode(&a2, nil, false)
 	a3 := alive{Node: "test3", Addr: []byte{127, 0, 0, 3}, Incarnation: 1}
-	m.aliveNode(&a3, nil)
+	m.aliveNode(&a3, nil, false)
 	d := dead{Node: "test2", Incarnation: 1}
 	m.deadNode(&d)
 
@@ -251,7 +251,7 @@ func TestMemberList_AliveNode_NewNode(t *testing.T) {
 	m.config.Events = &ChannelEventDelegate{ch}
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	if len(m.nodes) != 1 {
 		t.Fatalf("should add node")
@@ -293,7 +293,7 @@ func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
 	m := GetMemberlist(t)
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	// Listen only after first join
 	m.config.Events = &ChannelEventDelegate{ch}
@@ -304,14 +304,14 @@ func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
 	state.StateChange = state.StateChange.Add(-time.Hour)
 
 	// Old incarnation number, should not change
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 	if state.State != stateSuspect {
 		t.Fatalf("update with old incarnation!")
 	}
 
 	// Should reset to alive now
 	a.Incarnation = 2
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 	if state.State != stateAlive {
 		t.Fatalf("no update with new incarnation!")
 	}
@@ -338,7 +338,7 @@ func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 	m := GetMemberlist(t)
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	// Listen only after first join
 	m.config.Events = &ChannelEventDelegate{ch}
@@ -349,7 +349,7 @@ func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 
 	// Should reset to alive now
 	a.Incarnation = 2
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 	if state.State != stateAlive {
 		t.Fatalf("non idempotent")
 	}
@@ -381,7 +381,7 @@ func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 		Addr:        []byte{127, 0, 0, 1},
 		Meta:        []byte("val1"),
 		Incarnation: 1}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	// Listen only after first join
 	m.config.Events = &ChannelEventDelegate{ch}
@@ -392,7 +392,7 @@ func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 	// Should reset to alive now
 	a.Incarnation = 2
 	a.Meta = []byte("val2")
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	// Check updates
 	if bytes.Compare(state.Meta, a.Meta) != 0 {
@@ -417,6 +417,43 @@ func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 
 }
 
+func TestMemberList_AliveNode_Refute(t *testing.T) {
+	m := GetMemberlist(t)
+	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
+	m.aliveNode(&a, nil, true)
+
+	// Clear queue
+	m.broadcasts.Reset()
+
+	// Conflicting alive
+	s := alive{
+		Node:        m.config.Name,
+		Addr:        []byte{127, 0, 0, 1},
+		Incarnation: 2,
+		Meta:        []byte("foo"),
+	}
+	m.aliveNode(&s, nil, false)
+
+	state := m.nodeMap[m.config.Name]
+	if state.State != stateAlive {
+		t.Fatalf("should still be alive")
+	}
+	if state.Meta != nil {
+		t.Fatalf("meta should still be nil")
+	}
+
+	// Check a broad cast is queued
+	if num := m.broadcasts.NumQueued(); num != 1 {
+		t.Fatalf("expected only one queued message: %d",
+			num)
+	}
+
+	// Should be alive mesg
+	if messageType(m.broadcasts.bcQueue[0].b.Message()[0]) != aliveMsg {
+		t.Fatalf("expected queued alive msg")
+	}
+}
+
 func TestMemberList_SuspectNode_NoNode(t *testing.T) {
 	m := GetMemberlist(t)
 	s := suspect{Node: "test", Incarnation: 1}
@@ -431,7 +468,7 @@ func TestMemberList_SuspectNode(t *testing.T) {
 	m.config.ProbeInterval = time.Millisecond
 	m.config.SuspicionMult = 1
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	state := m.nodeMap["test"]
 	state.StateChange = state.StateChange.Add(-time.Hour)
@@ -486,7 +523,7 @@ func TestMemberList_SuspectNode(t *testing.T) {
 func TestMemberList_SuspectNode_DoubleSuspect(t *testing.T) {
 	m := GetMemberlist(t)
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	state := m.nodeMap["test"]
 	state.StateChange = state.StateChange.Add(-time.Hour)
@@ -523,7 +560,7 @@ func TestMemberList_SuspectNode_DoubleSuspect(t *testing.T) {
 func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
 	m := GetMemberlist(t)
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	state := m.nodeMap["test"]
 	state.StateChange = state.StateChange.Add(-time.Hour)
@@ -547,7 +584,7 @@ func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
 func TestMemberList_SuspectNode_Refute(t *testing.T) {
 	m := GetMemberlist(t)
 	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, true)
 
 	// Clear queue
 	m.broadcasts.Reset()
@@ -585,7 +622,7 @@ func TestMemberList_DeadNode(t *testing.T) {
 	m := GetMemberlist(t)
 	m.config.Events = &ChannelEventDelegate{ch}
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	// Read the join event
 	<-ch
@@ -629,7 +666,7 @@ func TestMemberList_DeadNode_Double(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m := GetMemberlist(t)
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	state := m.nodeMap["test"]
 	state.StateChange = state.StateChange.Add(-time.Hour)
@@ -662,7 +699,7 @@ func TestMemberList_DeadNode_Double(t *testing.T) {
 func TestMemberList_DeadNode_OldDead(t *testing.T) {
 	m := GetMemberlist(t)
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, false)
 
 	state := m.nodeMap["test"]
 	state.StateChange = state.StateChange.Add(-time.Hour)
@@ -678,7 +715,7 @@ func TestMemberList_DeadNode_OldDead(t *testing.T) {
 func TestMemberList_DeadNode_Refute(t *testing.T) {
 	m := GetMemberlist(t)
 	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a, nil)
+	m.aliveNode(&a, nil, true)
 
 	// Clear queue
 	m.broadcasts.Reset()
@@ -705,11 +742,11 @@ func TestMemberList_DeadNode_Refute(t *testing.T) {
 func TestMemberList_MergeState(t *testing.T) {
 	m := GetMemberlist(t)
 	a1 := alive{Node: "test1", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
-	m.aliveNode(&a1, nil)
+	m.aliveNode(&a1, nil, false)
 	a2 := alive{Node: "test2", Addr: []byte{127, 0, 0, 2}, Incarnation: 1}
-	m.aliveNode(&a2, nil)
+	m.aliveNode(&a2, nil, false)
 	a3 := alive{Node: "test3", Addr: []byte{127, 0, 0, 3}, Incarnation: 1}
-	m.aliveNode(&a3, nil)
+	m.aliveNode(&a3, nil, false)
 
 	s := suspect{Node: "test1", Incarnation: 1}
 	m.suspectNode(&s)
@@ -806,11 +843,11 @@ func TestMemberlist_Gossip(t *testing.T) {
 	defer m2.Shutdown()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
-	m1.aliveNode(&a1, nil)
+	m1.aliveNode(&a1, nil, true)
 	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
-	m1.aliveNode(&a2, nil)
+	m1.aliveNode(&a2, nil, false)
 	a3 := alive{Node: "172.0.0.1", Addr: []byte{172, 0, 0, 1}, Incarnation: 1}
-	m1.aliveNode(&a3, nil)
+	m1.aliveNode(&a3, nil, false)
 
 	// Gossip should send all this to m2
 	m1.gossip()
@@ -845,9 +882,9 @@ func TestMemberlist_PushPull(t *testing.T) {
 	defer m2.Shutdown()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
-	m1.aliveNode(&a1, nil)
+	m1.aliveNode(&a1, nil, true)
 	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
-	m1.aliveNode(&a2, nil)
+	m1.aliveNode(&a2, nil, false)
 
 	// Gossip should send all this to m2
 	m1.pushPull()

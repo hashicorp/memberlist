@@ -396,7 +396,7 @@ func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 		live.Port = uint16(m.config.BindPort)
 	}
 
-	m.aliveNode(&live, nil)
+	m.aliveNode(&live, nil, false)
 }
 
 func (m *Memberlist) handleDead(buf []byte, from net.Addr) {
