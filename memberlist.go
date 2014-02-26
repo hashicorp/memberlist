@@ -340,6 +340,19 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 	return nil
 }
 
+// SendTo is used to directly send a message to another node, without
+// the use of the gossip mechanism. This will encode the message as a
+// user-data message, which a delegate will receive through NotifyMsg
+func (m *Memberlist) SendTo(to net.Addr, msg []byte) error {
+	// Encode as a user message
+	buf := make([]byte, 1, len(msg)+1)
+	buf[0] = byte(userMsg)
+	buf = append(buf, msg...)
+
+	// Send the message
+	return m.rawSendMsg(to, buf)
+}
+
 // Members returns a list of all known live nodes. The node structures
 // returned must not be modified. If you wish to modify a Node, make a
 // copy first.

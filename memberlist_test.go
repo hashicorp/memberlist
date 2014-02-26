@@ -50,7 +50,9 @@ func (m *MockDelegate) NodeMeta(limit int) []byte {
 }
 
 func (m *MockDelegate) NotifyMsg(msg []byte) {
-	m.msgs = append(m.msgs, msg)
+	cp := make([]byte, len(msg))
+	copy(cp, msg)
+	m.msgs = append(m.msgs, cp)
 }
 
 func (m *MockDelegate) GetBroadcasts(overhead, limit int) [][]byte {
@@ -623,6 +625,76 @@ func TestMemberlist_UserData(t *testing.T) {
 	}
 	if !reflect.DeepEqual(d2.remoteState, []byte("something")) {
 		t.Fatalf("bad state %s", d2.remoteState)
+	}
+}
+
+func TestMemberlist_SendTo(t *testing.T) {
+	m1, d1 := GetMemberlistDelegate(t)
+	m1.setAlive()
+	m1.schedule()
+	defer m1.Shutdown()
+
+	// Create a second delegate with things to send
+	d2 := &MockDelegate{}
+
+	// Create a second node
+	c := DefaultLANConfig()
+	addr1 := getBindAddr()
+	c.Name = addr1.String()
+	c.BindAddr = addr1.String()
+	c.BindPort = m1.config.BindPort
+	c.GossipInterval = time.Millisecond
+	c.PushPullInterval = time.Millisecond
+	c.Delegate = d2
+
+	m2, err := Create(c)
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+	defer m2.Shutdown()
+
+	num, err := m2.Join([]string{m1.config.BindAddr})
+	if num != 1 {
+		t.Fatal("unexpected 1: %d", num)
+	}
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+
+	// Check the hosts
+	if m2.NumMembers() != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+
+	// Try to do a direct send
+	m2Addr := &net.UDPAddr{IP: addr1,
+		Port: c.BindPort}
+	if err := m1.SendTo(m2Addr, []byte("ping")); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	m1Addr := &net.UDPAddr{IP: net.ParseIP(m1.config.BindAddr),
+		Port: m1.config.BindPort}
+	if err := m2.SendTo(m1Addr, []byte("pong")); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	// Wait for a little while
+	time.Sleep(3 * time.Millisecond)
+
+	// Ensure we got the messages
+	if len(d1.msgs) != 1 {
+		t.Fatalf("should have 1 messages!")
+	}
+	if !reflect.DeepEqual(d1.msgs[0], []byte("pong")) {
+		t.Fatalf("bad msg %v", d1.msgs[0])
+	}
+
+	if len(d2.msgs) != 1 {
+		t.Fatalf("should have 1 messages!")
+	}
+	if !reflect.DeepEqual(d2.msgs[0], []byte("ping")) {
+		t.Fatalf("bad msg %v", d2.msgs[0])
 	}
 }
 
