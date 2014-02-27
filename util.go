@@ -68,7 +68,7 @@ func init() {
 
 // Decode reverses the encode operation on a byte slice input
 func decode(buf []byte, out interface{}) error {
-	r := bytes.NewBuffer(buf)
+	r := bytes.NewReader(buf)
 	hd := codec.MsgpackHandle{}
 	dec := codec.NewDecoder(r, &hd)
 	return dec.Decode(out)
