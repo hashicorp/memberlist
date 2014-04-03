@@ -1,6 +1,9 @@
 package memberlist
 
 import (
+	"bytes"
+	"crypto/sha1"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -107,8 +110,15 @@ type Config struct {
 	EnableCompression bool
 
 	// SecretKey is provided if message level encryption and verification
-	// are to be used. This key must be 16 bytes.
+	// are to be used. This key must be 16 bytes. The value contained here
+	// is the key used to perform encryption, and the first key tried during
+	// decryption.
 	SecretKey []byte
+
+	// SecretKeys stores all known encryption keys. These keys will not be
+	// used for encrypting messages, but will be used for decryption if a
+	// message fails to decrypt using the key contained in SecretKey.
+	SecretKeys map[string][]byte
 
 	// Delegate and Events are delegates for receiving and providing
 	// data to memberlist via callback mechanisms. For Delegate, see
@@ -157,7 +167,9 @@ func DefaultLANConfig() *Config {
 		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly
 
 		EnableCompression: true, // Enable compression by default
-		SecretKey:         nil,
+
+		SecretKey:  nil,                        // Key used for encrypting data
+		SecretKeys: make(map[string][]byte, 0), // Keys available for decrypting
 	}
 }
 
@@ -190,4 +202,58 @@ func DefaultLocalConfig() *Config {
 	conf.ProbeInterval = time.Second
 	conf.GossipInterval = 100 * time.Millisecond
 	return conf
+}
+
+// AddSecretKey will append a new key to the list of usable secret keys. Adding
+// a key to the list will make it available for decrypting.
+func (c *Config) AddSecretKey(key []byte) error {
+	if len(key) != 16 {
+		return fmt.Errorf("key size must be 16 bytes")
+	}
+	hasher := sha1.New()
+	hasher.Write(key)
+	cksum := fmt.Sprintf("%x", hasher.Sum(nil))
+	if _, ok := c.SecretKeys[cksum]; ok {
+		return fmt.Errorf("a key with checksum %s is already installed", cksum)
+	}
+	c.SecretKeys[cksum] = key
+	return nil
+}
+
+// UseSecretKey changes the key used to encrypt messages. This is the only key
+// used to encrypt messages, so peers should know this key before this method
+// is invoked.
+func (c *Config) UseSecretKey(cksum string) error {
+	if _, ok := c.SecretKeys[cksum]; !ok {
+		return fmt.Errorf("no keys match checksum %s", cksum)
+	}
+	c.SecretKey = c.SecretKeys[cksum]
+	return nil
+}
+
+// ListSecretKeys returns a list of sha1 sums, which identifies the keys.
+func (c *Config) ListSecretKeys() (keys []string) {
+	for cksum, _ := range c.SecretKeys {
+		keys = append(keys, cksum)
+	}
+	return
+}
+
+// GetSecretKey retrieves a key by its sha1 sum.
+func (c *Config) GetSecretKey(cksum string) ([]byte, error) {
+	if _, ok := c.SecretKeys[cksum]; !ok {
+		return nil, fmt.Errorf("no keys match checksum %s", cksum)
+	}
+	return c.SecretKeys[cksum], nil
+}
+
+// RemoveSecretKey drops a key from the list of available keys. This will return
+// an error if the key requested for removal is the currently active key.
+func (c *Config) RemoveSecretKey(cksum string) error {
+	if _, ok := c.SecretKeys[cksum]; ok {
+		if bytes.Equal(c.SecretKeys[cksum], c.SecretKey) {
+			return fmt.Errorf("removing the active key is not allowed")
+		}
+	}
+	return nil
 }
