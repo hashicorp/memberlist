@@ -139,13 +139,6 @@ type Config struct {
 	LogOutput io.Writer
 }
 
-// Init allocates substructures if they weren't already set.
-func (c *Config) init() {
-	if c.SecretKeys == nil {
-		c.SecretKeys = make(map[string][]byte, 0)
-	}
-}
-
 // DefaultLANConfig returns a sane set of configurations for Memberlist.
 // It uses the hostname as the node name, and otherwise sets very conservative
 // values that are sane for most LAN environments. The default configuration
@@ -174,8 +167,8 @@ func DefaultLANConfig() *Config {
 
 		EnableCompression: true, // Enable compression by default
 
-		SecretKey:  nil,                        // Key used for encrypting data
-		SecretKeys: make(map[string][]byte, 0), // Keys available for decrypting
+		SecretKey:  nil,               // Key used for encrypting data
+		SecretKeys: make([][]byte, 0), // Keys available for decrypting
 	}
 }
 
@@ -235,7 +228,7 @@ func (c *Config) UseSecretKey(key []byte) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("no keys match checksum %s", cksum)
+	return fmt.Errorf("requested key is not installed")
 }
 
 // RemoveSecretKey drops a key from the list of available keys. This will return
@@ -246,7 +239,7 @@ func (c *Config) RemoveSecretKey(key []byte) error {
 	}
 	for i, installedKey := range c.SecretKeys {
 		if bytes.Equal(key, installedKey) {
-			c.SecretKeys = append(c.SecretKeys[:i], c.SecretKeys[i+1:])
+			c.SecretKeys = append(c.SecretKeys[:i], c.SecretKeys[i+1:]...)
 		}
 	}
 	return nil

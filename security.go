@@ -135,26 +135,7 @@ func encryptPayload(vsn encryptionVersion, key []byte, msg []byte, data []byte, 
 	return nil
 }
 
-// decryptPayload is used to decrypt a message with a given key,
-// and verify it's contents. Any padding will be removed, and a
-// slice to the plaintext is returned. Decryption is done IN PLACE!
-func decryptPayload(key []byte, msg []byte, data []byte) ([]byte, error) {
-	// Ensure we have at least one byte
-	if len(msg) == 0 {
-		return nil, fmt.Errorf("Cannot decrypt empty payload")
-	}
-
-	// Verify the version
-	vsn := encryptionVersion(msg[0])
-	if vsn > maxEncryptionVersion {
-		return nil, fmt.Errorf("Unsupported encryption version %d", msg[0])
-	}
-
-	// Ensure the length is sane
-	if len(msg) < encryptedLength(vsn, 0) {
-		return nil, fmt.Errorf("Payload is too small to decrypt: %d", len(msg))
-	}
-
+func decryptMessage(key, msg []byte, data []byte) ([]byte, error) {
 	// Get the AES block cipher
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
@@ -175,10 +156,41 @@ func decryptPayload(key []byte, msg []byte, data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Remove the PKCS7 padding for vsn 0
-	if vsn == 0 {
-		return pkcs7decode(plain, aes.BlockSize), nil
-	} else {
-		return plain, nil
+	// Success!
+	return plain, nil
+}
+
+// decryptPayload is used to decrypt a message with a given key,
+// and verify it's contents. Any padding will be removed, and a
+// slice to the plaintext is returned. Decryption is done IN PLACE!
+func decryptPayload(keys [][]byte, msg []byte, data []byte) ([]byte, error) {
+	// Ensure we have at least one byte
+	if len(msg) == 0 {
+		return nil, fmt.Errorf("Cannot decrypt empty payload")
 	}
+
+	// Verify the version
+	vsn := encryptionVersion(msg[0])
+	if vsn > maxEncryptionVersion {
+		return nil, fmt.Errorf("Unsupported encryption version %d", msg[0])
+	}
+
+	// Ensure the length is sane
+	if len(msg) < encryptedLength(vsn, 0) {
+		return nil, fmt.Errorf("Payload is too small to decrypt: %d", len(msg))
+	}
+
+	for _, key := range keys {
+		plain, err := decryptMessage(key, msg, data)
+		if err == nil {
+			// Remove the PKCS7 padding for vsn 0
+			if vsn == 0 {
+				return pkcs7decode(plain, aes.BlockSize), nil
+			} else {
+				return plain, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("No installed keys could decrypt the message")
 }

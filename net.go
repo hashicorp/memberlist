@@ -251,8 +251,15 @@ func (m *Memberlist) udpListen() {
 func (m *Memberlist) ingestPacket(buf []byte, from net.Addr) {
 	// Check if encryption is enabled
 	if m.config.SecretKey != nil {
+		keys := [][]byte{m.config.SecretKey}
+		for _, key := range m.config.SecretKeys {
+			if !bytes.Equal(key, m.config.SecretKey) {
+				keys = append(keys, key)
+			}
+		}
+
 		// Decrypt the payload
-		plain, err := decryptPayload(m.config.SecretKey, buf, nil)
+		plain, err := decryptPayload(keys, buf, nil)
 		if err != nil {
 			m.logger.Printf("[ERR] memberlist: Decrypt packet failed: %v", err)
 			return
@@ -665,7 +672,16 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 	// Decrypt the cipherText
 	dataBytes := cipherText.Bytes()[:5]
 	cipherBytes := cipherText.Bytes()[5:]
-	return decryptPayload(m.config.SecretKey, cipherBytes, dataBytes)
+
+	keys := [][]byte{m.config.SecretKey}
+	for _, key := range m.config.SecretKeys {
+		if !bytes.Equal(key, m.config.SecretKey) {
+			keys = append(keys, key)
+		}
+	}
+
+	// Decrypt the payload
+	return decryptPayload(keys, cipherBytes, dataBytes)
 }
 
 // recvRemoteState is used to read the remote state from a connection
