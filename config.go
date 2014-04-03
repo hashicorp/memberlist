@@ -206,6 +206,10 @@ func DefaultLocalConfig() *Config {
 // AddSecretKey will install a new key to the list of usable secret keys. Adding
 // a key to the list will make it available for decrypting.
 func (c *Config) AddSecretKey(key []byte) error {
+	// Don't allow enabling encryption by adding a key
+	if c.SecretKey == nil {
+		return fmt.Errorf("encryption is not enabled")
+	}
 	if len(key) != 16 {
 		return fmt.Errorf("key size must be 16 bytes")
 	}

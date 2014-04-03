@@ -914,3 +914,39 @@ func TestMemberlist_conflictDelegate(t *testing.T) {
 		t.Fatalf("bad: %v %v", mock.existing, mock.other)
 	}
 }
+
+func TestSecretKeyFunctions(t *testing.T) {
+	key1 := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	key2 := []byte{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+
+	c := testConfig()
+	m, err := Create(c)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
+	yield()
+
+	if err = c.AddSecretKey(key1); err == nil {
+		t.Fatalf("Expected encryption disabled error")
+	}
+
+	c.SecretKey = key1
+
+	if err = c.AddSecretKey(key2); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	if err = c.RemoveSecretKey(key1); err == nil {
+		t.Fatalf("Expected key active error")
+	}
+
+	if err = c.UseSecretKey(key2); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	if err = c.RemoveSecretKey(key1); err != nil {
+		t.Fatalf("err: %s", err)
+	}
+}
