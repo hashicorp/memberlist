@@ -140,6 +140,13 @@ type Config struct {
 	LogOutput io.Writer
 }
 
+// Init allocates substructures if they weren't already set.
+func (c *Config) init() {
+	if c.SecretKeys == nil {
+		c.SecretKeys = make(map[string][]byte, 0)
+	}
+}
+
 // DefaultLANConfig returns a sane set of configurations for Memberlist.
 // It uses the hostname as the node name, and otherwise sets very conservative
 // values that are sane for most LAN environments. The default configuration

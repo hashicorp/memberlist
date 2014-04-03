@@ -57,6 +57,7 @@ type Memberlist struct {
 // newMemberlist creates the network listeners.
 // Does not schedule execution of background maintenence.
 func newMemberlist(conf *Config) (*Memberlist, error) {
+	conf.init()
 	if conf.ProtocolVersion < ProtocolVersionMin {
 		return nil, fmt.Errorf("Protocol version '%d' too low. Must be in range: [%d, %d]",
 			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
