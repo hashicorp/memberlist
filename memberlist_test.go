@@ -920,37 +920,30 @@ func TestSecretKeyFunctions(t *testing.T) {
 	key2 := []byte{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
 
 	c := testConfig()
-	m, err := Create(c)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
-	defer m.Shutdown()
 
-	yield()
-
-	if err = c.AddSecretKey(key1); err == nil {
+	if err := c.AddSecretKey(key1); err == nil {
 		t.Fatalf("Expected encryption disabled error")
 	}
 
 	c.SecretKey = key1
 
-	if err = c.UseSecretKey(key2); err == nil {
+	if err := c.UseSecretKey(key2); err == nil {
 		t.Fatalf("Expected key not installed error")
 	}
 
-	if err = c.AddSecretKey(key2); err != nil {
+	if err := c.AddSecretKey(key2); err != nil {
 		t.Fatalf("err: %s", err)
 	}
 
-	if err = c.RemoveSecretKey(key1); err == nil {
+	if err := c.RemoveSecretKey(key1); err == nil {
 		t.Fatalf("Expected key active error")
 	}
 
-	if err = c.UseSecretKey(key2); err != nil {
+	if err := c.UseSecretKey(key2); err != nil {
 		t.Fatalf("err: %s", err)
 	}
 
-	if err = c.RemoveSecretKey(key1); err != nil {
+	if err := c.RemoveSecretKey(key1); err != nil {
 		t.Fatalf("err: %s", err)
 	}
 }
