@@ -183,6 +183,20 @@ func TestCreate_secretKeyEmpty(t *testing.T) {
 	}
 }
 
+func TestCreate_secretKeyWithoutPrimary(t *testing.T) {
+	c := DefaultLANConfig()
+	c.BindAddr = getBindAddr().String()
+	c.SecretKey = make([]byte, 0)
+
+	key := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	c.SecretKeys = [][]byte{key}
+	m, err := Create(c)
+	if err == nil {
+		t.Fatalf("Expected primary key error")
+		m.Shutdown()
+	}
+}
+
 func TestCreate(t *testing.T) {
 	c := testConfig()
 	c.ProtocolVersion = ProtocolVersionMin

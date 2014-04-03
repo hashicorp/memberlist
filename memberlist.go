@@ -70,7 +70,12 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 			return nil, err
 		}
 	} else {
-		conf.SecretKey = nil
+		// Avoid starting if we have secret keys but none designated as active
+		if len(conf.SecretKeys) > 0 {
+			return nil, fmt.Errorf("No SecretKeys designated as primary")
+		} else {
+			conf.SecretKey = nil
+		}
 	}
 
 	tcpAddr := &net.TCPAddr{IP: net.ParseIP(conf.BindAddr), Port: conf.BindPort}
