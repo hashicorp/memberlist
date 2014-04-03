@@ -934,6 +934,10 @@ func TestSecretKeyFunctions(t *testing.T) {
 
 	c.SecretKey = key1
 
+	if err = c.UseSecretKey(key2); err == nil {
+		t.Fatalf("Expected key not installed error")
+	}
+
 	if err = c.AddSecretKey(key2); err != nil {
 		t.Fatalf("err: %s", err)
 	}
