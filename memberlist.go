@@ -66,8 +66,8 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	}
 
 	if len(conf.SecretKey) > 0 {
-		if len(conf.SecretKey) != 16 {
-			return nil, fmt.Errorf("SecretKey must be 16 bytes in length")
+		if err := conf.AddSecretKey(conf.SecretKey); err != nil {
+			return nil, err
 		}
 	} else {
 		conf.SecretKey = nil

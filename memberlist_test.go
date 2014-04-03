@@ -927,12 +927,26 @@ func TestSecretKeyFunctions(t *testing.T) {
 
 	c.SecretKey = key1
 
+	m, err := Create(c)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
 	if err := c.UseSecretKey(key2); err == nil {
 		t.Fatalf("Expected key not installed error")
 	}
 
 	if err := c.AddSecretKey(key2); err != nil {
 		t.Fatalf("err: %s", err)
+	}
+
+	if len(c.SecretKeys) != 2 {
+		t.Fatalf("Expected 2 keys but have %d", len(c.SecretKeys))
+	}
+
+	if !bytes.Equal(c.SecretKey, key1) {
+		t.Fatalf("Unexpected active key change")
 	}
 
 	if err := c.RemoveSecretKey(key1); err == nil {
@@ -943,7 +957,15 @@ func TestSecretKeyFunctions(t *testing.T) {
 		t.Fatalf("err: %s", err)
 	}
 
+	if !bytes.Equal(c.SecretKey, key2) {
+		t.Fatalf("Expected key change but key is unchanged")
+	}
+
 	if err := c.RemoveSecretKey(key1); err != nil {
 		t.Fatalf("err: %s", err)
+	}
+
+	if len(c.SecretKeys) != 1 {
+		t.Fatalf("Expected 1 key but have %d", len(c.SecretKeys))
 	}
 }

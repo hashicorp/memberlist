@@ -204,7 +204,8 @@ func DefaultLocalConfig() *Config {
 }
 
 // AddSecretKey will install a new key to the list of usable secret keys. Adding
-// a key to the list will make it available for decrypting.
+// a key to the list will make it available for decrypting. If the key already
+// exists in the key list, this function will just return noop.
 func (c *Config) AddSecretKey(key []byte) error {
 	// Don't allow enabling encryption by adding a key
 	if c.SecretKey == nil {
@@ -215,7 +216,7 @@ func (c *Config) AddSecretKey(key []byte) error {
 	}
 	for _, installedKey := range c.SecretKeys {
 		if bytes.Equal(installedKey, key) {
-			return fmt.Errorf("key is already installed", key)
+			return nil
 		}
 	}
 	c.SecretKeys = append(c.SecretKeys, key)
