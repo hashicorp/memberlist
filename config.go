@@ -249,3 +249,14 @@ func (c *Config) RemoveSecretKey(key []byte) error {
 	}
 	return nil
 }
+
+// GetSecretKeys will return all of the keys in the correct priority order
+func (c *Config) GetSecretKeys() (keys [][]byte) {
+	keys = append(keys, c.SecretKey)
+	for _, key := range c.SecretKeys {
+		if !bytes.Equal(key, c.SecretKey) {
+			keys = append(keys, key)
+		}
+	}
+	return
+}
