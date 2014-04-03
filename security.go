@@ -135,6 +135,8 @@ func encryptPayload(vsn encryptionVersion, key []byte, msg []byte, data []byte, 
 	return nil
 }
 
+// decryptMessage performs the actual decryption of ciphertext. This is in its
+// own function to allow it to be called on all keys easily.
 func decryptMessage(key, msg []byte, data []byte) ([]byte, error) {
 	// Get the AES block cipher
 	aesBlock, err := aes.NewCipher(key)
