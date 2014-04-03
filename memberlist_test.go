@@ -959,7 +959,7 @@ func TestSecretKeyFunctions(t *testing.T) {
 		t.Fatalf("Expected 2 keys but have %d", len(c.SecretKeys))
 	}
 
-	if !bytes.Equal(c.SecretKey, key1) {
+	if !bytes.Equal(c.SecretKey, key1) || !bytes.Equal(c.SecretKeys[0], key1) {
 		t.Fatalf("Unexpected active key change")
 	}
 
@@ -971,7 +971,7 @@ func TestSecretKeyFunctions(t *testing.T) {
 		t.Fatalf("err: %s", err)
 	}
 
-	if !bytes.Equal(c.SecretKey, key2) {
+	if !bytes.Equal(c.SecretKey, key2) || !bytes.Equal(c.SecretKeys[0], key2) {
 		t.Fatalf("Expected key change but key is unchanged")
 	}
 

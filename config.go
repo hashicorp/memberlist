@@ -219,7 +219,8 @@ func (c *Config) AddSecretKey(key []byte) error {
 			return nil
 		}
 	}
-	c.SecretKeys = append(c.SecretKeys, key)
+	keys := append(c.SecretKeys, key)
+	c.setSecretKeys(keys)
 	return nil
 }
 
@@ -230,6 +231,7 @@ func (c *Config) UseSecretKey(key []byte) error {
 	for _, installedKey := range c.SecretKeys {
 		if bytes.Equal(key, installedKey) {
 			c.SecretKey = key
+			c.setSecretKeys(c.SecretKeys)
 			return nil
 		}
 	}
@@ -244,19 +246,21 @@ func (c *Config) RemoveSecretKey(key []byte) error {
 	}
 	for i, installedKey := range c.SecretKeys {
 		if bytes.Equal(key, installedKey) {
-			c.SecretKeys = append(c.SecretKeys[:i], c.SecretKeys[i+1:]...)
+			keys := append(c.SecretKeys[:i], c.SecretKeys[i+1:]...)
+			c.setSecretKeys(keys)
 		}
 	}
 	return nil
 }
 
-// GetSecretKeys will return all of the keys in the correct priority order
-func (c *Config) GetSecretKeys() (keys [][]byte) {
-	keys = append(keys, c.SecretKey)
-	for _, key := range c.SecretKeys {
+// setSecretKeys will take a list of keys, arrange them with primary key first,
+// and set them into the config structure.
+func (c *Config) setSecretKeys(keys [][]byte) {
+	installKeys := [][]byte{c.SecretKey}
+	for _, key := range keys {
 		if !bytes.Equal(key, c.SecretKey) {
-			keys = append(keys, key)
+			installKeys = append(installKeys, key)
 		}
 	}
-	return
+	c.SecretKeys = installKeys
 }

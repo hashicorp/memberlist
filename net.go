@@ -251,8 +251,7 @@ func (m *Memberlist) udpListen() {
 func (m *Memberlist) ingestPacket(buf []byte, from net.Addr) {
 	// Check if encryption is enabled
 	if m.config.SecretKey != nil {
-		// Get the keys in the right order
-		keys := m.config.GetSecretKeys()
+		keys := m.config.SecretKeys
 
 		// Decrypt the payload
 		plain, err := decryptPayload(keys, buf, nil)
@@ -669,8 +668,7 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 	dataBytes := cipherText.Bytes()[:5]
 	cipherBytes := cipherText.Bytes()[5:]
 
-	// Get the keys in the right order
-	keys := m.config.GetSecretKeys()
+	keys := m.config.SecretKeys
 
 	// Decrypt the payload
 	return decryptPayload(keys, cipherBytes, dataBytes)
