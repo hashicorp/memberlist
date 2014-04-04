@@ -7,15 +7,14 @@ import (
 )
 
 type Keyring struct {
-	// The keyring lock gives us stronger consistency gurantees while performing
-	// IO operations that alter or read from the keyring.
-	keyringLock sync.Mutex
-
 	// Keys stores the key data used during encryption and decryption. It is
 	// ordered in such a way where the first key (index 0) is the primary key,
 	// which is used for encrypting messages, and is the first key tried during
 	// message decryption.
 	keys [][]byte
+
+	// The keyring lock is used while performing IO operations on the keyring.
+	keyringLock sync.Mutex
 }
 
 // Init allocates substructures
