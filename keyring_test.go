@@ -5,17 +5,19 @@ import (
 	"testing"
 )
 
-func TestKeyring(t *testing.T) {
-	key1 := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	key2 := []byte{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
-
+func TestKeyring_EmptyRing(t *testing.T) {
 	// Keyrings can be created with no encryption keys (disabled encryption)
-	keyring, err := NewKeyring(nil, nil)
+	_, err := NewKeyring(nil, nil)
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
+}
 
-	keyring, err = NewKeyring(nil, key1)
+func TestKeyring_PrimaryOnly(t *testing.T) {
+	key1 := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	key2 := []byte{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+
+	keyring, err := NewKeyring(nil, key1)
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
@@ -57,5 +59,28 @@ func TestKeyring(t *testing.T) {
 	keys = keyring.GetKeys()
 	if len(keys) != 1 {
 		t.Fatalf("Expected 1 key but have %d", len(keys))
+	}
+}
+
+func TestKeyRing_MultiKey(t *testing.T) {
+	keys := [][]byte{
+		[]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		[]byte{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0},
+		[]byte{8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7},
+	}
+
+	keyring, err := NewKeyring(keys, keys[1])
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	primaryKey := keyring.GetPrimaryKey()
+	if !bytes.Equal(primaryKey, keys[1]) {
+		t.Fatalf("Unexpected primary key %v", primaryKey)
+	}
+
+	ringKeys := keyring.GetKeys()
+	if len(ringKeys) != 3 {
+		t.Fatalf("Expected 3 keys in ring, have %d", len(ringKeys))
 	}
 }
