@@ -250,7 +250,7 @@ func (m *Memberlist) udpListen() {
 
 func (m *Memberlist) ingestPacket(buf []byte, from net.Addr) {
 	// Check if encryption is enabled
-	if m.config.Keyring.IsEnabled() {
+	if m.config.EncryptionEnabled {
 		// Decrypt the payload
 		plain, err := decryptPayload(m.config.Keyring.GetKeys(), buf, nil)
 		if err != nil {
@@ -446,7 +446,7 @@ func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType messageType, msg inte
 func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	// Check if we can piggy back any messages
 	bytesAvail := udpSendBuf - len(msg) - compoundHeaderOverhead
-	if m.config.Keyring.IsEnabled() {
+	if m.config.EncryptionEnabled {
 		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
 	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
@@ -484,7 +484,7 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 	}
 
 	// Check if we have encryption enabled
-	if m.config.Keyring.IsEnabled() {
+	if m.config.EncryptionEnabled {
 		// Encrypt the payload
 		var buf bytes.Buffer
 		primaryKey := m.config.Keyring.GetPrimaryKey()
@@ -601,7 +601,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 	}
 
 	// Check if encryption is enabled
-	if m.config.Keyring.IsEnabled() {
+	if m.config.EncryptionEnabled {
 		crypt, err := m.encryptLocalState(sendBuf)
 		if err != nil {
 			m.logger.Printf("[ERROR] memberlist: Failed to encrypt local state: %v", err)
@@ -690,7 +690,7 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 
 	// Check if the message is encrypted
 	if msgType == encryptMsg {
-		if !m.config.Keyring.IsEnabled() {
+		if !m.config.EncryptionEnabled {
 			return false, nil, nil,
 				fmt.Errorf("Remote state is encrypted and encryption is not configured")
 		}
@@ -703,7 +703,7 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 		// Reset message type and bufConn
 		msgType = messageType(plain[0])
 		bufConn = bytes.NewReader(plain[1:])
-	} else if m.config.Keyring.IsEnabled() {
+	} else if m.config.EncryptionEnabled {
 		return false, nil, nil,
 			fmt.Errorf("Encryption is configured but remote state is not encrypted")
 	}

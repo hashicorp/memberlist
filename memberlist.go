@@ -71,6 +71,12 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	}
 	conf.Keyring = keyring
 
+	if len(keyring.GetKeys()) > 0 {
+		conf.EncryptionEnabled = true
+	} else {
+		conf.EncryptionEnabled = false
+	}
+
 	tcpAddr := &net.TCPAddr{IP: net.ParseIP(conf.BindAddr), Port: conf.BindPort}
 	tcpLn, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {
@@ -249,7 +255,7 @@ func (m *Memberlist) setAlive() error {
 
 	// Check if this is a public address without encryption
 	addrStr := net.IP(advertiseAddr).String()
-	if !isPrivateIP(addrStr) && !isLoopbackIP(addrStr) && !m.config.Keyring.IsEnabled() {
+	if !isPrivateIP(addrStr) && !isLoopbackIP(addrStr) && !m.config.EncryptionEnabled {
 		m.logger.Printf("[WARN] memberlist: Binding to public address without encryption!")
 	}
 

@@ -117,8 +117,11 @@ type Config struct {
 	// message fails to decrypt using the key contained in SecretKey.
 	SecretKeys [][]byte
 
-	// The keyring holds all of the encryption keys used internally by
-	// memberlist.
+	// EncryptionEnabled is set during memberlist startup and indicates
+	// whether or not the current session should use encryption.
+	EncryptionEnabled bool
+
+	// The keyring holds all of the encryption keys used internally.
 	Keyring *Keyring
 
 	// Delegate and Events are delegates for receiving and providing
@@ -170,6 +173,8 @@ func DefaultLANConfig() *Config {
 		EnableCompression: true, // Enable compression by default
 
 		SecretKey: nil, // Key used for encrypting data
+
+		EncryptionEnabled: false, // Encryption gets enabled if keys are passed
 	}
 }
 

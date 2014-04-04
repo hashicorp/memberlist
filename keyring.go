@@ -7,9 +7,6 @@ import (
 )
 
 type Keyring struct {
-	// Indicates whether or not encryption is enabled
-	enabled bool
-
 	// The keyring lock gives us stronger consistency gurantees while performing
 	// IO operations that alter or read from the keyring.
 	keyringLock sync.Mutex
@@ -35,15 +32,14 @@ func (k *Keyring) init() {
 //   - Pass only a primary key
 //
 // If only a primary key is passed, then it will be automatically added to the
-// keyring and encryption will be enabled. Encryption being enabled or disabled
-// is not a setting that can change during a running session. It is a condition
-// that is detected at start time and persists for the life of the process.
+// keyring. If creating a keyring with multiple keys, one key must be designated
+// primary by passing it as the primaryKey. If the primaryKey does not exist in
+// the list of secondary keys, it will be automatically added at position 0.
 func NewKeyring(keys [][]byte, primaryKey []byte) (*Keyring, error) {
-	keyring := &Keyring{enabled: false}
+	keyring := &Keyring{}
 	keyring.init()
 
 	if len(keys) > 0 || len(primaryKey) > 0 {
-		keyring.enabled = true
 		if len(primaryKey) == 0 {
 			return nil, fmt.Errorf("Empty primary key not allowed")
 		}
@@ -60,20 +56,10 @@ func NewKeyring(keys [][]byte, primaryKey []byte) (*Keyring, error) {
 	return keyring, nil
 }
 
-// IsEnabled returns whether or not encryption is used in this session
-func (k *Keyring) IsEnabled() bool {
-	return k.enabled
-}
-
 // AddKey will install a new key on the ring. Adding a key to the ring will make
 // it available for use in decryption. If the key already exists on the ring,
 // this function will just return noop.
 func (k *Keyring) AddKey(key []byte) error {
-	// Don't allow enabling encryption by adding a key
-	if !k.enabled {
-		return fmt.Errorf("encryption is not enabled")
-	}
-
 	// Encorce 16-byte key size
 	if len(key) != 16 {
 		return fmt.Errorf("key size must be 16 bytes")

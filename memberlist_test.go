@@ -172,14 +172,15 @@ func TestCreate_secretKeyEmpty(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
 	c.SecretKey = make([]byte, 0)
+	c.SecretKeys = make([][]byte, 0)
 	m, err := Create(c)
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
 	defer m.Shutdown()
 
-	if m.config.Keyring.IsEnabled() {
-		t.Fatalf("Expected keyring to be disabled")
+	if m.config.EncryptionEnabled {
+		t.Fatalf("Expected encryption to be disabled")
 	}
 }
 
