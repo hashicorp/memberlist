@@ -77,7 +77,7 @@ func (k *Keyring) AddKey(key []byte) error {
 	if primaryKey == nil {
 		primaryKey = key
 	}
-	k.setKeys(keys, primaryKey)
+	k.installKeys(keys, primaryKey)
 	return nil
 }
 
@@ -86,7 +86,7 @@ func (k *Keyring) AddKey(key []byte) error {
 func (k *Keyring) UseKey(key []byte) error {
 	for _, installedKey := range k.keys {
 		if bytes.Equal(key, installedKey) {
-			k.setKeys(k.keys, key)
+			k.installKeys(k.keys, key)
 			return nil
 		}
 	}
@@ -102,26 +102,26 @@ func (k *Keyring) RemoveKey(key []byte) error {
 	for i, installedKey := range k.keys {
 		if bytes.Equal(key, installedKey) {
 			keys := append(k.keys[:i], k.keys[i+1:]...)
-			k.setKeys(keys, k.keys[0])
+			k.installKeys(keys, k.keys[0])
 		}
 	}
 	return nil
 }
 
-// setKeys will take out a lock on the keyring, and replace the keys with a new
-// set of keys. The key indicated by primaryKey will be installed as the new
+// installKeys will take out a lock on the keyring, and replace the keys with a
+// new set of keys. The key indicated by primaryKey will be installed as the new
 // primary key.
-func (k *Keyring) setKeys(keys [][]byte, primaryKey []byte) {
+func (k *Keyring) installKeys(keys [][]byte, primaryKey []byte) {
 	k.keyringLock.Lock()
 	defer k.keyringLock.Unlock()
 
-	installKeys := [][]byte{primaryKey}
+	newKeys := [][]byte{primaryKey}
 	for _, key := range keys {
 		if !bytes.Equal(key, primaryKey) {
-			installKeys = append(installKeys, key)
+			newKeys = append(newKeys, key)
 		}
 	}
-	k.keys = installKeys
+	k.keys = newKeys
 }
 
 // GetKeys returns the current set of keys on the ring.
