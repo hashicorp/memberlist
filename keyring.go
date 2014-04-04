@@ -26,6 +26,18 @@ func (k *Keyring) init() {
 	k.keys = make([][]byte, 0)
 }
 
+// NewKeyring constructs a new container for a set of encryption keys. The
+// keyring contains all key data used internally by memberlist.
+//
+// While creating a new keyring, you must do one of:
+//   - Omit keys and primary key, effectively disabling encryption
+//   - Pass a set of keys plus the primary key
+//   - Pass only a primary key
+//
+// If only a primary key is passed, then it will be automatically added to the
+// keyring and encryption will be enabled. Encryption being enabled or disabled
+// is not a setting that can change during a running session. It is a condition
+// that is detected at start time and persists for the life of the process.
 func NewKeyring(keys [][]byte, primaryKey []byte) (*Keyring, error) {
 	keyring := &Keyring{enabled: false}
 	keyring.init()
@@ -48,19 +60,21 @@ func NewKeyring(keys [][]byte, primaryKey []byte) (*Keyring, error) {
 	return keyring, nil
 }
 
+// IsEnabled returns whether or not encryption is used in this session
 func (k *Keyring) IsEnabled() bool {
 	return k.enabled
 }
 
-// AddSecretKey will install a new key to the list of usable secret keys. Adding
-// a key to the list will make it available for decrypting. If the key already
-// exists in the key list, this function will just return noop.
+// AddKey will install a new key on the ring. Adding a key to the ring will make
+// it available for use in decryption. If the key already exists on the ring,
+// this function will just return noop.
 func (k *Keyring) AddKey(key []byte) error {
 	// Don't allow enabling encryption by adding a key
 	if !k.enabled {
 		return fmt.Errorf("encryption is not enabled")
 	}
 
+	// Encorce 16-byte key size
 	if len(key) != 16 {
 		return fmt.Errorf("key size must be 16 bytes")
 	}
@@ -81,9 +95,8 @@ func (k *Keyring) AddKey(key []byte) error {
 	return nil
 }
 
-// UseSecretKey changes the key used to encrypt messages. This is the only key
-// used to encrypt messages, so peers should know this key before this method
-// is invoked.
+// UseKey changes the key used to encrypt messages. This is the only key used to
+// encrypt messages, so peers should know this key before this method is called.
 func (k *Keyring) UseKey(key []byte) error {
 	for _, installedKey := range k.keys {
 		if bytes.Equal(key, installedKey) {
@@ -94,8 +107,8 @@ func (k *Keyring) UseKey(key []byte) error {
 	return fmt.Errorf("Requested key is not in the keyring")
 }
 
-// RemoveSecretKey drops a key from the list of available keys. This will return
-// an error if the key requested for removal is the currently active key.
+// RemoveKey drops a key from the keyring. This will return an error if the key
+// requested for removal is currently at position 0 (primary key).
 func (k *Keyring) RemoveKey(key []byte) error {
 	if bytes.Equal(key, k.keys[0]) {
 		return fmt.Errorf("Removing the active key is not allowed")
@@ -109,8 +122,9 @@ func (k *Keyring) RemoveKey(key []byte) error {
 	return nil
 }
 
-// setSecretKeys will take a list of keys, arrange them with primary key first,
-// and set them into the config structure.
+// setKeys will take out a lock on the keyring, and replace the keys with a new
+// set of keys. The key indicated by primaryKey will be installed as the new
+// primary key.
 func (k *Keyring) setKeys(keys [][]byte, primaryKey []byte) {
 	k.keyringLock.Lock()
 	defer k.keyringLock.Unlock()
@@ -124,6 +138,7 @@ func (k *Keyring) setKeys(keys [][]byte, primaryKey []byte) {
 	k.keys = installKeys
 }
 
+// GetKeys returns the current set of keys on the ring.
 func (k *Keyring) GetKeys() [][]byte {
 	k.keyringLock.Lock()
 	defer k.keyringLock.Unlock()
@@ -131,6 +146,8 @@ func (k *Keyring) GetKeys() [][]byte {
 	return k.keys
 }
 
+// GetPrimaryKey returns the key on the ring at position 0. This is the key used
+// for encrypting messages, and is the first key tried for decrypting messages.
 func (k *Keyring) GetPrimaryKey() (key []byte) {
 	k.keyringLock.Lock()
 	defer k.keyringLock.Unlock()
