@@ -250,9 +250,9 @@ func (m *Memberlist) udpListen() {
 
 func (m *Memberlist) ingestPacket(buf []byte, from net.Addr) {
 	// Check if encryption is enabled
-	if m.config.SecretKey != nil {
+	if m.config.Keyring.IsEnabled() {
 		// Decrypt the payload
-		plain, err := decryptPayload(m.config.SecretKeys, buf, nil)
+		plain, err := decryptPayload(m.config.Keyring.GetKeys(), buf, nil)
 		if err != nil {
 			m.logger.Printf("[ERR] memberlist: Decrypt packet failed: %v", err)
 			return
@@ -446,7 +446,7 @@ func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType messageType, msg inte
 func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	// Check if we can piggy back any messages
 	bytesAvail := udpSendBuf - len(msg) - compoundHeaderOverhead
-	if m.config.SecretKey != nil {
+	if m.config.Keyring.IsEnabled() {
 		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
 	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
@@ -484,10 +484,11 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 	}
 
 	// Check if we have encryption enabled
-	if m.config.SecretKey != nil {
+	if m.config.Keyring.IsEnabled() {
 		// Encrypt the payload
 		var buf bytes.Buffer
-		err := encryptPayload(m.encryptionVersion(), m.config.SecretKey, msg, nil, &buf)
+		primaryKey := m.config.Keyring.GetPrimaryKey()
+		err := encryptPayload(m.encryptionVersion(), primaryKey, msg, nil, &buf)
 		if err != nil {
 			m.logger.Printf("[ERR] memberlist: Encryption of message failed: %v", err)
 			return err
@@ -600,7 +601,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 	}
 
 	// Check if encryption is enabled
-	if m.config.SecretKey != nil {
+	if m.config.Keyring.IsEnabled() {
 		crypt, err := m.encryptLocalState(sendBuf)
 		if err != nil {
 			m.logger.Printf("[ERROR] memberlist: Failed to encrypt local state: %v", err)
@@ -632,7 +633,8 @@ func (m *Memberlist) encryptLocalState(sendBuf []byte) ([]byte, error) {
 	buf.Write(sizeBuf)
 
 	// Write the encrypted cipher text to the buffer
-	err := encryptPayload(encVsn, m.config.SecretKey, sendBuf, buf.Bytes()[:5], &buf)
+	key := m.config.Keyring.GetPrimaryKey()
+	err := encryptPayload(encVsn, key, sendBuf, buf.Bytes()[:5], &buf)
 	if err != nil {
 		return nil, err
 	}
@@ -667,7 +669,8 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 	cipherBytes := cipherText.Bytes()[5:]
 
 	// Decrypt the payload
-	return decryptPayload(m.config.SecretKeys, cipherBytes, dataBytes)
+	keys := m.config.Keyring.GetKeys()
+	return decryptPayload(keys, cipherBytes, dataBytes)
 }
 
 // recvRemoteState is used to read the remote state from a connection
@@ -687,9 +690,9 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 
 	// Check if the message is encrypted
 	if msgType == encryptMsg {
-		if m.config.SecretKey == nil {
+		if !m.config.Keyring.IsEnabled() {
 			return false, nil, nil,
-				fmt.Errorf("Remote state is encrypted and SecretKey is not configured")
+				fmt.Errorf("Remote state is encrypted and encryption is not configured")
 		}
 
 		plain, err := m.decryptRemoteState(bufConn)
@@ -700,9 +703,9 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 		// Reset message type and bufConn
 		msgType = messageType(plain[0])
 		bufConn = bytes.NewReader(plain[1:])
-	} else if m.config.SecretKey != nil {
+	} else if m.config.Keyring.IsEnabled() {
 		return false, nil, nil,
-			fmt.Errorf("SecretKey is configured but remote state is not encrypted")
+			fmt.Errorf("Encryption is configured but remote state is not encrypted")
 	}
 
 	// Get the msgPack decoders

@@ -1,8 +1,6 @@
 package memberlist
 
 import (
-	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"time"
@@ -119,6 +117,10 @@ type Config struct {
 	// message fails to decrypt using the key contained in SecretKey.
 	SecretKeys [][]byte
 
+	// The keyring holds all of the encryption keys used internally by
+	// memberlist.
+	Keyring *Keyring
+
 	// Delegate and Events are delegates for receiving and providing
 	// data to memberlist via callback mechanisms. For Delegate, see
 	// the Delegate interface. For Events, see the EventDelegate interface.
@@ -167,8 +169,7 @@ func DefaultLANConfig() *Config {
 
 		EnableCompression: true, // Enable compression by default
 
-		SecretKey:  nil,               // Key used for encrypting data
-		SecretKeys: make([][]byte, 0), // Keys available for decrypting
+		SecretKey: nil, // Key used for encrypting data
 	}
 }
 
@@ -201,66 +202,4 @@ func DefaultLocalConfig() *Config {
 	conf.ProbeInterval = time.Second
 	conf.GossipInterval = 100 * time.Millisecond
 	return conf
-}
-
-// AddSecretKey will install a new key to the list of usable secret keys. Adding
-// a key to the list will make it available for decrypting. If the key already
-// exists in the key list, this function will just return noop.
-func (c *Config) AddSecretKey(key []byte) error {
-	// Don't allow enabling encryption by adding a key
-	if c.SecretKey == nil {
-		return fmt.Errorf("encryption is not enabled")
-	}
-	if len(key) != 16 {
-		return fmt.Errorf("key size must be 16 bytes")
-	}
-	for _, installedKey := range c.SecretKeys {
-		if bytes.Equal(installedKey, key) {
-			return nil
-		}
-	}
-	keys := append(c.SecretKeys, key)
-	c.setSecretKeys(keys)
-	return nil
-}
-
-// UseSecretKey changes the key used to encrypt messages. This is the only key
-// used to encrypt messages, so peers should know this key before this method
-// is invoked.
-func (c *Config) UseSecretKey(key []byte) error {
-	for _, installedKey := range c.SecretKeys {
-		if bytes.Equal(key, installedKey) {
-			c.SecretKey = key
-			c.setSecretKeys(c.SecretKeys)
-			return nil
-		}
-	}
-	return fmt.Errorf("requested key is not installed")
-}
-
-// RemoveSecretKey drops a key from the list of available keys. This will return
-// an error if the key requested for removal is the currently active key.
-func (c *Config) RemoveSecretKey(key []byte) error {
-	if bytes.Equal(key, c.SecretKey) {
-		return fmt.Errorf("removing the active key is not allowed")
-	}
-	for i, installedKey := range c.SecretKeys {
-		if bytes.Equal(key, installedKey) {
-			keys := append(c.SecretKeys[:i], c.SecretKeys[i+1:]...)
-			c.setSecretKeys(keys)
-		}
-	}
-	return nil
-}
-
-// setSecretKeys will take a list of keys, arrange them with primary key first,
-// and set them into the config structure.
-func (c *Config) setSecretKeys(keys [][]byte) {
-	installKeys := [][]byte{c.SecretKey}
-	for _, key := range keys {
-		if !bytes.Equal(key, c.SecretKey) {
-			installKeys = append(installKeys, key)
-		}
-	}
-	c.SecretKeys = installKeys
 }
