@@ -77,13 +77,30 @@ func TestDecryptMultipleKeys(t *testing.T) {
 		[]byte{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0},
 	}
 
+	// First encrypt using the primary key and make sure we can decrypt
 	var buf bytes.Buffer
-	err := encryptPayload(1, keys[1], plaintext, extra, &buf)
+	err := encryptPayload(1, keys[0], plaintext, extra, &buf)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
 	msg, err := decryptPayload(keys, buf.Bytes(), extra)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	if !bytes.Equal(msg, plaintext) {
+		t.Fatalf("bad: %v", msg)
+	}
+
+	// Now encrypt with a secondary key and decrypt again.
+	buf.Reset()
+	err = encryptPayload(1, keys[1], plaintext, extra, &buf)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	msg, err = decryptPayload(keys, buf.Bytes(), extra)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
