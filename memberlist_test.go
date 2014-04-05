@@ -149,6 +149,7 @@ func TestCreate_secretKey(t *testing.T) {
 		{make([]byte, 0), false},
 		{[]byte("abc"), true},
 		{make([]byte, 16), false},
+		{make([]byte, 32), true},
 	}
 
 	for _, tc := range cases {
@@ -172,29 +173,60 @@ func TestCreate_secretKeyEmpty(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
 	c.SecretKey = make([]byte, 0)
-	c.SecretKeys = make([][]byte, 0)
 	m, err := Create(c)
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
 	defer m.Shutdown()
 
-	if m.config.EncryptionEnabled {
+	if m.config.EncryptionEnabled() {
 		t.Fatalf("Expected encryption to be disabled")
 	}
 }
 
-func TestCreate_secretKeyWithoutPrimary(t *testing.T) {
+func TestCreate_keyringOnly(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
-	c.SecretKey = make([]byte, 0)
+	keyring, err := NewKeyring(nil, make([]byte, 16))
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	c.Keyring = keyring
 
-	key := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	c.SecretKeys = [][]byte{key}
 	m, err := Create(c)
-	if err == nil {
-		t.Fatalf("Expected primary key error")
-		m.Shutdown()
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
+	if !m.config.EncryptionEnabled() {
+		t.Fatalf("Expected encryption to be enabled")
+	}
+}
+
+func TestCreate_keyringAndSecretKey(t *testing.T) {
+	c := DefaultLANConfig()
+	c.BindAddr = getBindAddr().String()
+	keyring, err := NewKeyring(nil, make([]byte, 16))
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	c.Keyring = keyring
+	c.SecretKey = []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+
+	m, err := Create(c)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
+	if !m.config.EncryptionEnabled() {
+		t.Fatalf("Expected encryption to be enabled")
+	}
+
+	ringKeys := c.Keyring.GetKeys()
+	if !bytes.Equal(c.SecretKey, ringKeys[0]) {
+		t.Fatalf("Unexpected primary key %v", ringKeys[0])
 	}
 }
 

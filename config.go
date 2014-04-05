@@ -110,19 +110,8 @@ type Config struct {
 	// The primary encryption key is the only key used to encrypt messages and
 	// the first key used while attempting to decrypt messages. Providing a
 	// value for this primary key will enable message-level encryption and
-	// verification.
+	// verification, and automatically install the key onto the keyring.
 	SecretKey []byte
-
-	// SecretKeys is a used to initialize a "ring" of keys which can be used
-	// for decryption. Multiple keys are supported in the keyring. Passing in a
-	// set of keys requires that you also pass a SecretKey to initialize the
-	// primary key in the ring. The primary key can also be contained in this
-	// set without any negative consequences.
-	SecretKeys [][]byte
-
-	// EncryptionEnabled is set during memberlist startup and indicates
-	// whether or not the current session should use encryption.
-	EncryptionEnabled bool
 
 	// The keyring holds all of the encryption keys used internally. It is
 	// automatically initialized using the SecretKey and SecretKeys values.
@@ -176,9 +165,9 @@ func DefaultLANConfig() *Config {
 
 		EnableCompression: true, // Enable compression by default
 
-		SecretKey: nil, // Key used for encrypting data
+		SecretKey: nil,
 
-		EncryptionEnabled: false, // Encryption gets enabled if keys are passed
+		Keyring: nil,
 	}
 }
 
@@ -211,4 +200,12 @@ func DefaultLocalConfig() *Config {
 	conf.ProbeInterval = time.Second
 	conf.GossipInterval = 100 * time.Millisecond
 	return conf
+}
+
+// Returns whether or not encryption is enabled
+func (c *Config) EncryptionEnabled() bool {
+	if c.Keyring == nil || len(c.Keyring.GetKeys()) == 0 {
+		return false
+	}
+	return true
 }
