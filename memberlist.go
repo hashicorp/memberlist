@@ -66,11 +66,20 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	}
 
 	if len(conf.SecretKey) > 0 {
-		if len(conf.SecretKey) != 16 {
-			return nil, fmt.Errorf("SecretKey must be 16 bytes in length")
+		if conf.Keyring == nil {
+			keyring, err := NewKeyring(nil, conf.SecretKey)
+			if err != nil {
+				return nil, err
+			}
+			conf.Keyring = keyring
+		} else {
+			if err := conf.Keyring.AddKey(conf.SecretKey); err != nil {
+				return nil, err
+			}
+			if err := conf.Keyring.UseKey(conf.SecretKey); err != nil {
+				return nil, err
+			}
 		}
-	} else {
-		conf.SecretKey = nil
 	}
 
 	tcpAddr := &net.TCPAddr{IP: net.ParseIP(conf.BindAddr), Port: conf.BindPort}
@@ -251,7 +260,7 @@ func (m *Memberlist) setAlive() error {
 
 	// Check if this is a public address without encryption
 	addrStr := net.IP(advertiseAddr).String()
-	if !isPrivateIP(addrStr) && !isLoopbackIP(addrStr) && m.config.SecretKey == nil {
+	if !isPrivateIP(addrStr) && !isLoopbackIP(addrStr) && !m.config.EncryptionEnabled() {
 		m.logger.Printf("[WARN] memberlist: Binding to public address without encryption!")
 	}
 

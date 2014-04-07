@@ -106,9 +106,16 @@ type Config struct {
 	// utilization. This is only available starting at protocol version 1.
 	EnableCompression bool
 
-	// SecretKey is provided if message level encryption and verification
-	// are to be used. This key must be 16 bytes.
+	// SecretKey is used to initialize the primary encryption key in a keyring.
+	// The primary encryption key is the only key used to encrypt messages and
+	// the first key used while attempting to decrypt messages. Providing a
+	// value for this primary key will enable message-level encryption and
+	// verification, and automatically install the key onto the keyring.
 	SecretKey []byte
+
+	// The keyring holds all of the encryption keys used internally. It is
+	// automatically initialized using the SecretKey and SecretKeys values.
+	Keyring *Keyring
 
 	// Delegate and Events are delegates for receiving and providing
 	// data to memberlist via callback mechanisms. For Delegate, see
@@ -157,7 +164,10 @@ func DefaultLANConfig() *Config {
 		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly
 
 		EnableCompression: true, // Enable compression by default
-		SecretKey:         nil,
+
+		SecretKey: nil,
+
+		Keyring: nil,
 	}
 }
 
@@ -190,4 +200,12 @@ func DefaultLocalConfig() *Config {
 	conf.ProbeInterval = time.Second
 	conf.GossipInterval = 100 * time.Millisecond
 	return conf
+}
+
+// Returns whether or not encryption is enabled
+func (c *Config) EncryptionEnabled() bool {
+	if c.Keyring == nil || len(c.Keyring.GetKeys()) == 0 {
+		return false
+	}
+	return true
 }
