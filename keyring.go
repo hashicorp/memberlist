@@ -14,7 +14,7 @@ type Keyring struct {
 	keys [][]byte
 
 	// The keyring lock is used while performing IO operations on the keyring.
-	sync.Mutex
+	l sync.Mutex
 }
 
 // Init allocates substructures
@@ -111,8 +111,8 @@ func (k *Keyring) RemoveKey(key []byte) error {
 // new set of keys. The key indicated by primaryKey will be installed as the new
 // primary key.
 func (k *Keyring) installKeys(keys [][]byte, primaryKey []byte) {
-	k.Lock()
-	defer k.Unlock()
+	k.l.Lock()
+	defer k.l.Unlock()
 
 	newKeys := [][]byte{primaryKey}
 	for _, key := range keys {
@@ -125,8 +125,8 @@ func (k *Keyring) installKeys(keys [][]byte, primaryKey []byte) {
 
 // GetKeys returns the current set of keys on the ring.
 func (k *Keyring) GetKeys() [][]byte {
-	k.Lock()
-	defer k.Unlock()
+	k.l.Lock()
+	defer k.l.Unlock()
 
 	return k.keys
 }
@@ -134,8 +134,8 @@ func (k *Keyring) GetKeys() [][]byte {
 // GetPrimaryKey returns the key on the ring at position 0. This is the key used
 // for encrypting messages, and is the first key tried for decrypting messages.
 func (k *Keyring) GetPrimaryKey() (key []byte) {
-	k.Lock()
-	defer k.Unlock()
+	k.l.Lock()
+	defer k.l.Unlock()
 
 	if len(k.keys) > 0 {
 		key = k.keys[0]
