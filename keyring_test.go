@@ -68,7 +68,7 @@ func TestKeyring_AddRemoveUse(t *testing.T) {
 
 	keys := keyring.GetKeys()
 	if !bytes.Equal(keys[0], TestKeys[1]) {
-		t.Fatalf("Unexpected active key change")
+		t.Fatalf("Unexpected primary key change")
 	}
 
 	if len(keys) != 2 {

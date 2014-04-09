@@ -96,7 +96,7 @@ func (k *Keyring) UseKey(key []byte) error {
 // requested for removal is currently at position 0 (primary key).
 func (k *Keyring) RemoveKey(key []byte) error {
 	if bytes.Equal(key, k.keys[0]) {
-		return fmt.Errorf("Removing the active key is not allowed")
+		return fmt.Errorf("Removing the primary key is not allowed")
 	}
 	for i, installedKey := range k.keys {
 		if bytes.Equal(key, installedKey) {
