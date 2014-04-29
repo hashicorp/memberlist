@@ -616,8 +616,14 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		return
 	}
 
-	// Bail if the incarnation number is old
-	if a.Incarnation <= state.Incarnation {
+	// Bail if the incarnation number is older, and this is not about us
+	isLocalNode := state.Name == m.config.Name
+	if a.Incarnation <= state.Incarnation && !isLocalNode {
+		return
+	}
+
+	// Bail if strictly less and this is about us
+	if a.Incarnation < state.Incarnation && isLocalNode {
 		return
 	}
 
@@ -629,7 +635,30 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 	oldMeta := state.Meta
 
 	// If this is us we need to refute, otherwise re-broadcast
-	if !bootstrap && state.Name == m.config.Name {
+	if !bootstrap && isLocalNode {
+		// Compute the version vector
+		versions := []uint8{
+			state.PMin, state.PMax, state.PCur,
+			state.DMin, state.DMax, state.DCur,
+		}
+
+		// If the Incarnation is the same, we need special handling, since it
+		// possible for the following situation to happen:
+		// 1) Start with configuration C, join cluster
+		// 2) Hard fail / Kill / Shutdown
+		// 3) Restart with configuration C', join cluster
+		//
+		// In this case, other nodes and the local node see the same incarnation,
+		// but the values may not be the same. For this reason, we always
+		// need to do an equality check for this Incarnation. In most cases,
+		// we just ignore, but we may need to refute.
+		//
+		if a.Incarnation == state.Incarnation &&
+			bytes.Equal(a.Meta, state.Meta) &&
+			bytes.Equal(a.Vsn, versions) {
+			return
+		}
+
 		inc := m.nextIncarnation()
 		for a.Incarnation >= inc {
 			inc = m.nextIncarnation()
@@ -642,10 +671,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 			Addr:        state.Addr,
 			Port:        state.Port,
 			Meta:        state.Meta,
-			Vsn: []uint8{
-				state.PMin, state.PMax, state.PCur,
-				state.DMin, state.DMax, state.DCur,
-			},
+			Vsn:         versions,
 		}
 		m.encodeBroadcastNotify(a.Node, aliveMsg, a, notify)
 		m.logger.Printf("[WARN] memberlist: Refuting an alive message")

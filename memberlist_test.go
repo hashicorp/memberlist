@@ -961,3 +961,103 @@ func TestMemberlist_conflictDelegate(t *testing.T) {
 		t.Fatalf("bad: %v %v", mock.existing, mock.other)
 	}
 }
+
+// Consul bug, rapid restart (before failure detection),
+// with an updated meta data. Should be at incarnation 1 for
+// both.
+//
+// This test is uncommented because it requires that either we
+// can rebind the socket (SO_REUSEPORT) which Go does not allow,
+// OR we must disable the address conflict checking in memberlist.
+// I just comment out that code to test this case.
+//
+//func TestMemberlist_Restart_delegateMeta_Update(t *testing.T) {
+//    c1 := testConfig()
+//    c2 := testConfig()
+//    mock1 := &MockDelegate{meta: []byte("web")}
+//    mock2 := &MockDelegate{meta: []byte("lb")}
+//    c1.Delegate = mock1
+//    c2.Delegate = mock2
+
+//    m1, err := Create(c1)
+//    if err != nil {
+//        t.Fatalf("err: %s", err)
+//    }
+//    defer m1.Shutdown()
+
+//    m2, err := Create(c2)
+//    if err != nil {
+//        t.Fatalf("err: %s", err)
+//    }
+//    defer m2.Shutdown()
+
+//    _, err = m1.Join([]string{c2.BindAddr})
+//    if err != nil {
+//        t.Fatalf("err: %s", err)
+//    }
+
+//    yield()
+
+//    // Recreate m1 with updated meta
+//    m1.Shutdown()
+//    c3 := testConfig()
+//    c3.Name = c1.Name
+//    c3.Delegate = mock1
+//    c3.GossipInterval = time.Millisecond
+//    mock1.meta = []byte("api")
+
+//    m1, err = Create(c3)
+//    if err != nil {
+//        t.Fatalf("err: %s", err)
+//    }
+//    defer m1.Shutdown()
+
+//    _, err = m1.Join([]string{c2.BindAddr})
+//    if err != nil {
+//        t.Fatalf("err: %s", err)
+//    }
+
+//    yield()
+//    yield()
+
+//    // Check the updates have propagated
+//    var roles map[string]string
+
+//    // Check the roles of members of m1
+//    m1m := m1.Members()
+//    if len(m1m) != 2 {
+//        t.Fatalf("bad: %#v", m1m)
+//    }
+
+//    roles = make(map[string]string)
+//    for _, m := range m1m {
+//        roles[m.Name] = string(m.Meta)
+//    }
+
+//    if r := roles[c1.Name]; r != "api" {
+//        t.Fatalf("bad role for %s: %s", c1.Name, r)
+//    }
+
+//    if r := roles[c2.Name]; r != "lb" {
+//        t.Fatalf("bad role for %s: %s", c2.Name, r)
+//    }
+
+//    // Check the roles of members of m2
+//    m2m := m2.Members()
+//    if len(m2m) != 2 {
+//        t.Fatalf("bad: %#v", m2m)
+//    }
+
+//    roles = make(map[string]string)
+//    for _, m := range m2m {
+//        roles[m.Name] = string(m.Meta)
+//    }
+
+//    if r := roles[c1.Name]; r != "api" {
+//        t.Fatalf("bad role for %s: %s", c1.Name, r)
+//    }
+
+//    if r := roles[c2.Name]; r != "lb" {
+//        t.Fatalf("bad role for %s: %s", c2.Name, r)
+//    }
+//}
