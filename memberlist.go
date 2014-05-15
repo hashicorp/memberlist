@@ -230,18 +230,25 @@ func (m *Memberlist) setAlive() error {
 			}
 
 			// Find private IPv4 address
-			for _, addr := range addresses {
-				ip, ok := addr.(*net.IPNet)
-				if !ok {
+			for _, rawAddr := range addresses {
+				var ip net.IP
+				switch addr := rawAddr.(type) {
+				case *net.IPAddr:
+					ip = addr.IP
+				case *net.IPNet:
+					ip = addr.IP
+				default:
 					continue
 				}
-				if ip.IP.To4() == nil {
+
+				if ip.To4() == nil {
 					continue
 				}
-				if !isPrivateIP(ip.IP.String()) {
+				if !isPrivateIP(ip.String()) {
 					continue
 				}
-				advertiseAddr = ip.IP
+
+				advertiseAddr = ip
 				break
 			}
 
