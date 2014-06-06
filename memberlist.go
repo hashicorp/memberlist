@@ -426,7 +426,7 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 
 		state, ok := m.nodeMap[m.config.Name]
 		if !ok {
-			m.logger.Println("[WARN] Leave but we're not in the node map.")
+			m.logger.Printf("[WARN] memberlist: Leave but we're not in the node map.")
 			return nil
 		}
 
