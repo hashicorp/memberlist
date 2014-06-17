@@ -299,6 +299,9 @@ func (m *Memberlist) gossip() {
 
 	// Compute the bytes available
 	bytesAvail := udpSendBuf - compoundHeaderOverhead
+	if m.config.EncryptionEnabled() {
+		bytesAvail -= encryptOverhead(m.encryptionVersion())
+	}
 
 	for _, node := range kNodes {
 		// Get any pending broadcasts
