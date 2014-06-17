@@ -135,6 +135,13 @@ type compress struct {
 	Buf  []byte
 }
 
+// msgHandoff is used to transfer a message between goroutines
+type msgHandoff struct {
+	msgType messageType
+	buf     []byte
+	from    net.Addr
+}
+
 // encryptionVersion returns the encryption version to use
 func (m *Memberlist) encryptionVersion() encryptionVersion {
 	switch m.ProtocolVersion() {
@@ -205,7 +212,6 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 
 // udpListen listens for and handles incoming UDP packets
 func (m *Memberlist) udpListen() {
-	mainBuf := make([]byte, udpBufSize)
 	var n int
 	var addr net.Addr
 	var err error
@@ -219,8 +225,9 @@ func (m *Memberlist) udpListen() {
 				diff)
 		}
 
-		// Reset buffer
-		buf := mainBuf[0:udpBufSize]
+		// Create a new buffer
+		// TODO: Use Sync.Pool eventually
+		buf := make([]byte, udpBufSize)
 
 		// Read a packet
 		n, addr, err = m.udpListener.ReadFrom(buf)
@@ -275,24 +282,61 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr) {
 	switch msgType {
 	case compoundMsg:
 		m.handleCompound(buf, from)
+	case compressMsg:
+		m.handleCompressed(buf, from)
+
 	case pingMsg:
 		m.handlePing(buf, from)
 	case indirectPingMsg:
 		m.handleIndirectPing(buf, from)
 	case ackRespMsg:
 		m.handleAck(buf, from)
+
 	case suspectMsg:
-		m.handleSuspect(buf, from)
+		fallthrough
 	case aliveMsg:
-		m.handleAlive(buf, from)
+		fallthrough
 	case deadMsg:
-		m.handleDead(buf, from)
+		fallthrough
 	case userMsg:
-		m.handleUser(buf, from)
-	case compressMsg:
-		m.handleCompressed(buf, from)
+		select {
+		case m.handoff <- msgHandoff{msgType, buf, from}:
+		default:
+			m.logger.Printf("[WARN] memberlist: UDP handler queue full, dropping message (%d)", msgType)
+		}
+
 	default:
 		m.logger.Printf("[ERR] memberlist: UDP msg type (%d) not supported. From: %s", msgType, from)
+	}
+}
+
+// udpHandler processes messages received over UDP, but is decoupled
+// from the listener to avoid blocking the listener which may cause
+// ping/ack messages to be delayed.
+func (m *Memberlist) udpHandler() {
+	for {
+		select {
+		case msg := <-m.handoff:
+			msgType := msg.msgType
+			buf := msg.buf
+			from := msg.from
+
+			switch msgType {
+			case suspectMsg:
+				m.handleSuspect(buf, from)
+			case aliveMsg:
+				m.handleAlive(buf, from)
+			case deadMsg:
+				m.handleDead(buf, from)
+			case userMsg:
+				m.handleUser(buf, from)
+			default:
+				m.logger.Printf("[ERR] memberlist: UDP msg type (%d) not supported. From: %s (handler)", msgType, from)
+			}
+
+		case <-m.shutdownCh:
+			return
+		}
 	}
 }
 
