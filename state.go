@@ -261,7 +261,8 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	}
 
 	// No acks received from target, suspect
-	s := suspect{Incarnation: node.Incarnation, Node: node.Name}
+	m.logger.Printf("[INFO] memberlist: Suspect %s has failed, no acks received", node.Name)
+	s := suspect{Incarnation: node.Incarnation, Node: node.Name, From: m.config.Name}
 	m.suspectNode(&s)
 }
 
@@ -755,7 +756,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 			},
 		}
 		m.encodeAndBroadcast(s.Node, aliveMsg, a)
-		m.logger.Printf("[WARN] memberlist: Refuting a suspect message")
+		m.logger.Printf("[WARN] memberlist: Refuting a suspect message (from: %s)", s.From)
 		return // Do not mark ourself suspect
 	} else {
 		m.encodeAndBroadcast(s.Node, suspectMsg, s)
@@ -787,7 +788,8 @@ func (m *Memberlist) suspectNode(s *suspect) {
 // suspectTimeout is invoked when a suspect timeout has occurred
 func (m *Memberlist) suspectTimeout(n *nodeState) {
 	// Construct a dead message
-	d := dead{Incarnation: n.Incarnation, Node: n.Name}
+	m.logger.Printf("[INFO] memberlist: Marking %s as failed, suspect timeout reached", n.Name)
+	d := dead{Incarnation: n.Incarnation, Node: n.Name, From: m.config.Name}
 	m.deadNode(&d)
 }
 
@@ -835,7 +837,7 @@ func (m *Memberlist) deadNode(d *dead) {
 				},
 			}
 			m.encodeAndBroadcast(d.Node, aliveMsg, a)
-			m.logger.Printf("[WARN] memberlist: Refuting a dead message")
+			m.logger.Printf("[WARN] memberlist: Refuting a dead message (from: %s)", d.From)
 			return // Do not mark ourself dead
 		}
 
@@ -883,7 +885,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 			// suspect that node instead of declaring it dead instantly
 			fallthrough
 		case stateSuspect:
-			s := suspect{Incarnation: r.Incarnation, Node: r.Name}
+			s := suspect{Incarnation: r.Incarnation, Node: r.Name, From: m.config.Name}
 			m.suspectNode(&s)
 		}
 	}

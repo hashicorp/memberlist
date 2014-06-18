@@ -85,6 +85,7 @@ type ackResp struct {
 type suspect struct {
 	Incarnation uint32
 	Node        string
+	From        string // Include who is suspecting
 }
 
 // alive is broadcast when we know a node is alive.
@@ -106,6 +107,7 @@ type alive struct {
 type dead struct {
 	Incarnation uint32
 	Node        string
+	From        string // Include who is suspecting
 }
 
 // pushPullHeader is used to inform the
