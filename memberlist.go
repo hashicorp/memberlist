@@ -156,19 +156,22 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 	numSuccess := 0
 	var retErr error
 	for _, exist := range existing {
-		addr, port, err := m.resolveAddr(exist)
+		addrs, ports, err := m.resolveAddr(exist)
 		if err != nil {
 			m.logger.Printf("[WARN] memberlist: Failed to resolve %s: %v", exist, err)
 			retErr = err
 			continue
 		}
 
-		if err := m.pushPullNode(addr, port, true); err != nil {
-			retErr = err
-			continue
+		for idx, addr := range addrs {
+			port := ports[idx]
+			if err := m.pushPullNode(addr, port, true); err != nil {
+				retErr = err
+				continue
+			}
+			numSuccess++
 		}
 
-		numSuccess++
 	}
 
 	if numSuccess > 0 {
@@ -180,26 +183,48 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 
 // resolveAddr is used to resolve the address into an address,
 // port, and error. If no port is given, use the default
-func (m *Memberlist) resolveAddr(hostStr string) ([]byte, uint16, error) {
+func (m *Memberlist) resolveAddr(hostStr string) ([][]byte, []uint16, error) {
 	// Add the port if none
 START:
-	_, _, err := net.SplitHostPort(hostStr)
+	host, port, err := net.SplitHostPort(hostStr)
 	if ae, ok := err.(*net.AddrError); ok && ae.Err == "missing port in address" {
 		hostStr = fmt.Sprintf("%s:%d", hostStr, m.config.BindPort)
 		goto START
 	}
+	ips := make([][]byte, 0)
+	ports := make([]uint16, 0)
+
 	if err != nil {
-		return nil, 0, err
+		return ips, ports, err
 	}
 
-	// Get the address
-	addr, err := net.ResolveTCPAddr("tcp", hostStr)
-	if err != nil {
-		return nil, 0, err
+	// Probably an ip address
+	addrs := make([]string, 0, 0)
+
+	// If not, get the addresses that this might resolve to
+	if net.ParseIP(host) == nil {
+		if pre, err := net.LookupHost(host); err == nil {
+			for _, addrel := range pre {
+				addrs = append(addrs, fmt.Sprintf("%s:%d", addrel, port))
+			}
+		}
+	} else {
+                // yes, an ip address
+		addrs = append(addrs, hostStr)
 	}
 
-	// Return IP/Port
-	return addr.IP, uint16(addr.Port), nil
+	// Make tcp addresses from that
+	for _, addrel := range addrs {
+		// Get the address
+		addr, err := net.ResolveTCPAddr("tcp", addrel)
+		if err != nil {
+			return ips, ports, err
+		}
+		// Return IP/Port
+		ips = append(ips, addr.IP)
+		ports = append(ports, uint16(addr.Port))
+	}
+	return ips, ports, nil
 }
 
 // setAlive is used to mark this node as being alive. This is the same
