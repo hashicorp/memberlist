@@ -283,6 +283,28 @@ func TestMemberList_CreateShutdown(t *testing.T) {
 	}
 }
 
+func TestMemberList_ResolveAddr(t *testing.T) {
+	m := GetMemberlist(t)
+	if _, _, err := m.resolveAddr("localhost"); err != nil {
+		t.Fatalf("Could not resolve localhost %v", err)
+	}
+	if _, _, err := m.resolveAddr("[::1]:80"); err != nil {
+		t.Fatalf("Could not understand ipv6 pair %v", err)
+	}
+	if _, _, err := m.resolveAddr("[::1]"); err == nil {
+		t.Fatalf("Understood bracketed non-pair %v", err)
+	}
+	if _, _, err := m.resolveAddr(":80"); err == nil {
+		t.Fatalf("Understood hostless port", err)
+	}
+	if _, _, err := m.resolveAddr("localhost:80"); err != nil {
+		t.Fatalf("Could not understand hostname port combo", err)
+	}
+	if _, _, err := m.resolveAddr("localhost:80000"); err == nil {
+		t.Fatalf("Understood too high port", err)
+	}
+}
+
 func TestMemberList_Members(t *testing.T) {
 	n1 := &Node{Name: "test"}
 	n2 := &Node{Name: "test2"}
