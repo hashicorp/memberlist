@@ -5,7 +5,7 @@ import (
 	"compress/lzw"
 	"encoding/binary"
 	"fmt"
-	"github.com/ugorji/go/codec"
+	"github.com/hashicorp/go-msgpack/codec"
 	"io"
 	"math"
 	"math/rand"

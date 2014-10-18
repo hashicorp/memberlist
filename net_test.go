@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/ugorji/go/codec"
+	"github.com/hashicorp/go-msgpack/codec"
 	"io"
 	"net"
 	"reflect"

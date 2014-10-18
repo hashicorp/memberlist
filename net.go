@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/armon/go-metrics"
-	"github.com/ugorji/go/codec"
+	"github.com/hashicorp/go-msgpack/codec"
 	"io"
 	"net"
 	"time"
