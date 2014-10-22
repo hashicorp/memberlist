@@ -286,22 +286,22 @@ func TestMemberList_CreateShutdown(t *testing.T) {
 func TestMemberList_ResolveAddr(t *testing.T) {
 	m := GetMemberlist(t)
 	if _, _, err := m.resolveAddr("localhost"); err != nil {
-		t.Fatalf("Could not resolve localhost %v", err)
+		t.Fatalf("Could not resolve localhost: %s", err)
 	}
 	if _, _, err := m.resolveAddr("[::1]:80"); err != nil {
-		t.Fatalf("Could not understand ipv6 pair %v", err)
+		t.Fatalf("Could not understand ipv6 pair: %s", err)
 	}
 	if _, _, err := m.resolveAddr("[::1]"); err == nil {
-		t.Fatalf("Understood bracketed non-pair %v", err)
+		t.Fatalf("Understood bracketed non-pair")
 	}
 	if _, _, err := m.resolveAddr(":80"); err == nil {
-		t.Fatalf("Understood hostless port", err)
+		t.Fatalf("Understood hostless port")
 	}
 	if _, _, err := m.resolveAddr("localhost:80"); err != nil {
-		t.Fatalf("Could not understand hostname port combo", err)
+		t.Fatalf("Could not understand hostname port combo: %s", err)
 	}
 	if _, _, err := m.resolveAddr("localhost:80000"); err == nil {
-		t.Fatalf("Understood too high port", err)
+		t.Fatalf("Understood too high port")
 	}
 }
 
