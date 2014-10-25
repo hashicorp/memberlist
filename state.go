@@ -127,7 +127,9 @@ func (m *Memberlist) pushPullTrigger(stop <-chan struct{}) {
 
 	// Tick using a dynamic timer
 	for {
+		m.nodeLock.RLock()
 		tickTime := pushPullScale(interval, len(m.nodes))
+		m.nodeLock.RUnlock()
 		select {
 		case <-time.After(tickTime):
 			m.pushPull()
