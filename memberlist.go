@@ -194,7 +194,7 @@ func (m *Memberlist) resolveAddr(hostStr string) ([][]byte, uint16, error) {
 	} else if err != nil {
 		// error, but not missing port
 		return ips, port, err
-	} else if lport, err := strconv.ParseInt(sport, 10, 16); err != nil {
+	} else if lport, err := strconv.ParseUint(sport, 10, 16); err != nil {
 		// error, when parsing port
 		return ips, port, err
 	} else {
