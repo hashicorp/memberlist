@@ -712,6 +712,24 @@ func TestMemberList_DeadNode_OldDead(t *testing.T) {
 	}
 }
 
+func TestMemberList_DeadNode_AliveReplay(t *testing.T) {
+	m := GetMemberlist(t)
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10}
+	m.aliveNode(&a, nil, false)
+
+	d := dead{Node: "test", Incarnation: 10}
+	m.deadNode(&d)
+
+	// Replay alive at same incarnation
+	m.aliveNode(&a, nil, false)
+
+	// Should remain dead
+	state, ok := m.nodeMap["test"]
+	if ok && state.State != stateDead {
+		t.Fatalf("Bad state")
+	}
+}
+
 func TestMemberList_DeadNode_Refute(t *testing.T) {
 	m := GetMemberlist(t)
 	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1}

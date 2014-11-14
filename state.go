@@ -3,12 +3,13 @@ package memberlist
 import (
 	"bytes"
 	"fmt"
-	"github.com/armon/go-metrics"
 	"math"
 	"math/rand"
 	"net"
 	"sync/atomic"
 	"time"
+
+	"github.com/armon/go-metrics"
 )
 
 type nodeStateType int
@@ -277,6 +278,7 @@ func (m *Memberlist) resetNodes() {
 
 	// Deregister the dead nodes
 	for i := deadIdx; i < len(m.nodes); i++ {
+		delete(m.nodeMap, m.nodes[i].Name)
 		m.nodes[i] = nil
 	}
 
@@ -854,9 +856,6 @@ func (m *Memberlist) deadNode(d *dead) {
 	state.Incarnation = d.Incarnation
 	state.State = stateDead
 	state.StateChange = time.Now()
-
-	// Remove from the node map
-	delete(m.nodeMap, state.Name)
 
 	// Notify of death
 	if m.config.Events != nil {
