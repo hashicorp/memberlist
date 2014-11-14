@@ -37,10 +37,10 @@ func TestMemberlist_Integ(t *testing.T) {
 		c.Name = fmt.Sprintf("%s:%d", addr, 12345+i)
 		c.BindAddr = addr
 		c.BindPort = 12345 + i
-		c.ProbeInterval = 10 * time.Millisecond
+		c.ProbeInterval = 20 * time.Millisecond
 		c.ProbeTimeout = 100 * time.Millisecond
-		c.GossipInterval = 5 * time.Millisecond
-		c.PushPullInterval = 100 * time.Millisecond
+		c.GossipInterval = 20 * time.Millisecond
+		c.PushPullInterval = 200 * time.Millisecond
 		c.SecretKey = secret
 
 		if i == 0 {
