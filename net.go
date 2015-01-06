@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/armon/go-metrics"
-	"github.com/hashicorp/go-msgpack/codec"
 	"io"
 	"net"
 	"time"
+
+	"github.com/armon/go-metrics"
+	"github.com/hashicorp/go-msgpack/codec"
 )
 
 // This is the minimum and maximum protocol version that we can
@@ -201,6 +202,29 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	if err := m.verifyProtocol(remoteNodes); err != nil {
 		m.logger.Printf("[ERR] memberlist: Push/pull verification failed: %s", err)
 		return
+	}
+
+	// Invoke the merge delegate if any
+	if join && m.config.Merge != nil {
+		nodes := make([]*Node, len(remoteNodes))
+		for idx, n := range remoteNodes {
+			nodes[idx] = &Node{
+				Name: n.Name,
+				Addr: n.Addr,
+				Port: n.Port,
+				Meta: n.Meta,
+				PMin: n.Vsn[0],
+				PMax: n.Vsn[1],
+				PCur: n.Vsn[2],
+				DMin: n.Vsn[3],
+				DMax: n.Vsn[4],
+				DCur: n.Vsn[5],
+			}
+		}
+		if m.config.Merge.NotifyMerge(nodes) {
+			m.logger.Printf("[WARN] memberlist: Cluster merge canceled")
+			return
+		}
 	}
 
 	// Merge the membership state
