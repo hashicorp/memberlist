@@ -118,7 +118,11 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		broadcasts:     &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
 		logger:         logger,
 	}
-	m.broadcasts.NumNodes = func() int { return len(m.nodes) }
+	m.broadcasts.NumNodes = func() int {
+		m.nodeLock.RLock()
+		defer m.nodeLock.RUnlock()
+		return len(m.nodes)
+	}
 	go m.tcpListen()
 	go m.udpListen()
 	go m.udpHandler()
