@@ -221,8 +221,8 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 				DCur: n.Vsn[5],
 			}
 		}
-		if m.config.Merge.NotifyMerge(nodes) {
-			m.logger.Printf("[WARN] memberlist: Cluster merge canceled")
+		if err := m.config.Merge.NotifyMerge(nodes); err != nil {
+			m.logger.Printf("[WARN] memberlist: Cluster merge canceled: %s", err)
 			return
 		}
 	}
