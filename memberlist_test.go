@@ -362,10 +362,10 @@ type CustomMergeDelegate struct {
 	invoked bool
 }
 
-func (c *CustomMergeDelegate) NotifyMerge(nodes []*Node) (cancel bool) {
+func (c *CustomMergeDelegate) NotifyMerge(nodes []*Node) error {
 	log.Printf("Cancel merge")
 	c.invoked = true
-	return true
+	return fmt.Errorf("Custom merge canceled")
 }
 
 func TestMemberlist_Join_Cancel(t *testing.T) {
@@ -395,7 +395,7 @@ func TestMemberlist_Join_Cancel(t *testing.T) {
 	if num != 0 {
 		t.Fatalf("unexpected 0: %d", num)
 	}
-	if err.Error() != "Merge canceled" {
+	if err.Error() != "Custom merge canceled" {
 		t.Fatalf("unexpected err: %s", err)
 	}
 
