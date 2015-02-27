@@ -25,6 +25,10 @@ import (
 )
 
 type Memberlist struct {
+	sequenceNum uint32 // Local sequence number
+	incarnation uint32 // Local incarnation number
+	numNodes    uint32 // Number of known nodes (estimate)
+
 	config         *Config
 	shutdown       bool
 	shutdownCh     chan struct{}
@@ -34,9 +38,6 @@ type Memberlist struct {
 	udpListener *net.UDPConn
 	tcpListener *net.TCPListener
 	handoff     chan msgHandoff
-
-	sequenceNum uint32 // Local sequence number
-	incarnation uint32 // Local incarnation number
 
 	nodeLock sync.RWMutex
 	nodes    []*nodeState          // Known nodes
@@ -119,9 +120,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		logger:         logger,
 	}
 	m.broadcasts.NumNodes = func() int {
-		m.nodeLock.RLock()
-		defer m.nodeLock.RUnlock()
-		return len(m.nodes)
+		return m.estNumNodes()
 	}
 	go m.tcpListen()
 	go m.udpListen()

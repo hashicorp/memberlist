@@ -128,9 +128,7 @@ func (m *Memberlist) pushPullTrigger(stop <-chan struct{}) {
 
 	// Tick using a dynamic timer
 	for {
-		m.nodeLock.RLock()
-		tickTime := pushPullScale(interval, len(m.nodes))
-		m.nodeLock.RUnlock()
+		tickTime := pushPullScale(interval, m.estNumNodes())
 		select {
 		case <-time.After(tickTime):
 			m.pushPull()
@@ -286,6 +284,9 @@ func (m *Memberlist) resetNodes() {
 
 	// Trim the nodes to exclude the dead nodes
 	m.nodes = m.nodes[0:deadIdx]
+
+	// Update numNodes after we've trimmed the dead nodes
+	atomic.StoreUint32(&m.numNodes, uint32(deadIdx))
 
 	// Shuffle live nodes
 	shuffleNodes(m.nodes)
@@ -525,6 +526,11 @@ func (m *Memberlist) nextIncarnation() uint32 {
 	return atomic.AddUint32(&m.incarnation, 1)
 }
 
+// estNumNodes is used to get the current estimate of the number of nodes
+func (m *Memberlist) estNumNodes() int {
+	return int(atomic.LoadUint32(&m.numNodes))
+}
+
 // setAckChannel is used to attach a channel to receive a message when
 // an ack with a given sequence number is received. The channel gets sent
 // false on timeout
@@ -627,6 +633,9 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		// Add at the end and swap with the node at the offset
 		m.nodes = append(m.nodes, state)
 		m.nodes[offset], m.nodes[n] = m.nodes[n], m.nodes[offset]
+
+		// Update numNodes after we've added a new node
+		atomic.AddUint32(&m.numNodes, 1)
 	}
 
 	// Check if this address is different than the existing node
@@ -799,7 +808,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	state.StateChange = changeTime
 
 	// Setup a timeout for this
-	timeout := suspicionTimeout(m.config.SuspicionMult, len(m.nodes), m.config.ProbeInterval)
+	timeout := suspicionTimeout(m.config.SuspicionMult, m.estNumNodes(), m.config.ProbeInterval)
 	time.AfterFunc(timeout, func() {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]

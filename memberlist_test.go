@@ -356,6 +356,9 @@ func TestMemberlist_Join(t *testing.T) {
 	if len(m2.Members()) != 2 {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
 	}
+	if m2.estNumNodes() != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
 }
 
 type CustomMergeDelegate struct {
