@@ -289,7 +289,9 @@ func (m *Memberlist) setAlive() error {
 			addr := m.tcpListener.Addr().(*net.TCPAddr)
 			advertiseAddr = addr.IP
 		}
-		advertisePort = m.config.BindPort
+
+		// Use the port we are bound to.
+		advertisePort = m.tcpListener.Addr().(*net.TCPAddr).Port
 	}
 
 	// Check if this is a public address without encryption
