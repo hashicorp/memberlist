@@ -421,10 +421,16 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 	destAddr := &net.UDPAddr{IP: ind.Target, Port: int(ind.Port)}
 
 	// Setup a response handler to relay the ack
+	sent := time.Now()
 	respHandler := func() {
 		ack := ackResp{ind.SeqNo}
 		if err := m.encodeAndSendMsg(from, ackRespMsg, &ack); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to forward ack: %s", err)
+		}
+		if m.config.RTT != nil {
+			if n, ok := m.nodeMap[ind.Node]; ok {
+				m.config.RTT.NotifyRTT(&n.Node, time.Now().Sub(sent))
+			}
 		}
 	}
 	m.setAckHandler(localSeqNo, respHandler, m.config.ProbeTimeout)

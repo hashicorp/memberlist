@@ -218,6 +218,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
 
 	// Send the ping message
+	sent := time.Now()
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
 		return
@@ -227,6 +228,9 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	select {
 	case v := <-ackCh:
 		if v == true {
+			if m.config.RTT != nil {
+				m.config.RTT.NotifyRTT(&node.Node, time.Now().Sub(sent))
+			}
 			return
 		}
 

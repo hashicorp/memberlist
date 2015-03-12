@@ -132,6 +132,7 @@ type Config struct {
 	Events                  EventDelegate
 	Conflict                ConflictDelegate
 	Merge                   MergeDelegate
+	RTT                     RTTDelegate
 
 	// LogOutput is the writer where logs should be sent. If this is not
 	// set, logging will go to stderr by default.
