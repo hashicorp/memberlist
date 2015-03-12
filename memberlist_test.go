@@ -1048,16 +1048,19 @@ func TestMemberlist_conflictDelegate(t *testing.T) {
 
 type MockRTT struct {
 	other *Node
+	rtt   time.Duration
 }
 
-func (m *MockRTT) NotifyRTT(other *Node, _ time.Duration) {
+func (m *MockRTT) NotifyRTT(other *Node, rtt time.Duration) {
 	m.other = other
+	m.rtt = rtt
 }
 
 func TestMemberlist_RTTDelegate(t *testing.T) {
 	m1 := GetMemberlist(t)
 	m1.setAlive()
 	m1.schedule()
+	defer m1.Shutdown()
 
 	// Create a second node
 	c := DefaultLANConfig()
@@ -1090,6 +1093,10 @@ func TestMemberlist_RTTDelegate(t *testing.T) {
 	if !reflect.DeepEqual(mock.other, m1.LocalNode()) {
 		t.Fatalf("not notified about the correct node; expected: %+v; actual: %+v",
 			m2.LocalNode(), mock.other)
+	}
+
+	if mock.rtt <= 0 {
+		t.Fatalf("rtt should be greater than 0")
 	}
 }
 
