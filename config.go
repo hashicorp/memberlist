@@ -142,7 +142,7 @@ type Config struct {
 // DefaultLANConfig returns a sane set of configurations for Memberlist.
 // It uses the hostname as the node name, and otherwise sets very conservative
 // values that are sane for most LAN environments. The default configuration
-// errs on the side on the side of caution, choosing values that are optimized
+// errs on the side of caution, choosing values that are optimized
 // for higher convergence at the cost of higher bandwidth usage. Regardless,
 // these values are a good starting point when getting started with memberlist.
 func DefaultLANConfig() *Config {

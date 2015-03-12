@@ -1046,6 +1046,53 @@ func TestMemberlist_conflictDelegate(t *testing.T) {
 	}
 }
 
+type MockRTT struct {
+	other *Node
+}
+
+func (m *MockRTT) NotifyRTT(other *Node, _ time.Duration) {
+	m.other = other
+}
+
+func TestMemberlist_RTTDelegate(t *testing.T) {
+	m1 := GetMemberlist(t)
+	m1.setAlive()
+	m1.schedule()
+
+	// Create a second node
+	c := DefaultLANConfig()
+	addr1 := getBindAddr()
+	c.Name = addr1.String()
+	c.BindAddr = addr1.String()
+	c.BindPort = m1.config.BindPort
+	c.ProbeInterval = time.Millisecond
+	mock := &MockRTT{}
+	c.RTT = mock
+
+	m2, err := Create(c)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m2.Shutdown()
+
+	_, err = m2.Join([]string{m1.config.BindAddr})
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	yield()
+
+	// Ensure we were notified
+	if mock.other == nil {
+		t.Fatalf("should get notified")
+	}
+
+	if !reflect.DeepEqual(mock.other, m1.LocalNode()) {
+		t.Fatalf("not notified about the correct node; expected: %+v; actual: %+v",
+			m2.LocalNode(), mock.other)
+	}
+}
+
 // Consul bug, rapid restart (before failure detection),
 // with an updated meta data. Should be at incarnation 1 for
 // both.
