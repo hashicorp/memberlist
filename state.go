@@ -325,7 +325,7 @@ func (m *Memberlist) gossip() {
 
 		// Send the compound message
 		destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
-		if err := m.rawSendMsg(destAddr, compound.Bytes()); err != nil {
+		if err := m.rawSendMsgUDP(destAddr, compound.Bytes()); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
 		}
 	}
@@ -364,40 +364,11 @@ func (m *Memberlist) pushPullNode(addr []byte, port uint16, join bool) error {
 		return err
 	}
 
-	if err := m.verifyProtocol(remote); err != nil {
+	if err := m.mergeRemoteState(join, remote, userState); err != nil {
+		m.logger.Printf("[ERR] memberlist: Failed to merge remote state: %s", err)
 		return err
 	}
 
-	// Invoke the merge delegate if any
-	if join && m.config.Merge != nil {
-		nodes := make([]*Node, len(remote))
-		for idx, n := range remote {
-			nodes[idx] = &Node{
-				Name: n.Name,
-				Addr: n.Addr,
-				Port: n.Port,
-				Meta: n.Meta,
-				PMin: n.Vsn[0],
-				PMax: n.Vsn[1],
-				PCur: n.Vsn[2],
-				DMin: n.Vsn[3],
-				DMax: n.Vsn[4],
-				DCur: n.Vsn[5],
-			}
-		}
-		if err := m.config.Merge.NotifyMerge(nodes); err != nil {
-			m.logger.Printf("[WARN] memberlist: Cluster merge canceled: %s", err)
-			return err
-		}
-	}
-
-	// Merge the state
-	m.mergeState(remote)
-
-	// Invoke the delegate
-	if m.config.Delegate != nil {
-		m.config.Delegate.MergeRemoteState(userState, join)
-	}
 	return nil
 }
 
