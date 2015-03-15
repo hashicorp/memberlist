@@ -53,8 +53,6 @@ type Memberlist struct {
 
 	broadcasts *TransmitLimitedQueue
 
-	startStopLock sync.Mutex
-
 	logger *log.Logger
 }
 
@@ -228,7 +226,6 @@ func (m *Memberlist) resolveAddr(hostStr string) ([][]byte, uint16, error) {
 // as if we received an alive notification our own network channel for
 // ourself.
 func (m *Memberlist) setAlive() error {
-
 	var advertiseAddr []byte
 	var advertisePort int
 	if m.config.AdvertiseAddr != "" {
@@ -446,10 +443,12 @@ func (m *Memberlist) NumMembers() (alive int) {
 // This method is safe to call multiple times, but must not be called
 // after the cluster is already shut down.
 func (m *Memberlist) Leave(timeout time.Duration) error {
-	m.startStopLock.Lock()
-	defer m.startStopLock.Unlock()
+	m.nodeLock.Lock()
+	// We can't defer m.nodeLock.Unlock() because m.deadNode will also try to
+	// acquire a lock so we need to Unlock before that.
 
 	if m.shutdown {
+		m.nodeLock.Unlock()
 		panic("leave after shutdown")
 	}
 
@@ -457,6 +456,7 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 		m.leave = true
 
 		state, ok := m.nodeMap[m.config.Name]
+		m.nodeLock.Unlock()
 		if !ok {
 			m.logger.Printf("[WARN] memberlist: Leave but we're not in the node map.")
 			return nil
@@ -480,6 +480,8 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 				return fmt.Errorf("timeout waiting for leave broadcast")
 			}
 		}
+	} else {
+		m.nodeLock.Unlock()
 	}
 
 	return nil
@@ -514,8 +516,8 @@ func (m *Memberlist) ProtocolVersion() uint8 {
 //
 // This method is safe to call multiple times.
 func (m *Memberlist) Shutdown() error {
-	m.startStopLock.Lock()
-	defer m.startStopLock.Unlock()
+	m.nodeLock.Lock()
+	defer m.nodeLock.Unlock()
 
 	if m.shutdown {
 		return nil
