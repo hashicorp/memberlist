@@ -169,8 +169,8 @@ func TestMemberList_NextSeq(t *testing.T) {
 func TestMemberList_SetAckChannel(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
-	ch := make(chan bool, 1)
-	m.setAckChannel(0, ch, func(payload []byte) {}, 10*time.Millisecond)
+	ch := make(chan ackMessage, 1)
+	m.setAckChannel(0, ch, 10*time.Millisecond)
 
 	if _, ok := m.ackHandlers[0]; !ok {
 		t.Fatalf("missing handler")
@@ -226,20 +226,19 @@ func TestMemberList_InvokeAckHandler_Channel(t *testing.T) {
 	// Does nothing
 	m.invokeAckHandler(ack)
 
-	ch := make(chan bool, 1)
-	m.setAckChannel(0, ch, func(payload []byte) {
-		if bytes.Compare(payload, ack.Payload) != 0 {
-			t.Fatalf("wrong payload. expected: %v; actual: %v", payload, ack.Payload)
-		}
-	}, 10*time.Millisecond)
+	ch := make(chan ackMessage, 1)
+	m.setAckChannel(0, ch, 10*time.Millisecond)
 
 	// Should send message
 	m.invokeAckHandler(ack)
 
 	select {
 	case v := <-ch:
-		if v != true {
+		if v.Complete != true {
 			t.Fatalf("Bad value")
+		}
+		if bytes.Compare(v.Payload, ack.Payload) != 0 {
+			t.Fatalf("wrong payload. expected: %v; actual: %v", ack.Payload, v.Payload)
 		}
 	default:
 		t.Fatalf("message not sent")

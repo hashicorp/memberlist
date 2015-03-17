@@ -1052,7 +1052,7 @@ type MockPing struct {
 	payload []byte
 }
 
-func (m *MockPing) NotifyPing(other *Node, rtt time.Duration, payload []byte) {
+func (m *MockPing) NotifyPingComplete(other *Node, rtt time.Duration, payload []byte) {
 	m.other = other
 	m.rtt = rtt
 	m.payload = payload

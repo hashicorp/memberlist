@@ -214,13 +214,9 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
 
 	// Setup an ack handler
-	ackCh := make(chan bool, m.config.IndirectChecks+1)
+	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
 	sent := time.Now()
-	m.setAckChannel(ping.SeqNo, ackCh, func(payload []byte) {
-		if m.config.Ping != nil {
-			m.config.Ping.NotifyPing(&node.Node, time.Now().Sub(sent), payload)
-		}
-	}, m.config.ProbeInterval)
+	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
 
 	// Send the ping message
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
@@ -231,13 +227,16 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// Wait for response or round-trip-time
 	select {
 	case v := <-ackCh:
-		if v == true {
+		if v.Complete == true {
+			if m.config.Ping != nil {
+				m.config.Ping.NotifyPingComplete(&node.Node, time.Now().Sub(sent), v.Payload)
+			}
 			return
 		}
 
 		// As an edge case, if we get a timeout, we need to re-enqueue it
 		// here to break out of the select below
-		if v == false {
+		if v.Complete == false {
 			ackCh <- v
 		}
 	case <-time.After(m.config.ProbeTimeout):
@@ -261,7 +260,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// Wait for the acks or timeout
 	select {
 	case v := <-ackCh:
-		if v == true {
+		if v.Complete == true {
 			return
 		}
 	}
@@ -536,21 +535,24 @@ func (m *Memberlist) estNumNodes() int {
 	return int(atomic.LoadUint32(&m.numNodes))
 }
 
-// setAckChannel is used to attach a channel to receive a message and a handler to be
-// invoked when an ack with a given sequence number is received. The channel gets sent
-// false on timeout
-func (m *Memberlist) setAckChannel(seqNo uint32, ch chan bool, handler func(payload []byte), timeout time.Duration) {
+type ackMessage struct {
+	Complete bool
+	Payload  []byte
+}
+
+// setAckChannel is used to attach a channel to receive a message when an ack with a given
+// sequence number is received. The `complete` field of the message will be false on timeout
+func (m *Memberlist) setAckChannel(seqNo uint32, ch chan ackMessage, timeout time.Duration) {
 	// Create a handler function
-	h := func(payload []byte) {
-		handler(payload)
+	handler := func(payload []byte) {
 		select {
-		case ch <- true:
+		case ch <- ackMessage{true, payload}:
 		default:
 		}
 	}
 
 	// Add the handler
-	ah := &ackHandler{h, nil}
+	ah := &ackHandler{handler, nil}
 	m.ackLock.Lock()
 	m.ackHandlers[seqNo] = ah
 	m.ackLock.Unlock()
@@ -561,7 +563,7 @@ func (m *Memberlist) setAckChannel(seqNo uint32, ch chan bool, handler func(payl
 		delete(m.ackHandlers, seqNo)
 		m.ackLock.Unlock()
 		select {
-		case ch <- false:
+		case ch <- ackMessage{false, nil}:
 		default:
 		}
 	})

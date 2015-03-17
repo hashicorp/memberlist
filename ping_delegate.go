@@ -9,5 +9,5 @@ type PingDelegate interface {
 	// AckPayload is invoked when an ack is being sent; the returned bytes will be appended to the ack
 	AckPayload() []byte
 	// NotifyPing is invoked when an ack for a ping is received
-	NotifyPing(other *Node, rtt time.Duration, payload []byte)
+	NotifyPingComplete(other *Node, rtt time.Duration, payload []byte)
 }

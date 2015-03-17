@@ -434,7 +434,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 		}
 		if m.config.Ping != nil {
 			if n, ok := m.nodeMap[ind.Node]; ok {
-				m.config.Ping.NotifyPing(&n.Node, time.Now().Sub(sent), payload)
+				m.config.Ping.NotifyPingComplete(&n.Node, time.Now().Sub(sent), payload)
 			}
 		}
 	}
