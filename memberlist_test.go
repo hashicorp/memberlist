@@ -1046,18 +1046,27 @@ func TestMemberlist_conflictDelegate(t *testing.T) {
 	}
 }
 
-type MockRTT struct {
-	other *Node
-	rtt   time.Duration
+type MockPing struct {
+	other   *Node
+	rtt     time.Duration
+	payload []byte
 }
 
-func (m *MockRTT) NotifyRTT(other *Node, rtt time.Duration) {
+func (m *MockPing) NotifyPingComplete(other *Node, rtt time.Duration, payload []byte) {
 	m.other = other
 	m.rtt = rtt
+	m.payload = payload
 }
 
-func TestMemberlist_RTTDelegate(t *testing.T) {
+const DEFAULT_PAYLOAD = "whatever"
+
+func (m *MockPing) AckPayload() []byte {
+	return []byte(DEFAULT_PAYLOAD)
+}
+
+func TestMemberlist_PingDelegate(t *testing.T) {
 	m1 := GetMemberlist(t)
+	m1.config.Ping = &MockPing{}
 	m1.setAlive()
 	m1.schedule()
 	defer m1.Shutdown()
@@ -1069,8 +1078,8 @@ func TestMemberlist_RTTDelegate(t *testing.T) {
 	c.BindAddr = addr1.String()
 	c.BindPort = m1.config.BindPort
 	c.ProbeInterval = time.Millisecond
-	mock := &MockRTT{}
-	c.RTT = mock
+	mock := &MockPing{}
+	c.Ping = mock
 
 	m2, err := Create(c)
 	if err != nil {
@@ -1097,6 +1106,10 @@ func TestMemberlist_RTTDelegate(t *testing.T) {
 
 	if mock.rtt <= 0 {
 		t.Fatalf("rtt should be greater than 0")
+	}
+
+	if bytes.Compare(mock.payload, []byte(DEFAULT_PAYLOAD)) != 0 {
+		t.Fatalf("incorrect payload. expected: %v; actual: %v", []byte(DEFAULT_PAYLOAD), mock.payload)
 	}
 }
 
