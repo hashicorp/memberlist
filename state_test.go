@@ -170,7 +170,7 @@ func TestMemberList_SetAckChannel(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
 	ch := make(chan bool, 1)
-	m.setAckChannel(0, ch, 10*time.Millisecond)
+	m.setAckChannel(0, ch, func(payload []byte) {}, 10*time.Millisecond)
 
 	if _, ok := m.ackHandlers[0]; !ok {
 		t.Fatalf("missing handler")
@@ -185,7 +185,7 @@ func TestMemberList_SetAckChannel(t *testing.T) {
 func TestMemberList_SetAckHandler(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
-	f := func() {}
+	f := func([]byte) {}
 	m.setAckHandler(0, f, 10*time.Millisecond)
 
 	if _, ok := m.ackHandlers[0]; !ok {
@@ -202,14 +202,14 @@ func TestMemberList_InvokeAckHandler(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
 	// Does nothing
-	m.invokeAckHandler(0)
+	m.invokeAckHandler(ackResp{})
 
 	var b bool
-	f := func() { b = true }
+	f := func(payload []byte) { b = true }
 	m.setAckHandler(0, f, 10*time.Millisecond)
 
 	// Should set b
-	m.invokeAckHandler(0)
+	m.invokeAckHandler(ackResp{0, nil})
 	if !b {
 		t.Fatalf("b not set")
 	}
@@ -222,14 +222,19 @@ func TestMemberList_InvokeAckHandler(t *testing.T) {
 func TestMemberList_InvokeAckHandler_Channel(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
+	ack := ackResp{0, []byte{0, 0, 0}}
 	// Does nothing
-	m.invokeAckHandler(0)
+	m.invokeAckHandler(ack)
 
 	ch := make(chan bool, 1)
-	m.setAckChannel(0, ch, 10*time.Millisecond)
+	m.setAckChannel(0, ch, func(payload []byte) {
+		if bytes.Compare(payload, ack.Payload) != 0 {
+			t.Fatalf("wrong payload. expected: %v; actual: %v", payload, ack.Payload)
+		}
+	}, 10*time.Millisecond)
 
 	// Should send message
-	m.invokeAckHandler(0)
+	m.invokeAckHandler(ack)
 
 	select {
 	case v := <-ch:

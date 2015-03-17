@@ -79,7 +79,8 @@ type indirectPingReq struct {
 
 // ack response is sent for a ping
 type ackResp struct {
-	SeqNo uint32
+	SeqNo   uint32
+	Payload []byte
 }
 
 // suspect is broadcast when we suspect a node is dead
@@ -396,7 +397,11 @@ func (m *Memberlist) handlePing(buf []byte, from net.Addr) {
 		m.logger.Printf("[WARN] memberlist: Got ping for unexpected node '%s'", p.Node)
 		return
 	}
-	ack := ackResp{p.SeqNo}
+	var ack ackResp
+	ack.SeqNo = p.SeqNo
+	if m.config.Ping != nil {
+		ack.Payload = m.config.Ping.AckPayload()
+	}
 	if err := m.encodeAndSendMsg(from, ackRespMsg, &ack); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ack: %s", err)
 	}
@@ -422,14 +427,14 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 
 	// Setup a response handler to relay the ack
 	sent := time.Now()
-	respHandler := func() {
-		ack := ackResp{ind.SeqNo}
+	respHandler := func(payload []byte) {
+		ack := ackResp{ind.SeqNo, nil}
 		if err := m.encodeAndSendMsg(from, ackRespMsg, &ack); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to forward ack: %s", err)
 		}
-		if m.config.RTT != nil {
+		if m.config.Ping != nil {
 			if n, ok := m.nodeMap[ind.Node]; ok {
-				m.config.RTT.NotifyRTT(&n.Node, time.Now().Sub(sent))
+				m.config.Ping.NotifyPing(&n.Node, time.Now().Sub(sent), payload)
 			}
 		}
 	}
@@ -447,7 +452,7 @@ func (m *Memberlist) handleAck(buf []byte, from net.Addr) {
 		m.logger.Printf("[ERR] memberlist: Failed to decode ack response: %s", err)
 		return
 	}
-	m.invokeAckHandler(ack.SeqNo)
+	m.invokeAckHandler(ack)
 }
 
 func (m *Memberlist) handleSuspect(buf []byte, from net.Addr) {

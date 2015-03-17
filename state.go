@@ -44,7 +44,7 @@ type nodeState struct {
 
 // ackHandler is used to register handlers for incoming acks
 type ackHandler struct {
-	handler func()
+	handler func([]byte)
 	timer   *time.Timer
 }
 
@@ -215,10 +215,14 @@ func (m *Memberlist) probeNode(node *nodeState) {
 
 	// Setup an ack handler
 	ackCh := make(chan bool, m.config.IndirectChecks+1)
-	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
+	sent := time.Now()
+	m.setAckChannel(ping.SeqNo, ackCh, func(payload []byte) {
+		if m.config.Ping != nil {
+			m.config.Ping.NotifyPing(&node.Node, time.Now().Sub(sent), payload)
+		}
+	}, m.config.ProbeInterval)
 
 	// Send the ping message
-	sent := time.Now()
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
 		return
@@ -228,9 +232,6 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	select {
 	case v := <-ackCh:
 		if v == true {
-			if m.config.RTT != nil {
-				m.config.RTT.NotifyRTT(&node.Node, time.Now().Sub(sent))
-			}
 			return
 		}
 
@@ -535,12 +536,13 @@ func (m *Memberlist) estNumNodes() int {
 	return int(atomic.LoadUint32(&m.numNodes))
 }
 
-// setAckChannel is used to attach a channel to receive a message when
-// an ack with a given sequence number is received. The channel gets sent
+// setAckChannel is used to attach a channel to receive a message and a handler to be
+// invoked when an ack with a given sequence number is received. The channel gets sent
 // false on timeout
-func (m *Memberlist) setAckChannel(seqNo uint32, ch chan bool, timeout time.Duration) {
+func (m *Memberlist) setAckChannel(seqNo uint32, ch chan bool, handler func(payload []byte), timeout time.Duration) {
 	// Create a handler function
-	handler := func() {
+	h := func(payload []byte) {
+		handler(payload)
 		select {
 		case ch <- true:
 		default:
@@ -548,7 +550,7 @@ func (m *Memberlist) setAckChannel(seqNo uint32, ch chan bool, timeout time.Dura
 	}
 
 	// Add the handler
-	ah := &ackHandler{handler, nil}
+	ah := &ackHandler{h, nil}
 	m.ackLock.Lock()
 	m.ackHandlers[seqNo] = ah
 	m.ackLock.Unlock()
@@ -568,7 +570,7 @@ func (m *Memberlist) setAckChannel(seqNo uint32, ch chan bool, timeout time.Dura
 // setAckHandler is used to attach a handler to be invoked when an
 // ack with a given sequence number is received. If a timeout is reached,
 // the handler is deleted
-func (m *Memberlist) setAckHandler(seqNo uint32, handler func(), timeout time.Duration) {
+func (m *Memberlist) setAckHandler(seqNo uint32, handler func(payload []byte), timeout time.Duration) {
 	// Add the handler
 	ah := &ackHandler{handler, nil}
 	m.ackLock.Lock()
@@ -584,16 +586,16 @@ func (m *Memberlist) setAckHandler(seqNo uint32, handler func(), timeout time.Du
 }
 
 // Invokes an Ack handler if any is associated, and reaps the handler immediately
-func (m *Memberlist) invokeAckHandler(seqNo uint32) {
+func (m *Memberlist) invokeAckHandler(ack ackResp) {
 	m.ackLock.Lock()
-	ah, ok := m.ackHandlers[seqNo]
-	delete(m.ackHandlers, seqNo)
+	ah, ok := m.ackHandlers[ack.SeqNo]
+	delete(m.ackHandlers, ack.SeqNo)
 	m.ackLock.Unlock()
 	if !ok {
 		return
 	}
 	ah.timer.Stop()
-	ah.handler()
+	ah.handler(ack.Payload)
 }
 
 // aliveNode is invoked by the network layer when we get a message about a
