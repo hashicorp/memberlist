@@ -203,6 +203,18 @@ func DefaultLocalConfig() *Config {
 	return conf
 }
 
+
+// DefaultElementalLadn works like DefaultConfig, however it returns a configuration
+// that is optimized for elemental Conductor Live 3 environments. 
+func DefaultElementalLanConfig() *Config {
+       conf := DefaultLANConfig()
+       conf.TCPTimeout = 1 * time.Second
+       conf.SuspicionMult = 3
+       conf.ProbeTimeout = 300 * time.Millisecond
+       conf.ProbeInterval = 650 * time.Millisecond
+       return conf
+}
+
 // Returns whether or not encryption is enabled
 func (c *Config) EncryptionEnabled() bool {
 	return c.Keyring != nil && len(c.Keyring.GetKeys()) > 0
