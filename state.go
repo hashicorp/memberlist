@@ -313,7 +313,9 @@ func (m *Memberlist) gossip() {
 		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
 
-	for _, node := range kNodes {
+	// We try back-to-back to get a few broadcasts
+
+	for i := 0; i < len(kNodes); i++ {
 		// Get any pending broadcasts
 		msgs := m.getBroadcasts(compoundOverhead, bytesAvail)
 		if len(msgs) == 0 {
@@ -323,10 +325,13 @@ func (m *Memberlist) gossip() {
 		// Create a compound message
 		compound := makeCompoundMessage(msgs)
 
-		// Send the compound message
-		destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
-		if err := m.rawSendMsg(destAddr, compound.Bytes()); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
+		// We send the same broadcast to each selected Node
+		for _, node := range kNodes {
+			// Send the compound message
+			destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
+			if err := m.rawSendMsg(destAddr, compound.Bytes()); err != nil {
+				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
+			}
 		}
 	}
 }
