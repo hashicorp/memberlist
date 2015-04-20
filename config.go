@@ -190,7 +190,7 @@ func DefaultWANConfig() *Config {
 	conf.ProbeTimeout = 3 * time.Second
 	conf.ProbeInterval = 5 * time.Second
 	conf.GossipNodes = 4 // Gossip less frequently, but to an additional node
-	conf.GossipMessages = 4, // Ask for 4 sets of messages on each pass
+	conf.GossipMessages = 4 // Ask for 4 sets of messages on each pass
 	conf.GossipInterval = 500 * time.Millisecond
 	return conf
 }
@@ -207,7 +207,7 @@ func DefaultLocalConfig() *Config {
 	conf.PushPullInterval = 15 * time.Second
 	conf.ProbeTimeout = 200 * time.Millisecond
 	conf.ProbeInterval = time.Second
-	conf.GossipMessages = 2, // There are usually fewer nodes in this environment
+	conf.GossipMessages = 2 // There are usually fewer nodes in this environment
 	conf.GossipInterval = 100 * time.Millisecond
 	return conf
 }
