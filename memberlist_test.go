@@ -956,6 +956,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 
 	num, err := m2.Join([]string{fmt.Sprintf("%s:%d", m1.config.BindAddr, 23456)})
 	if num != 1 {
+		t.Errorf("Our err: %v", err)
 		t.Fatalf("unexpected 1: %d", num)
 	}
 	if err != nil {

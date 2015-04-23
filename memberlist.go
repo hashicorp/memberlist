@@ -467,6 +467,7 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 		d := dead{
 			Incarnation: state.Incarnation,
 			Node:        state.Name,
+			ClusterName: m.config.ClusterName,
 		}
 		m.deadNode(&d)
 

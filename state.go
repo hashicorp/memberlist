@@ -721,6 +721,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		a := alive{
 			Incarnation: inc,
 			Node:        state.Name,
+			ClusterName: m.config.ClusterName,
 			Addr:        state.Addr,
 			Port:        state.Port,
 			Meta:        state.Meta,
@@ -878,6 +879,7 @@ func (m *Memberlist) deadNode(d *dead) {
 			a := alive{
 				Incarnation: inc,
 				Node:        state.Name,
+				ClusterName: m.config.ClusterName,
 				Addr:        state.Addr,
 				Port:        state.Port,
 				Meta:        state.Meta,

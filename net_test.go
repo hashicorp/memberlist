@@ -275,7 +275,7 @@ func TestTCPPushPull(t *testing.T) {
 	localNodes[2].State = stateAlive
 
 	// Send our node state
-	header := pushPullHeader{Nodes: 3}
+	header := pushPullHeader{Nodes: 3, ClusterName: m.config.ClusterName}
 	hd := codec.MsgpackHandle{}
 	enc := codec.NewEncoder(conn, &hd)
 
@@ -368,6 +368,7 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	a := alive{
 		Incarnation: 10,
 		Node:        "rand",
+		ClusterName: m.config.ClusterName,
 		Addr:        []byte{127, 0, 0, 255},
 		Meta:        nil,
 	}
