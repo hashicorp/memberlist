@@ -312,6 +312,7 @@ func (m *Memberlist) setAlive() error {
 	a := alive{
 		Incarnation: m.nextIncarnation(),
 		Node:        m.config.Name,
+		ClusterName: m.config.ClusterName,
 		Addr:        advertiseAddr,
 		Port:        uint16(advertisePort),
 		Meta:        meta,
@@ -358,6 +359,7 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 	a := alive{
 		Incarnation: m.nextIncarnation(),
 		Node:        m.config.Name,
+		ClusterName: m.config.ClusterName,
 		Addr:        state.Addr,
 		Port:        state.Port,
 		Meta:        meta,
