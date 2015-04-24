@@ -275,7 +275,7 @@ func TestTCPPushPull(t *testing.T) {
 	localNodes[2].State = stateAlive
 
 	// Send our node state
-	header := pushPullHeader{Nodes: 3}
+	header := pushPullHeader{Nodes: 3, ClusterName: m.config.ClusterName}
 	hd := codec.MsgpackHandle{}
 	enc := codec.NewEncoder(conn, &hd)
 
@@ -368,6 +368,7 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	a := alive{
 		Incarnation: 10,
 		Node:        "rand",
+		ClusterName: m.config.ClusterName,
 		Addr:        []byte{127, 0, 0, 255},
 		Meta:        nil,
 	}
@@ -472,5 +473,23 @@ func TestEncryptDecryptState(t *testing.T) {
 
 	if !reflect.DeepEqual(state, plain) {
 		t.Fatalf("Decrypt failed: %v", plain)
+	}
+}
+
+func TestIsSameCluster(t *testing.T) {
+	m := GetMemberlist(t)
+	defer m.Shutdown()
+
+	m.config.ClusterName = "default"
+	clusterName := "default"
+
+	if !m.isSameCluster(clusterName) {
+		t.Fatalf("Cluster names should match. %v <-> %v", m.config.ClusterName, clusterName)
+	}
+
+	clusterName = "badCluster"
+
+	if m.isSameCluster(clusterName) {
+		t.Fatalf("Cluster names should not match. %v <-> %v", m.config.ClusterName, clusterName)
 	}
 }

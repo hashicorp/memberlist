@@ -267,7 +267,8 @@ func (m *Memberlist) probeNode(node *nodeState) {
 
 	// No acks received from target, suspect
 	m.logger.Printf("[INFO] memberlist: Suspect %s has failed, no acks received", node.Name)
-	s := suspect{Incarnation: node.Incarnation, Node: node.Name, From: m.config.Name}
+	s := suspect{Incarnation: node.Incarnation, Node: node.Name, From: m.config.Name,
+		ClusterName: m.config.ClusterName}
 	m.suspectNode(&s)
 }
 
@@ -313,7 +314,8 @@ func (m *Memberlist) gossip() {
 		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
 
-	for _, node := range kNodes {
+	// We try back-to-back to get a few broadcasts
+	for i := 0; i < m.config.GossipMessages; i++ {
 		// Get any pending broadcasts
 		msgs := m.getBroadcasts(compoundOverhead, bytesAvail)
 		if len(msgs) == 0 {
@@ -323,10 +325,13 @@ func (m *Memberlist) gossip() {
 		// Create a compound message
 		compound := makeCompoundMessage(msgs)
 
-		// Send the compound message
-		destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
-		if err := m.rawSendMsg(destAddr, compound.Bytes()); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
+		// We send the same broadcast to each selected Node
+		for _, node := range kNodes {
+			// Send the compound message
+			destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
+			if err := m.rawSendMsg(destAddr, compound.Bytes()); err != nil {
+				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
+			}
 		}
 	}
 }
@@ -716,6 +721,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		a := alive{
 			Incarnation: inc,
 			Node:        state.Name,
+			ClusterName: m.config.ClusterName,
 			Addr:        state.Addr,
 			Port:        state.Port,
 			Meta:        state.Meta,
@@ -791,6 +797,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		a := alive{
 			Incarnation: inc,
 			Node:        state.Name,
+			ClusterName: m.config.ClusterName,
 			Addr:        state.Addr,
 			Port:        state.Port,
 			Meta:        state.Meta,
@@ -872,6 +879,7 @@ func (m *Memberlist) deadNode(d *dead) {
 			a := alive{
 				Incarnation: inc,
 				Node:        state.Name,
+				ClusterName: m.config.ClusterName,
 				Addr:        state.Addr,
 				Port:        state.Port,
 				Meta:        state.Meta,
@@ -914,6 +922,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 			a := alive{
 				Incarnation: r.Incarnation,
 				Node:        r.Name,
+				ClusterName: m.config.ClusterName,
 				Addr:        r.Addr,
 				Port:        r.Port,
 				Meta:        r.Meta,
@@ -926,7 +935,8 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 			// suspect that node instead of declaring it dead instantly
 			fallthrough
 		case stateSuspect:
-			s := suspect{Incarnation: r.Incarnation, Node: r.Name, From: m.config.Name}
+			s := suspect{Incarnation: r.Incarnation, Node: r.Name, From: m.config.Name,
+				ClusterName: m.config.ClusterName}
 			m.suspectNode(&s)
 		}
 	}

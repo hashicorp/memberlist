@@ -361,6 +361,45 @@ func TestMemberlist_Join(t *testing.T) {
 	}
 }
 
+func TestMemberlist_Join_ClusterName(t *testing.T) {
+	m1 := GetMemberlist(t)
+	m1.setAlive()
+	m1.schedule()
+	defer m1.Shutdown()
+
+	// Create a second node
+	c := DefaultLANConfig()
+	addr1 := getBindAddr()
+	c.Name = addr1.String()
+	c.BindAddr = addr1.String()
+	c.BindPort = m1.config.BindPort
+
+	m2, err := Create(c)
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+	defer m2.Shutdown()
+
+	m2.config.ClusterName = "testCluster"
+
+	num, err := m2.Join([]string{m1.config.BindAddr})
+	if num != 0 {
+		t.Fatalf("Should not be able to join cluster with different ClusterName "+
+			"than our own! Nodes: %v", num)
+	}
+	if err == nil {
+		t.Fatalf("Error should not be nil when joining a cluster with different " +
+			"ClusterName than our own!")
+	}
+
+	if len(m2.Members()) != 1 {
+		t.Fatalf("should have 1 node! %v", m2.Members())
+	}
+	if m2.estNumNodes() != 1 {
+		t.Fatalf("should have 1 node! %v", m2.Members())
+	}
+}
+
 type CustomMergeDelegate struct {
 	invoked bool
 }
@@ -956,6 +995,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 
 	num, err := m2.Join([]string{fmt.Sprintf("%s:%d", m1.config.BindAddr, 23456)})
 	if num != 1 {
+		t.Errorf("Our err: %v", err)
 		t.Fatalf("unexpected 1: %d", num)
 	}
 	if err != nil {
