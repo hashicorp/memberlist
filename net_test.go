@@ -475,3 +475,21 @@ func TestEncryptDecryptState(t *testing.T) {
 		t.Fatalf("Decrypt failed: %v", plain)
 	}
 }
+
+func TestIsSameCluster(t *testing.T) {
+	m := GetMemberlist(t)
+	defer m.Shutdown()
+
+	m.config.ClusterName = "default"
+	clusterName := "default"
+
+	if !m.isSameCluster(clusterName) {
+		t.Fatalf("Cluster names should match. %v <-> %v", m.config.ClusterName, clusterName)
+	}
+
+	clusterName = "badCluster"
+
+	if m.isSameCluster(clusterName) {
+		t.Fatalf("Cluster names should not match. %v <-> %v", m.config.ClusterName, clusterName)
+	}
+}
