@@ -120,6 +120,11 @@ type pushPullHeader struct {
 	Join         bool // Is this a join request or a anti-entropy run
 }
 
+// userMsgHeader is used to encapsulate a userMsg
+type userMsgHeader struct {
+	UserMsgLen int // Encodes the byte lengh of user state
+}
+
 // pushNodeState is used for pushPullReq when we are
 // transfering out node states
 type pushNodeState struct {
@@ -186,54 +191,37 @@ func (m *Memberlist) tcpListen() {
 
 // handleConn handles a single incoming TCP connection
 func (m *Memberlist) handleConn(conn *net.TCPConn) {
-	m.logger.Printf("[DEBUG] memberlist: Responding to push/pull sync with: %s", conn.RemoteAddr())
+	m.logger.Printf("[DEBUG] memberlist: TCP connection from: %s", conn.RemoteAddr())
+
 	defer conn.Close()
 	metrics.IncrCounter([]string{"memberlist", "tcp", "accept"}, 1)
 
-	join, remoteNodes, userState, err := m.readRemoteState(conn)
+	msgType, bufConn, dec, err := m.readTCP(conn)
 	if err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to receive remote state: %s", err)
+		m.logger.Printf("[ERR] memberlist: failed to receive: %s", err)
 		return
 	}
 
-	if err := m.sendLocalState(conn, join); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to push local state: %s", err)
-	}
-
-	if err := m.verifyProtocol(remoteNodes); err != nil {
-		m.logger.Printf("[ERR] memberlist: Push/pull verification failed: %s", err)
-		return
-	}
-
-	// Invoke the merge delegate if any
-	if join && m.config.Merge != nil {
-		nodes := make([]*Node, len(remoteNodes))
-		for idx, n := range remoteNodes {
-			nodes[idx] = &Node{
-				Name: n.Name,
-				Addr: n.Addr,
-				Port: n.Port,
-				Meta: n.Meta,
-				PMin: n.Vsn[0],
-				PMax: n.Vsn[1],
-				PCur: n.Vsn[2],
-				DMin: n.Vsn[3],
-				DMax: n.Vsn[4],
-				DCur: n.Vsn[5],
-			}
+	if msgType == userMsg {
+		if err := m.readUserMsg(bufConn, dec); err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to receive user message: %s", err)
 		}
-		if err := m.config.Merge.NotifyMerge(nodes); err != nil {
-			m.logger.Printf("[WARN] memberlist: Cluster merge canceled: %s", err)
+	} else if msgType == pushPullMsg {
+		join, remoteNodes, userState, err := m.readRemoteState(bufConn, dec)
+		if err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to read remote state: %s", err)
 			return
 		}
-	}
 
-	// Merge the membership state
-	m.mergeState(remoteNodes)
+		if err := m.sendLocalState(conn, join); err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to push local state: %s", err)
+		}
 
-	// Invoke the delegate for user state
-	if m.config.Delegate != nil {
-		m.config.Delegate.MergeRemoteState(userState, join)
+		if err := m.mergeRemoteState(join, remoteNodes, userState); err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to merge remote state: %s", err)
+		}
+	} else {
+		m.logger.Printf("[ERR] memberlist: Received invalid msgType (%d)", msgType)
 	}
 }
 
@@ -534,7 +522,7 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 
 	// Fast path if nothing to piggypack
 	if len(extra) == 0 {
-		return m.rawSendMsg(to, msg)
+		return m.rawSendMsgUDP(to, msg)
 	}
 
 	// Join all the messages
@@ -546,11 +534,11 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	compound := makeCompoundMessage(msgs)
 
 	// Send the message
-	return m.rawSendMsg(to, compound.Bytes())
+	return m.rawSendMsgUDP(to, compound.Bytes())
 }
 
-// rawSendMsg is used to send a UDP message to another host without modification
-func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
+// rawSendMsgUDP is used to send a UDP message to another host without modification
+func (m *Memberlist) rawSendMsgUDP(to net.Addr, msg []byte) error {
 	// Check if we have compression enabled
 	if m.config.EnableCompression {
 		buf, err := compressPayload(msg)
@@ -582,7 +570,72 @@ func (m *Memberlist) rawSendMsg(to net.Addr, msg []byte) error {
 	return err
 }
 
-// sendState is used to initiate a push/pull over TCP with a remote node
+// rawSendMsgTCP is used to send a TCP message to another host without modification
+func (m *Memberlist) rawSendMsgTCP(conn net.Conn, sendBuf []byte) error {
+	// Check if compresion is enabled
+	if m.config.EnableCompression {
+		compBuf, err := compressPayload(sendBuf)
+		if err != nil {
+			m.logger.Printf("[ERROR] memberlist: Failed to compress payload: %v", err)
+		} else {
+			sendBuf = compBuf.Bytes()
+		}
+	}
+
+	// Check if encryption is enabled
+	if m.config.EncryptionEnabled() {
+		crypt, err := m.encryptLocalState(sendBuf)
+		if err != nil {
+			m.logger.Printf("[ERROR] memberlist: Failed to encrypt local state: %v", err)
+			return err
+		}
+		sendBuf = crypt
+	}
+
+	// Write out the entire send buffer
+	metrics.IncrCounter([]string{"memberlist", "tcp", "sent"}, float32(len(sendBuf)))
+
+	if n, err := conn.Write(sendBuf); err != nil {
+		return err
+	} else if n != len(sendBuf) {
+		return fmt.Errorf("only %d of %d bytes written", n, len(sendBuf))
+	}
+
+	return nil
+}
+
+// sendTCPUserMsg is used to send a TCP userMsg to another host
+func (m *Memberlist) sendTCPUserMsg(to net.Addr, sendBuf []byte) error {
+	dialer := net.Dialer{Timeout: m.config.TCPTimeout}
+	conn, err := dialer.Dial("tcp", to.String())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	bufConn := bytes.NewBuffer(nil)
+
+	if err := bufConn.WriteByte(byte(userMsg)); err != nil {
+		return err
+	}
+
+	// Send our node state
+	header := userMsgHeader{UserMsgLen: len(sendBuf)}
+	hd := codec.MsgpackHandle{}
+	enc := codec.NewEncoder(bufConn, &hd)
+
+	if err := enc.Encode(&header); err != nil {
+		return err
+	}
+
+	if _, err := bufConn.Write(sendBuf); err != nil {
+		return err
+	}
+
+	return m.rawSendMsgTCP(conn, bufConn.Bytes())
+}
+
+// sendAndReceiveState is used to initiate a push/pull over TCP with a remote node
 func (m *Memberlist) sendAndReceiveState(addr []byte, port uint16, join bool) ([]pushNodeState, []byte, error) {
 	// Attempt to connect
 	dialer := net.Dialer{Timeout: m.config.TCPTimeout}
@@ -600,15 +653,20 @@ func (m *Memberlist) sendAndReceiveState(addr []byte, port uint16, join bool) ([
 		return nil, nil, err
 	}
 
-	// Read remote state
-	_, remote, userState, err := m.readRemoteState(conn)
+	msgType, bufConn, dec, err := m.readTCP(conn)
 	if err != nil {
-		err := fmt.Errorf("Reading remote state failed: %v", err)
 		return nil, nil, err
 	}
 
-	// Return the remote state
-	return remote, userState, nil
+	// Quit if not push/pull
+	if msgType != pushPullMsg {
+		err := fmt.Errorf("received invalid msgType (%d), expected pushPullMsg (%d)", msgType, pushPullMsg)
+		return nil, nil, err
+	}
+
+	// Read remote state
+	_, remoteNodes, userState, err := m.readRemoteState(bufConn, dec)
+	return remoteNodes, userState, err
 }
 
 // sendLocalState is invoked to send our local state over a tcp connection
@@ -669,34 +727,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 	}
 
 	// Get the send buffer
-	sendBuf := bufConn.Bytes()
-
-	// Check if compresion is enabled
-	if m.config.EnableCompression {
-		compBuf, err := compressPayload(bufConn.Bytes())
-		if err != nil {
-			m.logger.Printf("[ERROR] memberlist: Failed to compress local state: %v", err)
-		} else {
-			sendBuf = compBuf.Bytes()
-		}
-	}
-
-	// Check if encryption is enabled
-	if m.config.EncryptionEnabled() {
-		crypt, err := m.encryptLocalState(sendBuf)
-		if err != nil {
-			m.logger.Printf("[ERROR] memberlist: Failed to encrypt local state: %v", err)
-			return err
-		}
-		sendBuf = crypt
-	}
-
-	// Write out the entire send buffer
-	metrics.IncrCounter([]string{"memberlist", "tcp", "sent"}, float32(len(sendBuf)))
-	if _, err := conn.Write(sendBuf); err != nil {
-		return err
-	}
-	return nil
+	return m.rawSendMsgTCP(conn, bufConn.Bytes())
 }
 
 // encryptLocalState is used to help encrypt local state before sending
@@ -754,8 +785,9 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 	return decryptPayload(keys, cipherBytes, dataBytes)
 }
 
-// recvRemoteState is used to read the remote state from a connection
-func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []byte, error) {
+// readTCP is used to read the start of a TCP stream.
+// it decrypts and decompresses the stream if necessary
+func (m *Memberlist) readTCP(conn net.Conn) (messageType, io.Reader, *codec.Decoder, error) {
 	// Setup a deadline
 	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
 
@@ -765,27 +797,27 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 	// Read the message type
 	buf := [1]byte{0}
 	if _, err := bufConn.Read(buf[:]); err != nil {
-		return false, nil, nil, err
+		return 0, nil, nil, err
 	}
 	msgType := messageType(buf[0])
 
 	// Check if the message is encrypted
 	if msgType == encryptMsg {
 		if !m.config.EncryptionEnabled() {
-			return false, nil, nil,
+			return 0, nil, nil,
 				fmt.Errorf("Remote state is encrypted and encryption is not configured")
 		}
 
 		plain, err := m.decryptRemoteState(bufConn)
 		if err != nil {
-			return false, nil, nil, err
+			return 0, nil, nil, err
 		}
 
 		// Reset message type and bufConn
 		msgType = messageType(plain[0])
 		bufConn = bytes.NewReader(plain[1:])
 	} else if m.config.EncryptionEnabled() {
-		return false, nil, nil,
+		return 0, nil, nil,
 			fmt.Errorf("Encryption is configured but remote state is not encrypted")
 	}
 
@@ -797,11 +829,11 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 	if msgType == compressMsg {
 		var c compress
 		if err := dec.Decode(&c); err != nil {
-			return false, nil, nil, err
+			return 0, nil, nil, err
 		}
 		decomp, err := decompressBuffer(&c)
 		if err != nil {
-			return false, nil, nil, err
+			return 0, nil, nil, err
 		}
 
 		// Reset the message type
@@ -814,12 +846,11 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 		dec = codec.NewDecoder(bufConn, &hd)
 	}
 
-	// Quit if not push/pull
-	if msgType != pushPullMsg {
-		err := fmt.Errorf("received invalid msgType (%d)", msgType)
-		return false, nil, nil, err
-	}
+	return msgType, bufConn, dec, nil
+}
 
+// readRemoteState is used to read the remote state from a connection
+func (m *Memberlist) readRemoteState(bufConn io.Reader, dec *codec.Decoder) (bool, []pushNodeState, []byte, error) {
 	// Read the push/pull header
 	var header pushPullHeader
 	if err := dec.Decode(&header); err != nil {
@@ -832,7 +863,7 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 	// Try to decode all the states
 	for i := 0; i < header.Nodes; i++ {
 		if err := dec.Decode(&remoteNodes[i]); err != nil {
-			return false, remoteNodes, nil, err
+			return false, nil, nil, err
 		}
 	}
 
@@ -847,7 +878,7 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 				bytes, header.UserStateLen)
 		}
 		if err != nil {
-			return false, remoteNodes, nil, err
+			return false, nil, nil, err
 		}
 	}
 
@@ -860,4 +891,76 @@ func (m *Memberlist) readRemoteState(conn net.Conn) (bool, []pushNodeState, []by
 	}
 
 	return header.Join, remoteNodes, userBuf, nil
+}
+
+// mergeRemoteState is used to merge the remote state with our local state
+func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, userBuf []byte) error {
+	if err := m.verifyProtocol(remoteNodes); err != nil {
+		m.logger.Printf("[ERR] memberlist: Push/pull verification failed: %s", err)
+		return err
+	}
+
+	// Invoke the merge delegate if any
+	if join && m.config.Merge != nil {
+		nodes := make([]*Node, len(remoteNodes))
+		for idx, n := range remoteNodes {
+			nodes[idx] = &Node{
+				Name: n.Name,
+				Addr: n.Addr,
+				Port: n.Port,
+				Meta: n.Meta,
+				PMin: n.Vsn[0],
+				PMax: n.Vsn[1],
+				PCur: n.Vsn[2],
+				DMin: n.Vsn[3],
+				DMax: n.Vsn[4],
+				DCur: n.Vsn[5],
+			}
+		}
+		if err := m.config.Merge.NotifyMerge(nodes); err != nil {
+			m.logger.Printf("[WARN] memberlist: Cluster merge canceled: %s", err)
+			return err
+		}
+	}
+
+	// Merge the membership state
+	m.mergeState(remoteNodes)
+
+	// Invoke the delegate for user state
+	if m.config.Delegate != nil {
+		m.config.Delegate.MergeRemoteState(userBuf, join)
+	}
+
+	return nil
+}
+
+// readUserMsg is used to decode a UserMsg from a TCP stream
+func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
+	// Read the user message header
+	var header userMsgHeader
+	if err := dec.Decode(&header); err != nil {
+		return err
+	}
+
+	// Read the user message into a buffer
+	var userBuf []byte
+	if header.UserMsgLen > 0 {
+		userBuf = make([]byte, header.UserMsgLen)
+		bytes, err := io.ReadAtLeast(bufConn, userBuf, header.UserMsgLen)
+		if err == nil && bytes != header.UserMsgLen {
+			err = fmt.Errorf(
+				"Failed to read full user message (%d / %d)",
+				bytes, header.UserMsgLen)
+		}
+		if err != nil {
+			return err
+		}
+
+		d := m.config.Delegate
+		if d != nil {
+			d.NotifyMsg(userBuf)
+		}
+	}
+
+	return nil
 }

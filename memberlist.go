@@ -387,7 +387,8 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 // user-data message, which a delegate will receive through NotifyMsg
 // The actual data is transmitted over UDP, which means this is a
 // best-effort transmission mechanism, and the maximum size of the
-// message is the size of a single UDP datagram, after compression
+// message is the size of a single UDP datagram, after compression.
+// This method is DEPRECATED in favor or SendToUDP
 func (m *Memberlist) SendTo(to net.Addr, msg []byte) error {
 	// Encode as a user message
 	buf := make([]byte, 1, len(msg)+1)
@@ -395,7 +396,36 @@ func (m *Memberlist) SendTo(to net.Addr, msg []byte) error {
 	buf = append(buf, msg...)
 
 	// Send the message
-	return m.rawSendMsg(to, buf)
+	return m.rawSendMsgUDP(to, buf)
+}
+
+// SendToUDP is used to directly send a message to another node, without
+// the use of the gossip mechanism. This will encode the message as a
+// user-data message, which a delegate will receive through NotifyMsg
+// The actual data is transmitted over UDP, which means this is a
+// best-effort transmission mechanism, and the maximum size of the
+// message is the size of a single UDP datagram, after compression
+func (m *Memberlist) SendToUDP(to *Node, msg []byte) error {
+	// Encode as a user message
+	buf := make([]byte, 1, len(msg)+1)
+	buf[0] = byte(userMsg)
+	buf = append(buf, msg...)
+
+	// Send the message
+	destAddr := &net.UDPAddr{IP: to.Addr, Port: int(to.Port)}
+	return m.rawSendMsgUDP(destAddr, buf)
+}
+
+// SendToTCP is used to directly send a message to another node, without
+// the use of the gossip mechanism. This will encode the message as a
+// user-data message, which a delegate will receive through NotifyMsg
+// The actual data is transmitted over TCP, which means delivery
+// is guaranteed if no error is returned. There is no limit
+// to the size of the message
+func (m *Memberlist) SendToTCP(to *Node, msg []byte) error {
+	// Send the message
+	destAddr := &net.TCPAddr{IP: to.Addr, Port: int(to.Port)}
+	return m.sendTCPUserMsg(destAddr, msg)
 }
 
 // Members returns a list of all known live nodes. The node structures
