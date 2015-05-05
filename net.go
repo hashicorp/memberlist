@@ -215,10 +215,11 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 
 		if err := m.sendLocalState(conn, join); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to push local state: %s", err)
+			return
 		}
 
 		if err := m.mergeRemoteState(join, remoteNodes, userState); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to merge remote state: %s", err)
+			return
 		}
 	} else {
 		m.logger.Printf("[ERR] memberlist: Received invalid msgType (%d)", msgType)
