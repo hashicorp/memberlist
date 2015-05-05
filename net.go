@@ -896,7 +896,7 @@ func (m *Memberlist) readRemoteState(bufConn io.Reader, dec *codec.Decoder) (boo
 // mergeRemoteState is used to merge the remote state with our local state
 func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, userBuf []byte) error {
 	if err := m.verifyProtocol(remoteNodes); err != nil {
-		m.logger.Printf("[ERR] memberlist: Push/pull verification failed: %s", err)
+		m.logger.Printf("[ERR] memberlist: push/pull verification failed: %s", err)
 		return err
 	}
 
@@ -918,7 +918,7 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 			}
 		}
 		if err := m.config.Merge.NotifyMerge(nodes); err != nil {
-			m.logger.Printf("[WARN] memberlist: Cluster merge canceled: %s", err)
+			m.logger.Printf("[WARN] memberlist: cluster merge canceled: %s", err)
 			return err
 		}
 	}
@@ -930,7 +930,6 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 	if m.config.Delegate != nil {
 		m.config.Delegate.MergeRemoteState(userBuf, join)
 	}
-
 	return nil
 }
 

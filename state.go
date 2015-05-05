@@ -365,10 +365,8 @@ func (m *Memberlist) pushPullNode(addr []byte, port uint16, join bool) error {
 	}
 
 	if err := m.mergeRemoteState(join, remote, userState); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to merge remote state: %s", err)
 		return err
 	}
-
 	return nil
 }
 
