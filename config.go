@@ -133,6 +133,7 @@ type Config struct {
 	Conflict                ConflictDelegate
 	Merge                   MergeDelegate
 	Ping                    PingDelegate
+	Alive                   AliveDelegate
 
 	// LogOutput is the writer where logs should be sent. If this is not
 	// set, logging will go to stderr by default.

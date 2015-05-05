@@ -586,6 +586,30 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		return
 	}
 
+	// Invoke the Alive delegate if any. This can be used to filter out
+	// alive messages based on custom logic. For example, using a cluster name.
+	// Using a merge delegate is not enough, as it is possible for passive
+	// cluster merging to still occur.
+	if m.config.Alive != nil {
+		node := &Node{
+			Name: a.Node,
+			Addr: a.Addr,
+			Port: a.Port,
+			Meta: a.Meta,
+			PMin: a.Vsn[0],
+			PMax: a.Vsn[1],
+			PCur: a.Vsn[2],
+			DMin: a.Vsn[3],
+			DMax: a.Vsn[4],
+			DCur: a.Vsn[5],
+		}
+		if err := m.config.Alive.NotifyAlive(node); err != nil {
+			m.logger.Printf("[WARN] memberlist: ignoring alive message for '%s': %s",
+				a.Node, err)
+			return
+		}
+	}
+
 	// Check if we've never seen this node before, and if not, then
 	// store this node in our node map.
 	if !ok {

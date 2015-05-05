@@ -419,6 +419,72 @@ func TestMemberlist_Join_Cancel(t *testing.T) {
 	}
 }
 
+type CustomAliveDelegate struct {
+	Ignore string
+	count  int
+}
+
+func (c *CustomAliveDelegate) NotifyAlive(peer *Node) error {
+	c.count++
+	if peer.Name == c.Ignore {
+		return nil
+	}
+	log.Printf("Cancel alive")
+	return fmt.Errorf("Custom alive canceled")
+}
+
+func TestMemberlist_Join_Cancel_Passive(t *testing.T) {
+	m1 := GetMemberlist(t)
+	alive1 := &CustomAliveDelegate{
+		Ignore: m1.config.Name,
+	}
+	m1.config.Alive = alive1
+	m1.setAlive()
+	m1.schedule()
+	defer m1.Shutdown()
+
+	// Create a second node
+	c := DefaultLANConfig()
+	addr1 := getBindAddr()
+	c.Name = addr1.String()
+	c.BindAddr = addr1.String()
+	c.BindPort = m1.config.BindPort
+
+	m2, err := Create(c)
+	if err != nil {
+		t.Fatal("unexpected err: %s", err)
+	}
+	alive2 := &CustomAliveDelegate{
+		Ignore: c.Name,
+	}
+	m2.config.Alive = alive2
+	defer m2.Shutdown()
+
+	num, err := m2.Join([]string{m1.config.BindAddr})
+	if num != 1 {
+		t.Fatalf("unexpected 1: %d", num)
+	}
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+
+	// Check the hosts
+	if len(m2.Members()) != 1 {
+		t.Fatalf("should have 1 nodes! %v", m2.Members())
+	}
+	if len(m1.Members()) != 1 {
+		t.Fatalf("should have 1 nodes! %v", m1.Members())
+	}
+
+	// Check delegate invocation
+	if alive1.count == 0 {
+		t.Fatalf("should invoke delegate: %d", alive1.count)
+	}
+	if alive2.count == 0 {
+		t.Fatalf("should invoke delegate: %d", alive2.count)
+	}
+}
+
 func TestMemberlist_Join_protocolVersions(t *testing.T) {
 	c1 := testConfig()
 	c2 := testConfig()
