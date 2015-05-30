@@ -18,7 +18,7 @@ import (
 // range. This range is inclusive.
 const (
 	ProtocolVersionMin uint8 = 1
-	ProtocolVersionMax       = 2
+	ProtocolVersionMax       = 3
 )
 
 // messageType is an integer ID of a type of message that can be received
