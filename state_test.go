@@ -115,9 +115,11 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 	ip3 := []byte(addr3)
 	ip4 := []byte(addr4)
 
+	var probeTimeMax time.Duration
 	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
+		probeTimeMax = c.ProbeInterval + time.Millisecond
 	})
 	m2 := HostMemberlist(addr2.String(), t, nil)
 	m3 := HostMemberlist(addr3.String(), t, nil)
@@ -151,13 +153,22 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 		t.Fatalf("could not close UDP listener")
 	}
 	n := m1.nodeMap[addr4.String()]
+	startProbe := time.Now()
 	m1.probeNode(n)
+	probeTime := time.Now().Sub(startProbe)
+
+	// Should be marked alive because of the TCP fallback ping.
 	if n.State != stateAlive {
 		t.Fatalf("expect node to be alive")
 	}
 
+	// Make sure TCP activity completed in a timely manner.
+	if probeTime > probeTimeMax {
+		t.Fatalf("took to long to probe, %9.6f", probeTime.Seconds())
+	}
+
 	// Confirm the peers attempted an indirect probe.
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(probeTimeMax)
 	if m2.sequenceNum != 1 {
 		t.Fatalf("bad seqno %v", m2.sequenceNum)
 	}
@@ -170,13 +181,23 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 	if err := m4.tcpListener.Close(); err != nil {
 		t.Fatalf("could not close TCP listener")
 	}
+	startProbe = time.Now()
 	m1.probeNode(n)
+	probeTime = time.Now().Sub(startProbe)
+
+	// Node should be reported suspect.
 	if n.State != stateSuspect {
 		t.Fatalf("expect node to be suspect")
 	}
 
+	// Make sure TCP activity didn't cause us to wait too long before
+	// timing out.
+	if probeTime > probeTimeMax {
+		t.Fatalf("took to long to probe, %9.6f", probeTime.Seconds())
+	}
+
 	// Confirm the peers attempted an indirect probe.
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(probeTimeMax)
 	if m2.sequenceNum != 2 {
 		t.Fatalf("bad seqno %v", m2.sequenceNum)
 	}

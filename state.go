@@ -205,27 +205,27 @@ START:
 	m.probeNode(&node)
 }
 
-// probeNode handles a single round of failure checking on a node
+// probeNode handles a single round of failure checking on a node.
 func (m *Memberlist) probeNode(node *nodeState) {
 	defer metrics.MeasureSince([]string{"memberlist", "probeNode"}, time.Now())
 
-	// Send a ping to the node
+	// Send a ping to the node.
 	ping := ping{SeqNo: m.nextSeqNo(), Node: node.Name}
 	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
 
-	// Setup an ack handler
+	// Setup an ack handler.
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
 	sent := time.Now()
 	deadline := sent.Add(m.config.ProbeInterval)
 	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
 
-	// Send the ping message
+	// Send the ping message.
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
 		return
 	}
 
-	// Wait for response or round-trip-time
+	// Wait for response or round-trip-time.
 	select {
 	case v := <-ackCh:
 		if v.Complete == true {
@@ -236,20 +236,20 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		}
 
 		// As an edge case, if we get a timeout, we need to re-enqueue it
-		// here to break out of the select below
+		// here to break out of the select below.
 		if v.Complete == false {
 			ackCh <- v
 		}
 	case <-time.After(m.config.ProbeTimeout):
 	}
 
-	// Get some random live nodes
+	// Get some random live nodes.
 	m.nodeLock.RLock()
 	excludes := []string{m.config.Name, node.Name}
 	kNodes := kRandomNodes(m.config.IndirectChecks, excludes, m.nodes)
 	m.nodeLock.RUnlock()
 
-	// Attempt an indirect ping
+	// Attempt an indirect ping.
 	ind := indirectPingReq{SeqNo: ping.SeqNo, Target: node.Addr, Port: node.Port, Node: node.Name}
 	for _, peer := range kNodes {
 		destAddr := &net.UDPAddr{IP: peer.Addr, Port: int(peer.Port)}
@@ -266,30 +266,23 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	fallbackCh := make(chan bool)
 	if node.PMax >= 3 {
 		destAddr := &net.TCPAddr{IP: node.Addr, Port: int(node.Port)}
-		dialer := net.Dialer{Timeout: deadline.Sub(time.Now())}
-		conn, err := dialer.Dial("tcp", destAddr.String())
-		if err != nil {
-			// This will fail if the node is actually dead, so we
-			// shouldn't spam the logs with it.
-			close(fallbackCh)
-		} else {
-			go func() {
-				defer close(fallbackCh)
-				defer conn.Close()
-
-				conn.SetDeadline(deadline)
-				if err := m.sendPingAndWaitForAck(conn, ping); err != nil {
-					m.logger.Printf("[ERR] memberlist: Failed TCP fallback ping: %s", err)
-				} else {
-					fallbackCh <- true
-				}
-			}()
-		}
+		go func() {
+			defer close(fallbackCh)
+			didContact, err := m.sendPingAndWaitForAck(destAddr, ping, deadline)
+			if err != nil {
+				m.logger.Printf("[ERR] memberlist: Failed TCP fallback ping: %s", err)
+			} else {
+				fallbackCh <- didContact
+			}
+		}()
 	} else {
 		close(fallbackCh)
 	}
 
-	// Wait for the acks or timeout
+	// Wait for the acks or timeout. Note that we don't check the fallback
+	// channel here because we want to issue a warning below if that's the
+	// *only* way we hear back from the peer, so we have to let this time
+	// out first to allow the normal UDP-based acks to come in.
 	select {
 	case v := <-ackCh:
 		if v.Complete == true {
@@ -297,13 +290,14 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		}
 	}
 
-	// Finally, poll the fallback channel - anything in there means that the
-	// TCP fallback ping was successful. The timeouts are set such that the
-	// channel will have something or be closed without having to wait any
-	// additional time here.
-	for _ = range fallbackCh {
-		m.logger.Printf("memberlist: Was able to reach %s via TCP but not UDP, network may be misconfigured and not allowing bidirectional UDP", node.Name)
-		return
+	// Finally, poll the fallback channel. The timeouts are set such that
+	// the channel will have something or be closed without having to wait
+	// any additional time here.
+	for didContact := range fallbackCh {
+		if didContact {
+			m.logger.Printf("memberlist: Was able to reach %s via TCP but not UDP, network may be misconfigured and not allowing bidirectional UDP", node.Name)
+			return
+		}
 	}
 
 	// No acks received from target, suspect
