@@ -991,10 +991,9 @@ func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
 
 // sendPingAndWaitForAck makes a TCP connection to the given address, sends
 // a ping, and waits for an ack. All of this is done as a series of blocking
-// operations, given the deadline.
-func (m *Memberlist) sendPingAndWaitForAck(destAddr net.Addr, ping ping, deadline time.Time) (didContact bool, err error) {
-	didContact = false
-
+// operations, given the deadline. The bool return parameter is true if we
+// we able to round trip a ping to the other node.
+func (m *Memberlist) sendPingAndWaitForAck(destAddr net.Addr, ping ping, deadline time.Time) (bool, error) {
 	dialer := net.Dialer{Deadline: deadline}
 	conn, err := dialer.Dial("tcp", destAddr.String())
 	if err != nil {
@@ -1002,41 +1001,37 @@ func (m *Memberlist) sendPingAndWaitForAck(destAddr net.Addr, ping ping, deadlin
 		// shouldn't spam the logs with it. After this point, errors
 		// with the connection are real, unexpected errors and should
 		// get propagated up.
-		err = nil
-		return
+		return false, nil
 	}
 	defer conn.Close()
 	conn.SetDeadline(deadline)
 
 	out, err := encode(pingMsg, &ping)
 	if err != nil {
-		return
+		return false, err
 	}
 
 	if err = m.rawSendMsgTCP(conn, out.Bytes()); err != nil {
-		return
+		return false, err
 	}
 
 	msgType, _, dec, err := m.readTCP(conn)
 	if err != nil {
-		return
+		return false, err
 	}
 
 	if msgType != ackRespMsg {
-		err = fmt.Errorf("unexpected msgType (%d) from TCP ping", msgType)
-		return
+		return false, fmt.Errorf("Unexpected msgType (%d) from TCP ping", msgType)
 	}
 
 	var ack ackResp
 	if err = dec.Decode(&ack); err != nil {
-		return
+		return false, err
 	}
 
 	if ack.SeqNo != ping.SeqNo {
-		err = fmt.Errorf("sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo)
-		return
+		return false, fmt.Errorf("Sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo)
 	}
 
-	didContact = true
-	return
+	return true, nil
 }

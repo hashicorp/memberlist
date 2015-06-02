@@ -251,7 +251,9 @@ func TestTCPPing(t *testing.T) {
 	if tcp == nil {
 		t.Fatalf("no tcp listener")
 	}
-	defer tcp.Close()
+
+	// Note that tcp gets closed in the last test, so we avoid a deferred
+	// Close() call here.
 
 	m := GetMemberlist(t)
 	defer m.Shutdown()
@@ -266,6 +268,7 @@ func TestTCPPing(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %s", err)
 		}
+		defer conn.Close()
 
 		msgType, _, dec, err := m.readTCP(conn)
 		if err != nil {
@@ -316,6 +319,7 @@ func TestTCPPing(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %s", err)
 		}
+		defer conn.Close()
 
 		_, _, dec, err := m.readTCP(conn)
 		if err != nil {
@@ -340,7 +344,7 @@ func TestTCPPing(t *testing.T) {
 	}()
 	deadline = time.Now().Add(pingTimeout)
 	didContact, err = m.sendPingAndWaitForAck(tcpAddr, pingOut, deadline)
-	if err == nil || !strings.Contains(err.Error(), "sequence number") {
+	if err == nil || !strings.Contains(err.Error(), "Sequence number") {
 		t.Fatalf("expected an error from mis-matched sequence number")
 	}
 	if didContact {
@@ -354,6 +358,7 @@ func TestTCPPing(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to connect: %s", err)
 		}
+		defer conn.Close()
 
 		_, _, _, err = m.readTCP(conn)
 		if err != nil {
@@ -373,29 +378,22 @@ func TestTCPPing(t *testing.T) {
 	}()
 	deadline = time.Now().Add(pingTimeout)
 	didContact, err = m.sendPingAndWaitForAck(tcpAddr, pingOut, deadline)
-	if err == nil || !strings.Contains(err.Error(), "unexpected msgType") {
+	if err == nil || !strings.Contains(err.Error(), "Unexpected msgType") {
 		t.Fatalf("expected an error from bogus message")
 	}
 	if didContact {
 		t.Fatalf("expected failed ping")
 	}
 
-	// Make sure failed I/O respects the deadline.
-	go func() {
-		tcp.SetDeadline(time.Now().Add(pingTimeMax))
-		_, err := tcp.AcceptTCP()
-		if err != nil {
-			t.Fatalf("failed to connect: %s", err)
-		}
-
-		time.Sleep(2 * pingTimeMax)
-	}()
+	// Make sure failed I/O respects the deadline. In this case we try the
+	// common case of the receiving node being totally down.
+	tcp.Close()
 	deadline = time.Now().Add(pingTimeout)
 	startPing := time.Now()
 	didContact, err = m.sendPingAndWaitForAck(tcpAddr, pingOut, deadline)
 	pingTime := time.Now().Sub(startPing)
-	if err == nil {
-		t.Fatalf("expected an error while trying to ping")
+	if err != nil {
+		t.Fatalf("expected no error during ping on closed socket, got: %s", err)
 	}
 	if didContact {
 		t.Fatalf("expected failed ping")

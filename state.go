@@ -264,7 +264,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// misinformation to other nodes via anti-entropy), avoiding flapping in
 	// the cluster.
 	fallbackCh := make(chan bool)
-	if node.PMax >= 3 {
+	if m.ProtocolVersion() >= 3 && node.PMax >= 3 {
 		destAddr := &net.TCPAddr{IP: node.Addr, Port: int(node.Port)}
 		go func() {
 			defer close(fallbackCh)
@@ -295,7 +295,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// any additional time here.
 	for didContact := range fallbackCh {
 		if didContact {
-			m.logger.Printf("memberlist: Was able to reach %s via TCP but not UDP, network may be misconfigured and not allowing bidirectional UDP", node.Name)
+			m.logger.Printf("[WARN] memberlist: Was able to reach %s via TCP but not UDP, network may be misconfigured and not allowing bidirectional UDP", node.Name)
 			return
 		}
 	}
