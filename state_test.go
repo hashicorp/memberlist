@@ -105,6 +105,86 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	}
 }
 
+func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	addr3 := getBindAddr()
+	addr4 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+	ip3 := []byte(addr3)
+	ip4 := []byte(addr4)
+
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
+		c.ProbeTimeout = time.Millisecond
+		c.ProbeInterval = 10 * time.Millisecond
+	})
+	m2 := HostMemberlist(addr2.String(), t, nil)
+	m3 := HostMemberlist(addr3.String(), t, nil)
+	m4 := HostMemberlist(addr4.String(), t, nil)
+
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a1, nil, true)
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a2, nil, false)
+	a3 := alive{Node: addr3.String(), Addr: ip3, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a3, nil, false)
+
+	// Make sure m4 is configured with the same protocol version as m1 so
+	// the TCP fallback behavior is enabled.
+	a4 := alive{
+		Node: addr4.String(),
+		Addr: ip4,
+		Port: 7946,
+		Incarnation: 1,
+		Vsn: []uint8{
+			ProtocolVersionMin, ProtocolVersionMax,
+			m1.config.ProtocolVersion, m1.config.DelegateProtocolMin,
+			m1.config.DelegateProtocolMax, m1.config.DelegateProtocolVersion,
+		},
+	}
+	m1.aliveNode(&a4, nil, false)
+
+	// Isolate m4 from all inbound UDP traffic to force the TCP fallback
+	// path to get executed.
+	if err := m4.udpListener.Close(); err != nil {
+		t.Fatalf("could not close UDP listener")
+	}
+	n := m1.nodeMap[addr4.String()]
+	m1.probeNode(n)
+	if n.State != stateAlive {
+		t.Fatalf("expect node to be alive")
+	}
+
+	// Confirm the peers attempted an indirect probe.
+	time.Sleep(10 * time.Millisecond)
+	if m2.sequenceNum != 1 {
+		t.Fatalf("bad seqno %v", m2.sequenceNum)
+	}
+	if m3.sequenceNum != 1 {
+		t.Fatalf("bad seqno %v", m3.sequenceNum)
+	}
+
+	// Now shutdown all inbound TCP traffic to make sure the TCP fallback
+	// path properly fails when the node is really unreachable.
+	if err := m4.tcpListener.Close(); err != nil {
+		t.Fatalf("could not close TCP listener")
+	}
+	m1.probeNode(n)
+	if n.State != stateSuspect {
+		t.Fatalf("expect node to be suspect")
+	}
+
+	// Confirm the peers attempted an indirect probe.
+	time.Sleep(10 * time.Millisecond)
+	if m2.sequenceNum != 2 {
+		t.Fatalf("bad seqno %v", m2.sequenceNum)
+	}
+	if m3.sequenceNum != 2 {
+		t.Fatalf("bad seqno %v", m3.sequenceNum)
+	}
+}
+
 func TestMemberList_ProbeNode(t *testing.T) {
 	addr1 := getBindAddr()
 	addr2 := getBindAddr()
@@ -115,7 +195,7 @@ func TestMemberList_ProbeNode(t *testing.T) {
 		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
 	})
-	m2 := HostMemberlist(addr2.String(), t, nil)
+	_ = HostMemberlist(addr2.String(), t, nil)
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a1, nil, true)
@@ -125,14 +205,14 @@ func TestMemberList_ProbeNode(t *testing.T) {
 	n := m1.nodeMap[addr2.String()]
 	m1.probeNode(n)
 
-	// Should be marked suspect
+	// Should be marked alive
 	if n.State != stateAlive {
 		t.Fatalf("Expect node to be alive")
 	}
 
 	// Should increment seqno
 	if m1.sequenceNum != 1 {
-		t.Fatalf("bad seqno %v", m2.sequenceNum)
+		t.Fatalf("bad seqno %v", m1.sequenceNum)
 	}
 }
 

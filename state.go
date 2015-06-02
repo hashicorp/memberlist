@@ -216,6 +216,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// Setup an ack handler
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
 	sent := time.Now()
+	deadline := sent.Add(m.config.ProbeInterval)
 	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
 
 	// Send the ping message
@@ -257,12 +258,52 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		}
 	}
 
+	// Also make an attempt to contact the node directly over TCP. This
+	// helps prevent confused clients who get isolated from UDP traffic
+	// but can still speak TCP (which also means they can possibly report
+	// misinformation to other nodes via anti-entropy), avoiding flapping in
+	// the cluster.
+	fallbackCh := make(chan bool)
+	if node.PMax >= 3 {
+		destAddr := &net.TCPAddr{IP: node.Addr, Port: int(node.Port)}
+		dialer := net.Dialer{Timeout: deadline.Sub(time.Now())}
+		conn, err := dialer.Dial("tcp", destAddr.String())
+		if err != nil {
+			// This will fail if the node is actually dead, so we
+			// shouldn't spam the logs with it.
+			close(fallbackCh)
+		} else {
+			go func() {
+				defer close(fallbackCh)
+				defer conn.Close()
+
+				conn.SetDeadline(deadline)
+				if err := m.sendPingAndWaitForAck(conn, ping); err != nil {
+					m.logger.Printf("[ERR] memberlist: Failed TCP fallback ping: %s", err)
+				} else {
+					fallbackCh <- true
+				}
+			}()
+		}
+	} else {
+		close(fallbackCh)
+	}
+
 	// Wait for the acks or timeout
 	select {
 	case v := <-ackCh:
 		if v.Complete == true {
 			return
 		}
+	}
+
+	// Finally, poll the fallback channel - anything in there means that the
+	// TCP fallback ping was successful. The timeouts are set such that the
+	// channel will have something or be closed without having to wait any
+	// additional time here.
+	for _ = range fallbackCh {
+		m.logger.Printf("memberlist: Was able to reach %s via TCP but not UDP, network may be misconfigured and not allowing bidirectional UDP", node.Name)
+		return
 	}
 
 	// No acks received from target, suspect
