@@ -238,7 +238,7 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 		ack := ackResp{p.SeqNo, nil}
 		out, err := encode(ackRespMsg, &ack)
 		if err != nil {
-			m.logger.Printf("[ERR] memeberlist: Failed to encode TCP ack: %s", err)
+			m.logger.Printf("[ERR] memberlist: Failed to encode TCP ack: %s", err)
 			return
 		}
 
