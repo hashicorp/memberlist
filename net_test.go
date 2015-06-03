@@ -258,7 +258,7 @@ func TestTCPPing(t *testing.T) {
 	m := GetMemberlist(t)
 	defer m.Shutdown()
 	pingTimeout := m.config.ProbeInterval
-	pingTimeMax := m.config.ProbeInterval + 10 * time.Millisecond
+	pingTimeMax := m.config.ProbeInterval + 10*time.Millisecond
 
 	// Do a normal round trip.
 	pingOut := ping{SeqNo: 23, Node: "mongo"}

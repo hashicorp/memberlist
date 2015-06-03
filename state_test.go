@@ -135,9 +135,9 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 	// Make sure m4 is configured with the same protocol version as m1 so
 	// the TCP fallback behavior is enabled.
 	a4 := alive{
-		Node: addr4.String(),
-		Addr: ip4,
-		Port: 7946,
+		Node:        addr4.String(),
+		Addr:        ip4,
+		Port:        7946,
 		Incarnation: 1,
 		Vsn: []uint8{
 			ProtocolVersionMin, ProtocolVersionMax,
