@@ -18,7 +18,7 @@ import (
 // range. This range is inclusive.
 const (
 	ProtocolVersionMin uint8 = 1
-	ProtocolVersionMax       = 2
+	ProtocolVersionMax       = 3
 )
 
 // messageType is an integer ID of a type of message that can be received
@@ -196,17 +196,19 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	defer conn.Close()
 	metrics.IncrCounter([]string{"memberlist", "tcp", "accept"}, 1)
 
+	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
 	msgType, bufConn, dec, err := m.readTCP(conn)
 	if err != nil {
 		m.logger.Printf("[ERR] memberlist: failed to receive: %s", err)
 		return
 	}
 
-	if msgType == userMsg {
+	switch msgType {
+	case userMsg:
 		if err := m.readUserMsg(bufConn, dec); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to receive user message: %s", err)
 		}
-	} else if msgType == pushPullMsg {
+	case pushPullMsg:
 		join, remoteNodes, userState, err := m.readRemoteState(bufConn, dec)
 		if err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to read remote state: %s", err)
@@ -221,7 +223,31 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 		if err := m.mergeRemoteState(join, remoteNodes, userState); err != nil {
 			return
 		}
-	} else {
+	case pingMsg:
+		var p ping
+		if err := dec.Decode(&p); err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to decode TCP ping: %s", err)
+			return
+		}
+
+		if p.Node != "" && p.Node != m.config.Name {
+			m.logger.Printf("[WARN] memberlist: Got ping for unexpected node %s", p.Node)
+			return
+		}
+
+		ack := ackResp{p.SeqNo, nil}
+		out, err := encode(ackRespMsg, &ack)
+		if err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to encode TCP ack: %s", err)
+			return
+		}
+
+		err = m.rawSendMsgTCP(conn, out.Bytes())
+		if err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to send TCP ack: %s", err)
+			return
+		}
+	default:
 		m.logger.Printf("[ERR] memberlist: Received invalid msgType (%d)", msgType)
 	}
 }
@@ -654,6 +680,7 @@ func (m *Memberlist) sendAndReceiveState(addr []byte, port uint16, join bool) ([
 		return nil, nil, err
 	}
 
+	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
 	msgType, bufConn, dec, err := m.readTCP(conn)
 	if err != nil {
 		return nil, nil, err
@@ -789,9 +816,6 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 // readTCP is used to read the start of a TCP stream.
 // it decrypts and decompresses the stream if necessary
 func (m *Memberlist) readTCP(conn net.Conn) (messageType, io.Reader, *codec.Decoder, error) {
-	// Setup a deadline
-	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
-
 	// Created a buffered reader
 	var bufConn io.Reader = bufio.NewReader(conn)
 
@@ -934,7 +958,7 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 	return nil
 }
 
-// readUserMsg is used to decode a UserMsg from a TCP stream
+// readUserMsg is used to decode a userMsg from a TCP stream
 func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
 	// Read the user message header
 	var header userMsgHeader
@@ -963,4 +987,51 @@ func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
 	}
 
 	return nil
+}
+
+// sendPingAndWaitForAck makes a TCP connection to the given address, sends
+// a ping, and waits for an ack. All of this is done as a series of blocking
+// operations, given the deadline. The bool return parameter is true if we
+// we able to round trip a ping to the other node.
+func (m *Memberlist) sendPingAndWaitForAck(destAddr net.Addr, ping ping, deadline time.Time) (bool, error) {
+	dialer := net.Dialer{Deadline: deadline}
+	conn, err := dialer.Dial("tcp", destAddr.String())
+	if err != nil {
+		// If the node is actually dead we expect this to fail, so we
+		// shouldn't spam the logs with it. After this point, errors
+		// with the connection are real, unexpected errors and should
+		// get propagated up.
+		return false, nil
+	}
+	defer conn.Close()
+	conn.SetDeadline(deadline)
+
+	out, err := encode(pingMsg, &ping)
+	if err != nil {
+		return false, err
+	}
+
+	if err = m.rawSendMsgTCP(conn, out.Bytes()); err != nil {
+		return false, err
+	}
+
+	msgType, _, dec, err := m.readTCP(conn)
+	if err != nil {
+		return false, err
+	}
+
+	if msgType != ackRespMsg {
+		return false, fmt.Errorf("Unexpected msgType (%d) from TCP ping", msgType)
+	}
+
+	var ack ackResp
+	if err = dec.Decode(&ack); err != nil {
+		return false, err
+	}
+
+	if ack.SeqNo != ping.SeqNo {
+		return false, fmt.Errorf("Sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo)
+	}
+
+	return true, nil
 }

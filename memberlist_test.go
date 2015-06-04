@@ -70,39 +70,47 @@ func (m *MockDelegate) MergeRemoteState(s []byte, join bool) {
 	m.remoteState = s
 }
 
+// Returns a new Memberlist on an open port by trying a range of port numbers
+// until something sticks.
+func NewMemberlistOnOpenPort(c *Config) (*Memberlist, error) {
+	var m *Memberlist
+	var err error
+	for i := 0; i < 100; i++ {
+		m, err = newMemberlist(c)
+		if err == nil {
+			return m, nil
+		}
+		c.BindPort++
+	}
+
+	return nil, err
+}
+
 func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
 	d := &MockDelegate{}
 
 	c := testConfig()
 	c.Delegate = d
 
-	var m *Memberlist
-	var err error
-	for i := 0; i < 100; i++ {
-		m, err = newMemberlist(c)
-		if err == nil {
-			return m, d
-		}
-		c.BindPort++
+	m, err := NewMemberlistOnOpenPort(c)
+	if err != nil {
+		t.Fatalf("failed to start: %v", err)
+		return nil, nil
 	}
-	t.Fatalf("failed to start: %v", err)
-	return nil, nil
+
+	return m, d
 }
 
 func GetMemberlist(t *testing.T) *Memberlist {
 	c := testConfig()
 
-	var m *Memberlist
-	var err error
-	for i := 0; i < 100; i++ {
-		m, err = newMemberlist(c)
-		if err == nil {
-			return m
-		}
-		c.BindPort++
+	m, err := NewMemberlistOnOpenPort(c)
+	if err != nil {
+		t.Fatalf("failed to start: %v", err)
+		return nil
 	}
-	t.Fatalf("failed to start: %v", err)
-	return nil
+
+	return m
 }
 
 func TestDefaultLANConfig_protocolVersion(t *testing.T) {
@@ -942,47 +950,56 @@ func TestMemberlist_Join_DeadNode(t *testing.T) {
 	}
 }
 
-func TestMemberlist_Join_Proto1And2(t *testing.T) {
-	// Create first node, protocol 2
-	m1 := GetMemberlist(t)
-	m1.setAlive()
-	m1.schedule()
-	defer m1.Shutdown()
-	if m1.config.ProtocolVersion != 2 {
-		t.Fatalf("expected version 2")
+// Tests that nodes running different versions of the protocol can successfully
+// discover each other and add themselves to their respective member lists.
+func TestMemberlist_Join_Prototocol_Compatibility(t *testing.T) {
+	testProtocolVersionPair := func(t *testing.T, pv1 uint8, pv2 uint8) {
+		c1 := testConfig()
+		c1.ProtocolVersion = pv1
+		m1, err := NewMemberlistOnOpenPort(c1)
+		if err != nil {
+			t.Fatalf("failed to start: %v", err)
+		}
+		m1.setAlive()
+		m1.schedule()
+		defer m1.Shutdown()
+
+		c2 := DefaultLANConfig()
+		addr1 := getBindAddr()
+		c2.Name = addr1.String()
+		c2.BindAddr = addr1.String()
+		c2.BindPort = m1.config.BindPort
+		c2.ProtocolVersion = pv2
+
+		m2, err := Create(c2)
+		if err != nil {
+			t.Fatalf("unexpected err: %s", err)
+		}
+		defer m2.Shutdown()
+
+		num, err := m2.Join([]string{m1.config.BindAddr})
+		if num != 1 {
+			t.Fatalf("unexpected 1: %d", num)
+		}
+		if err != nil {
+			t.Fatalf("unexpected err: %s", err)
+		}
+
+		// Check the hosts
+		if len(m2.Members()) != 2 {
+			t.Fatalf("should have 2 nodes! %v", m2.Members())
+		}
+
+		// Check the hosts
+		if len(m1.Members()) != 2 {
+			t.Fatalf("should have 2 nodes! %v", m1.Members())
+		}
 	}
 
-	// Create a second node, lower protocol!
-	c := DefaultLANConfig()
-	addr1 := getBindAddr()
-	c.Name = addr1.String()
-	c.BindAddr = addr1.String()
-	c.BindPort = m1.config.BindPort
-	c.ProtocolVersion = 1
-
-	m2, err := Create(c)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
-	defer m2.Shutdown()
-
-	num, err := m2.Join([]string{m1.config.BindAddr})
-	if num != 1 {
-		t.Fatalf("unexpected 1: %d", num)
-	}
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
-
-	// Check the hosts
-	if len(m2.Members()) != 2 {
-		t.Fatalf("should have 2 nodes! %v", m2.Members())
-	}
-
-	// Check the hosts
-	if len(m1.Members()) != 2 {
-		t.Fatalf("should have 2 nodes! %v", m2.Members())
-	}
+	testProtocolVersionPair(t, 2, 1)
+	testProtocolVersionPair(t, 2, 3)
+	testProtocolVersionPair(t, 3, 2)
+	testProtocolVersionPair(t, 3, 1)
 }
 
 func TestMemberlist_Join_IPv6(t *testing.T) {

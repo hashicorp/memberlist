@@ -93,15 +93,22 @@ be disabled entirely.
 
 Failure detection is done by periodic random probing using a configurable interval.
 If the node fails to ack within a reasonable time (typically some multiple
-of RTT), then an indirect probe is attempted. An indirect probe asks a
-configurable number of random nodes to probe the same node, in case there
-are network issues causing our own node to fail the probe. If both our
-probe and the indirect probes fail within a reasonable time, then the
-node is marked "suspicious" and this knowledge is gossiped to the cluster.
-A suspicious node is still considered a member of cluster. If the suspect member
-of the cluster does not disputes the suspicion within a configurable period of
-time, the node is finally considered dead, and this state is then gossiped
-to the cluster.
+of RTT), then an indirect probe as well as a direct TCP probe are attempted. An
+indirect probe asks a configurable number of random nodes to probe the same node,
+in case there are network issues causing our own node to fail the probe. The direct
+TCP probe is used to help identify the common situation where networking is
+misconfigured to allow TCP but not UDP. Without the TCP probe, a UDP-isolated node
+would think all other nodes were suspect and could cause churn in the cluster when
+it attempts a TCP-based state exchange with another node. It is not desirable to
+operate with only TCP connectivity because convergence will be much slower, but it
+is enabled so that memberlist can detect this situation and alert operators.
+
+If both our probe, the indirect probes, and the direct TCP probe fail within a
+configurable time, then the node is marked "suspicious" and this knowledge is
+gossiped to the cluster. A suspicious node is still considered a member of
+cluster. If the suspect member of the cluster does not dispute the suspicion
+within a configurable period of time, the node is finally considered dead,
+and this state is then gossiped to the cluster.
 
 This is a brief and incomplete description of the protocol. For a better idea,
 please read the
