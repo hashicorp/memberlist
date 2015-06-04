@@ -992,7 +992,7 @@ func TestMemberlist_Join_Prototocol_Compatibility(t *testing.T) {
 
 		// Check the hosts
 		if len(m1.Members()) != 2 {
-			t.Fatalf("should have 2 nodes! %v", m2.Members())
+			t.Fatalf("should have 2 nodes! %v", m1.Members())
 		}
 	}
 
