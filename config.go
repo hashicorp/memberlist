@@ -111,6 +111,8 @@ type Config struct {
 	// the first key used while attempting to decrypt messages. Providing a
 	// value for this primary key will enable message-level encryption and
 	// verification, and automatically install the key onto the keyring.
+	// The value should be either 16, 24, or 32 bytes to select AES-128, 
+	// AES-192, or AES-256. 
 	SecretKey []byte
 
 	// The keyring holds all of the encryption keys used internally. It is
