@@ -17,6 +17,20 @@ type Config struct {
 	BindAddr string
 	BindPort int
 
+	// Configuration related to using the multicast discovery
+	// service, takes a multicast address and port to listen on
+	// and query when "bootstrapping".
+	DiscoveryBindAddr string
+	DiscoveryBindPort int
+
+	// Enable the discovery service (uses multicast), this will run
+	// a multicast listener to respond to discovery queries
+	EnableDiscovery bool
+
+	// Timeout for discovery. Causes discovery to wait until timeout expires
+	// and return the hosts found.
+	DiscoveryTimeout time.Duration
+
 	// Configuration related to what address to advertise to other
 	// cluster members. Used for nat traversal.
 	AdvertiseAddr string
@@ -204,6 +218,17 @@ func DefaultLocalConfig() *Config {
 	conf.ProbeTimeout = 200 * time.Millisecond
 	conf.ProbeInterval = time.Second
 	conf.GossipInterval = 100 * time.Millisecond
+	return conf
+}
+
+// DefaultDiscoverableConfig works like DefaultLocalConfig, however it returns a configuration
+// that enables discovery (multicast bootstrap)
+func DefaultDiscoverableConfig() *Config {
+	conf := DefaultLocalConfig()
+	conf.EnableDiscovery = true
+	conf.DiscoveryBindAddr = "224.0.0.55"
+	conf.DiscoveryBindPort = 9999
+	conf.DiscoveryTimeout = 1 * time.Second
 	return conf
 }
 

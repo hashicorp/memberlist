@@ -35,9 +35,10 @@ type Memberlist struct {
 	leave          bool
 	leaveBroadcast chan struct{}
 
-	udpListener *net.UDPConn
-	tcpListener *net.TCPListener
-	handoff     chan msgHandoff
+	udpListener       *net.UDPConn
+	discoveryListener *net.UDPConn
+	tcpListener       *net.TCPListener
+	handoff           chan msgHandoff
 
 	nodeLock sync.RWMutex
 	nodes    []*nodeState          // Known nodes
@@ -120,6 +121,19 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	m.broadcasts.NumNodes = func() int {
 		return m.estNumNodes()
 	}
+
+	if conf.EnableDiscovery {
+		discoveryAddr := &net.UDPAddr{
+			IP: net.ParseIP(conf.DiscoveryBindAddr), Port: conf.DiscoveryBindPort}
+		m.discoveryListener, err = net.ListenMulticastUDP("udp", nil, discoveryAddr)
+		if err != nil {
+			tcpLn.Close()
+			udpLn.Close()
+			return nil, fmt.Errorf("Failed to start discovery listener. Err: %s", err)
+		}
+		go m.discoveryListen()
+	}
+
 	go m.tcpListen()
 	go m.udpListen()
 	go m.udpHandler()
@@ -180,6 +194,52 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 	}
 
 	return numSuccess, retErr
+}
+
+// Discover finds seed peer(s) responding via multicast to be used with Join
+func (m *Memberlist) Discover() ([]string, error) {
+	var dAddrs []string
+	if !m.config.EnableDiscovery {
+		return nil, fmt.Errorf("Discovery is not enabled, set EnableDiscovery in config")
+	}
+
+	c, err := net.ListenPacket("udp", ":0")
+	if err != nil {
+		return nil, fmt.Errorf("Could not open udp connection: %v", err)
+	}
+	defer c.Close()
+
+	addr := &net.UDPAddr{
+		IP:   net.ParseIP(m.config.DiscoveryBindAddr),
+		Port: m.config.DiscoveryBindPort,
+	}
+
+	// Send our hostname, the discoveryListen function will not send a
+	// response if it detects its own node name
+	_, err = c.WriteTo([]byte(m.config.Name), addr)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"Could not send discovery request: %s", err)
+	}
+
+	timeout := m.config.DiscoveryTimeout
+	if timeout == 0 {
+		// We will be nice here and auto set one
+		timeout = 1 * time.Second
+	}
+	c.SetReadDeadline(time.Now().Add(timeout))
+	for {
+		buf := make([]byte, udpBufSize)
+		n, _, err := c.ReadFrom(buf)
+		if err != nil {
+			// This is kind of gross, but any timing out of the reader
+			// requires an error to be thrown, no point in trying it again
+			break
+		}
+		dAddrs = append(dAddrs, string(buf[:n]))
+	}
+
+	return dAddrs, nil
 }
 
 // resolveAddr is used to resolve the address into an address,
