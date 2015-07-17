@@ -174,6 +174,43 @@ func setUDPRecvBuf(c *net.UDPConn) {
 	}
 }
 
+// discoveryListen listens for and handles discovery traffic, responding
+// with the tcp address of this host
+func (m *Memberlist) discoveryListen() {
+	var n int
+	var addr *net.UDPAddr
+	var err error
+
+	for {
+		buf := make([]byte, udpBufSize)
+		n, addr, err = m.discoveryListener.ReadFromUDP(buf)
+		if err != nil {
+			if m.shutdown {
+				break
+			}
+			m.logger.Printf("[ERR] memberlist: Error reading multicast UDP packet: %s", err)
+			continue
+		}
+
+		if n < 1 {
+			m.logger.Printf("[ERR] memberlist: multicast packet too short (%d bytes). From: %s",
+				len(buf), addr)
+			continue
+		} else if string(buf[:n]) == m.config.Name {
+			// Ignore our own requests
+			continue
+		}
+		// Respond to the mcast membership query
+		c, err := net.DialUDP("udp", nil, addr)
+		if err != nil {
+			m.logger.Printf("[ERR] memberlist: could not reply to multicast request: %s", err)
+			continue
+		}
+		// Respond with the TCP listen address
+		c.Write([]byte(m.tcpListener.Addr().String()))
+	}
+}
+
 // tcpListen listens for and handles incoming connections
 func (m *Memberlist) tcpListen() {
 	for {

@@ -113,6 +113,22 @@ func GetMemberlist(t *testing.T) *Memberlist {
 	return m
 }
 
+func GetDiscoverableMemberlist(t *testing.T) *Memberlist {
+	c := testConfig()
+	c.EnableDiscovery = true
+	c.DiscoveryBindAddr = "224.0.0.55"
+	c.DiscoveryBindPort = 9999
+	c.DiscoveryTimeout = 1 * time.Second
+
+	m, err := NewMemberlistOnOpenPort(c)
+	if err != nil {
+		t.Fatalf("failed to start: %v", err)
+		return nil
+	}
+
+	return m
+}
+
 func TestDefaultLANConfig_protocolVersion(t *testing.T) {
 	c := DefaultLANConfig()
 	if c.ProtocolVersion != ProtocolVersionMax {
@@ -353,6 +369,47 @@ func TestMemberlist_Join(t *testing.T) {
 	defer m2.Shutdown()
 
 	num, err := m2.Join([]string{m1.config.BindAddr})
+	if num != 1 {
+		t.Fatalf("unexpected 1: %d", num)
+	}
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+
+	// Check the hosts
+	if len(m2.Members()) != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+	if m2.estNumNodes() != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+}
+
+func TestMemberlist_JoinDiscoverable(t *testing.T) {
+	m1 := GetDiscoverableMemberlist(t)
+	m1.setAlive()
+	m1.schedule()
+	defer m1.Shutdown()
+
+	// Create a second node
+	c := DefaultDiscoverableConfig()
+	addr1 := getBindAddr()
+	c.Name = addr1.String()
+	c.BindAddr = addr1.String()
+	c.BindPort = m1.config.BindPort
+
+	m2, err := Create(c)
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+	defer m2.Shutdown()
+
+	existing, err := m2.Discover()
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+
+	num, err := m2.Join(existing)
 	if num != 1 {
 		t.Fatalf("unexpected 1: %d", num)
 	}
