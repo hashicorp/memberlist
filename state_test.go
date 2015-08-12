@@ -119,7 +119,7 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.ProbeTimeout = time.Millisecond
 		c.ProbeInterval = 10 * time.Millisecond
-		probeTimeMax = c.ProbeInterval + time.Millisecond
+		probeTimeMax = c.ProbeInterval + 2 * time.Millisecond
 	})
 	m2 := HostMemberlist(addr2.String(), t, nil)
 	m3 := HostMemberlist(addr3.String(), t, nil)
