@@ -158,7 +158,7 @@ func TestCreate_secretKey(t *testing.T) {
 		{make([]byte, 0), false},
 		{[]byte("abc"), true},
 		{make([]byte, 16), false},
-		{make([]byte, 32), true},
+		{make([]byte, 38), true},
 	}
 
 	for _, tc := range cases {
