@@ -117,13 +117,20 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 
 	var probeTimeMax time.Duration
 	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
-		c.ProbeTimeout = time.Millisecond
-		c.ProbeInterval = 10 * time.Millisecond
-		probeTimeMax = c.ProbeInterval + 2 * time.Millisecond
+		c.ProbeTimeout = 10 * time.Millisecond
+		c.ProbeInterval = 200 * time.Millisecond
+		probeTimeMax = c.ProbeInterval + 20 * time.Millisecond
 	})
+	defer m1.Shutdown()
+
 	m2 := HostMemberlist(addr2.String(), t, nil)
+	defer m2.Shutdown()
+
 	m3 := HostMemberlist(addr3.String(), t, nil)
+	defer m3.Shutdown()
+
 	m4 := HostMemberlist(addr4.String(), t, nil)
+	defer m4.Shutdown()
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a1, nil, true)
@@ -167,13 +174,10 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 		t.Fatalf("took to long to probe, %9.6f", probeTime.Seconds())
 	}
 
-	// Confirm the peers attempted an indirect probe.
+	// Confirm at least one of the peers attempted an indirect probe.
 	time.Sleep(probeTimeMax)
-	if m2.sequenceNum != 1 {
-		t.Fatalf("bad seqno %v", m2.sequenceNum)
-	}
-	if m3.sequenceNum != 1 {
-		t.Fatalf("bad seqno %v", m3.sequenceNum)
+	if m2.sequenceNum != 1 && m3.sequenceNum != 1{
+		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
 	}
 
 	// Now shutdown all inbound TCP traffic to make sure the TCP fallback
@@ -196,13 +200,10 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 		t.Fatalf("took to long to probe, %9.6f", probeTime.Seconds())
 	}
 
-	// Confirm the peers attempted an indirect probe.
+	// Confirm at least one of the peers attempted an indirect probe.
 	time.Sleep(probeTimeMax)
-	if m2.sequenceNum != 2 {
-		t.Fatalf("bad seqno %v", m2.sequenceNum)
-	}
-	if m3.sequenceNum != 2 {
-		t.Fatalf("bad seqno %v", m3.sequenceNum)
+	if m2.sequenceNum != 2 && m3.sequenceNum != 2{
+		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
 	}
 }
 
