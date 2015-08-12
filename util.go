@@ -5,12 +5,13 @@ import (
 	"compress/lzw"
 	"encoding/binary"
 	"fmt"
-	"github.com/hashicorp/go-msgpack/codec"
 	"io"
 	"math"
 	"math/rand"
 	"net"
 	"time"
+
+	"github.com/hashicorp/go-msgpack/codec"
 )
 
 // pushPullScale is the minimum number of nodes
@@ -107,9 +108,10 @@ func retransmitLimit(retransmitMult, n int) int {
 	return limit
 }
 
-// shuffleNodes randomly shuffles the input nodes
+// shuffleNodes randomly shuffles the input nodes using the Fisher-Yates shuffle
 func shuffleNodes(nodes []*nodeState) {
-	for i := range nodes {
+	n := len(nodes)
+	for i := n - 1; i > 0; i-- {
 		j := rand.Intn(i + 1)
 		nodes[i], nodes[j] = nodes[j], nodes[i]
 	}
