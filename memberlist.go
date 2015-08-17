@@ -89,6 +89,9 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to start TCP listener. Err: %s", err)
 	}
+	if conf.BindPort == 0 {
+		conf.BindPort = tcpLn.Addr().(*net.TCPAddr).Port
+	}
 
 	udpAddr := &net.UDPAddr{IP: net.ParseIP(conf.BindAddr), Port: conf.BindPort}
 	udpLn, err := net.ListenUDP("udp", udpAddr)

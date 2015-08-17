@@ -73,17 +73,8 @@ func (m *MockDelegate) MergeRemoteState(s []byte, join bool) {
 // Returns a new Memberlist on an open port by trying a range of port numbers
 // until something sticks.
 func NewMemberlistOnOpenPort(c *Config) (*Memberlist, error) {
-	var m *Memberlist
-	var err error
-	for i := 0; i < 100; i++ {
-		m, err = newMemberlist(c)
-		if err == nil {
-			return m, nil
-		}
-		c.BindPort++
-	}
-
-	return nil, err
+	c.BindPort = 0
+	return newMemberlist(c)
 }
 
 func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
