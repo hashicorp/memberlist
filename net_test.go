@@ -48,7 +48,7 @@ func TestHandleCompoundPing(t *testing.T) {
 
 	// Wait for responses
 	go func() {
-		time.Sleep(time.Second)
+		time.Sleep(2 * time.Second)
 		panic("timeout")
 	}()
 
@@ -108,7 +108,7 @@ func TestHandlePing(t *testing.T) {
 
 	// Wait for response
 	go func() {
-		time.Sleep(time.Second)
+		time.Sleep(2 * time.Second)
 		panic("timeout")
 	}()
 
@@ -211,7 +211,7 @@ func TestHandleIndirectPing(t *testing.T) {
 
 	// Wait for response
 	go func() {
-		time.Sleep(time.Second)
+		time.Sleep(2 * time.Second)
 		panic("timeout")
 	}()
 
@@ -563,7 +563,7 @@ func TestSendMsg_Piggyback(t *testing.T) {
 
 	// Wait for response
 	go func() {
-		time.Sleep(time.Second)
+		time.Sleep(2 * time.Second)
 		panic("timeout")
 	}()
 

@@ -85,6 +85,11 @@ type Config struct {
 	ProbeInterval time.Duration
 	ProbeTimeout  time.Duration
 
+	// DisableTcpPings will turn off the fallback TCP pings that are attempted
+	// if the direct UDP ping fails. These get pipelined along with the
+	// indirect UDP pings.
+	DisableTcpPings bool
+
 	// GossipInterval and GossipNodes are used to configure the gossip
 	// behavior of memberlist.
 	//
@@ -156,7 +161,7 @@ func DefaultLANConfig() *Config {
 		BindPort:         7946,
 		AdvertiseAddr:    "",
 		AdvertisePort:    7946,
-		ProtocolVersion:  ProtocolVersionMax,
+		ProtocolVersion:  ProtocolVersion2Compatible,
 		TCPTimeout:       10 * time.Second,       // Timeout after 10 seconds
 		IndirectChecks:   3,                      // Use 3 nodes for the indirect ping
 		RetransmitMult:   4,                      // Retransmit a message 4 * log(N+1) nodes
@@ -164,6 +169,7 @@ func DefaultLANConfig() *Config {
 		PushPullInterval: 30 * time.Second,       // Low frequency
 		ProbeTimeout:     500 * time.Millisecond, // Reasonable RTT time for LAN
 		ProbeInterval:    1 * time.Second,        // Failure check every second
+		DisableTcpPings:  false,                  // TCP pings are safe, even with mixed versions
 
 		GossipNodes:    3,                      // Gossip to 3 nodes
 		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly
