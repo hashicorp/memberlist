@@ -18,7 +18,15 @@ import (
 // range. This range is inclusive.
 const (
 	ProtocolVersionMin uint8 = 1
-	ProtocolVersionMax       = 3
+
+	// Version 3 added support for TCP pings but we kept the default
+	// protocol version at 2 to ease transition to this new feature.
+	// A memberlist speaking version 2 of the protocol will attempt
+	// to TCP ping another memberlist who understands version 3 or
+	// greater.
+	ProtocolVersion2Compatible = 2
+
+	ProtocolVersionMax = 3
 )
 
 // messageType is an integer ID of a type of message that can be received

@@ -115,7 +115,7 @@ func GetMemberlist(t *testing.T) *Memberlist {
 
 func TestDefaultLANConfig_protocolVersion(t *testing.T) {
 	c := DefaultLANConfig()
-	if c.ProtocolVersion != ProtocolVersionMax {
+	if c.ProtocolVersion != ProtocolVersion2Compatible {
 		t.Fatalf("should be max: %d", c.ProtocolVersion)
 	}
 }

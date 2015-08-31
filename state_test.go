@@ -3,6 +3,7 @@ package memberlist
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 )
@@ -90,18 +91,15 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	n := m1.nodeMap[addr4.String()]
 	m1.probeNode(n)
 
-	// Should be marked suspect
+	// Should be marked suspect.
 	if n.State != stateSuspect {
 		t.Fatalf("Expect node to be suspect")
 	}
 	time.Sleep(10 * time.Millisecond)
 
-	// Should increment seqno
-	if m2.sequenceNum != 1 {
-		t.Fatalf("bad seqno %v", m2.sequenceNum)
-	}
-	if m3.sequenceNum != 1 {
-		t.Fatalf("bad seqno %v", m3.sequenceNum)
+	// One of the peers should have attempted an indirect probe.
+	if m2.sequenceNum != 1 && m3.sequenceNum != 1 {
+		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
 	}
 }
 
@@ -119,7 +117,7 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.ProbeTimeout = 10 * time.Millisecond
 		c.ProbeInterval = 200 * time.Millisecond
-		probeTimeMax = c.ProbeInterval + 20 * time.Millisecond
+		probeTimeMax = c.ProbeInterval + 20*time.Millisecond
 	})
 	defer m1.Shutdown()
 
@@ -147,18 +145,28 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 		Port:        7946,
 		Incarnation: 1,
 		Vsn: []uint8{
-			ProtocolVersionMin, ProtocolVersionMax,
-			m1.config.ProtocolVersion, m1.config.DelegateProtocolMin,
-			m1.config.DelegateProtocolMax, m1.config.DelegateProtocolVersion,
+			ProtocolVersionMin,
+			ProtocolVersionMax,
+			m1.config.ProtocolVersion,
+			m1.config.DelegateProtocolMin,
+			m1.config.DelegateProtocolMax,
+			m1.config.DelegateProtocolVersion,
 		},
 	}
 	m1.aliveNode(&a4, nil, false)
 
-	// Isolate m4 from all inbound UDP traffic to force the TCP fallback
-	// path to get executed.
-	if err := m4.udpListener.Close(); err != nil {
-		t.Fatalf("could not close UDP listener")
+	// Isolate m4 from UDP traffic by re-opening its listener on the wrong
+	// port. This should force the TCP fallback path to be used.
+	var err error
+	if err = m4.udpListener.Close(); err != nil {
+		t.Fatalf("err: %v", err)
 	}
+	udpAddr := &net.UDPAddr{IP: ip4, Port: 9999}
+	if m4.udpListener, err = net.ListenUDP("udp", udpAddr); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	// Have node m1 probe m4.
 	n := m1.nodeMap[addr4.String()]
 	startProbe := time.Now()
 	m1.probeNode(n)
@@ -176,15 +184,21 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 
 	// Confirm at least one of the peers attempted an indirect probe.
 	time.Sleep(probeTimeMax)
-	if m2.sequenceNum != 1 && m3.sequenceNum != 1{
+	if m2.sequenceNum != 1 && m3.sequenceNum != 1 {
 		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
 	}
 
 	// Now shutdown all inbound TCP traffic to make sure the TCP fallback
 	// path properly fails when the node is really unreachable.
-	if err := m4.tcpListener.Close(); err != nil {
-		t.Fatalf("could not close TCP listener")
+	if err = m4.tcpListener.Close(); err != nil {
+		t.Fatalf("err: %v", err)
 	}
+	tcpAddr := &net.TCPAddr{IP: ip4, Port: 9999}
+	if m4.tcpListener, err = net.ListenTCP("tcp", tcpAddr); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	// Probe again, this time there should be no contact.
 	startProbe = time.Now()
 	m1.probeNode(n)
 	probeTime = time.Now().Sub(startProbe)
@@ -202,7 +216,184 @@ func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 
 	// Confirm at least one of the peers attempted an indirect probe.
 	time.Sleep(probeTimeMax)
-	if m2.sequenceNum != 2 && m3.sequenceNum != 2{
+	if m2.sequenceNum != 2 && m3.sequenceNum != 2 {
+		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
+	}
+}
+
+func TestMemberList_ProbeNode_FallbackTCP_Disabled(t *testing.T) {
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	addr3 := getBindAddr()
+	addr4 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+	ip3 := []byte(addr3)
+	ip4 := []byte(addr4)
+
+	var probeTimeMax time.Duration
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
+		c.ProbeTimeout = 10 * time.Millisecond
+		c.ProbeInterval = 200 * time.Millisecond
+		probeTimeMax = c.ProbeInterval + 20*time.Millisecond
+	})
+	defer m1.Shutdown()
+
+	m2 := HostMemberlist(addr2.String(), t, nil)
+	defer m2.Shutdown()
+
+	m3 := HostMemberlist(addr3.String(), t, nil)
+	defer m3.Shutdown()
+
+	m4 := HostMemberlist(addr4.String(), t, nil)
+	defer m4.Shutdown()
+
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a1, nil, true)
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a2, nil, false)
+	a3 := alive{Node: addr3.String(), Addr: ip3, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a3, nil, false)
+
+	// Make sure m4 is configured with the same protocol version as m1 so
+	// the TCP fallback behavior is enabled.
+	a4 := alive{
+		Node:        addr4.String(),
+		Addr:        ip4,
+		Port:        7946,
+		Incarnation: 1,
+		Vsn: []uint8{
+			ProtocolVersionMin,
+			ProtocolVersionMax,
+			m1.config.ProtocolVersion,
+			m1.config.DelegateProtocolMin,
+			m1.config.DelegateProtocolMax,
+			m1.config.DelegateProtocolVersion,
+		},
+	}
+	m1.aliveNode(&a4, nil, false)
+
+	// Isolate m4 from UDP traffic by re-opening its listener on the wrong
+	// port. This should force the TCP fallback path to be used.
+	var err error
+	if err = m4.udpListener.Close(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	udpAddr := &net.UDPAddr{IP: ip4, Port: 9999}
+	if m4.udpListener, err = net.ListenUDP("udp", udpAddr); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	// Disable the TCP pings using the config mechanism.
+	m1.config.DisableTcpPings = true
+
+	// Have node m1 probe m4.
+	n := m1.nodeMap[addr4.String()]
+	startProbe := time.Now()
+	m1.probeNode(n)
+	probeTime := time.Now().Sub(startProbe)
+
+	// Node should be reported suspect.
+	if n.State != stateSuspect {
+		t.Fatalf("expect node to be suspect")
+	}
+
+	// Make sure TCP activity didn't cause us to wait too long before
+	// timing out.
+	if probeTime > probeTimeMax {
+		t.Fatalf("took to long to probe, %9.6f", probeTime.Seconds())
+	}
+
+	// Confirm at least one of the peers attempted an indirect probe.
+	time.Sleep(probeTimeMax)
+	if m2.sequenceNum != 1 && m3.sequenceNum != 1 {
+		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
+	}
+}
+
+func TestMemberList_ProbeNode_FallbackTCP_OldProtocol(t *testing.T) {
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	addr3 := getBindAddr()
+	addr4 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+	ip3 := []byte(addr3)
+	ip4 := []byte(addr4)
+
+	var probeTimeMax time.Duration
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
+		c.ProbeTimeout = 10 * time.Millisecond
+		c.ProbeInterval = 200 * time.Millisecond
+		probeTimeMax = c.ProbeInterval + 20*time.Millisecond
+	})
+	defer m1.Shutdown()
+
+	m2 := HostMemberlist(addr2.String(), t, nil)
+	defer m2.Shutdown()
+
+	m3 := HostMemberlist(addr3.String(), t, nil)
+	defer m3.Shutdown()
+
+	m4 := HostMemberlist(addr4.String(), t, nil)
+	defer m4.Shutdown()
+
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a1, nil, true)
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a2, nil, false)
+	a3 := alive{Node: addr3.String(), Addr: ip3, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a3, nil, false)
+
+	// Set up m4 so that it doesn't understand a version of the protocol
+	// that supports TCP pings.
+	a4 := alive{
+		Node:        addr4.String(),
+		Addr:        ip4,
+		Port:        7946,
+		Incarnation: 1,
+		Vsn: []uint8{
+			ProtocolVersionMin,
+			ProtocolVersion2Compatible,
+			ProtocolVersion2Compatible,
+			m1.config.DelegateProtocolMin,
+			m1.config.DelegateProtocolMax,
+			m1.config.DelegateProtocolVersion,
+		},
+	}
+	m1.aliveNode(&a4, nil, false)
+
+	// Isolate m4 from UDP traffic by re-opening its listener on the wrong
+	// port. This should force the TCP fallback path to be used.
+	var err error
+	if err = m4.udpListener.Close(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	udpAddr := &net.UDPAddr{IP: ip4, Port: 9999}
+	if m4.udpListener, err = net.ListenUDP("udp", udpAddr); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	// Have node m1 probe m4.
+	n := m1.nodeMap[addr4.String()]
+	startProbe := time.Now()
+	m1.probeNode(n)
+	probeTime := time.Now().Sub(startProbe)
+
+	// Node should be reported suspect.
+	if n.State != stateSuspect {
+		t.Fatalf("expect node to be suspect")
+	}
+
+	// Make sure TCP activity didn't cause us to wait too long before
+	// timing out.
+	if probeTime > probeTimeMax {
+		t.Fatalf("took to long to probe, %9.6f", probeTime.Seconds())
+	}
+
+	// Confirm at least one of the peers attempted an indirect probe.
+	time.Sleep(probeTimeMax)
+	if m2.sequenceNum != 1 && m3.sequenceNum != 1 {
 		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
 	}
 }

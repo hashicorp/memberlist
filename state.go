@@ -268,8 +268,13 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// but can still speak TCP (which also means they can possibly report
 	// misinformation to other nodes via anti-entropy), avoiding flapping in
 	// the cluster.
+	//
+	// This is a little unusual because we will attempt a TCP ping to any
+	// member who understands version 3 of the protocol, regardless of
+	// which protocol version we are speaking. That's why we've included a
+	// config option to turn this off if desired.
 	fallbackCh := make(chan bool)
-	if m.ProtocolVersion() >= 3 && node.PMax >= 3 {
+	if (!m.config.DisableTcpPings) && (node.PMax >= 3) {
 		destAddr := &net.TCPAddr{IP: node.Addr, Port: int(node.Port)}
 		go func() {
 			defer close(fallbackCh)
@@ -545,8 +550,8 @@ func (m *Memberlist) estNumNodes() int {
 }
 
 type ackMessage struct {
-	Complete bool
-	Payload  []byte
+	Complete  bool
+	Payload   []byte
 	Timestamp time.Time
 }
 
