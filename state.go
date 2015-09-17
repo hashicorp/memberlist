@@ -715,9 +715,6 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		return
 	}
 
-	// Update metrics
-	metrics.IncrCounter([]string{"memberlist", "msg", "alive"}, 1)
-
 	// Store the old state and meta data
 	oldState := state.State
 	oldMeta := state.Meta
@@ -784,6 +781,9 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 			state.StateChange = time.Now()
 		}
 	}
+
+	// Update metrics
+	metrics.IncrCounter([]string{"memberlist", "msg", "alive"}, 1)
 
 	// Notify the delegate of any relevant updates
 	if m.config.Events != nil {
