@@ -209,44 +209,19 @@ START:
 func (m *Memberlist) probeNode(node *nodeState) {
 	defer metrics.MeasureSince([]string{"memberlist", "probeNode"}, time.Now())
 
-	// Send a ping to the node.
 	ping := ping{SeqNo: m.nextSeqNo(), Node: node.Name}
-	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
 
 	// Setup an ack handler.
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
-	deadline := time.Now().Add(m.config.ProbeInterval)
 	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
 
-	// Send the ping message.
-	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
+	// Send a ping to the node.
+	deadline := time.Now().Add(m.config.ProbeInterval)
+	if success, _, err := m.pingNode(&ping, node, ackCh); err != nil {
+		m.logger.Printf("[ERR] memberlist: Could not ping node: %s", err)
 		return
-	}
-
-	// Mark the sent time here, which should be after any pre-processing and
-	// system calls to do the actual send. This probably under-reports a bit,
-	// but it's the best we can do.
-	sent := time.Now()
-
-	// Wait for response or round-trip-time.
-	select {
-	case v := <-ackCh:
-		if v.Complete == true {
-			if m.config.Ping != nil {
-				rtt := v.Timestamp.Sub(sent)
-				m.config.Ping.NotifyPingComplete(&node.Node, rtt, v.Payload)
-			}
-			return
-		}
-
-		// As an edge case, if we get a timeout, we need to re-enqueue it
-		// here to break out of the select below.
-		if v.Complete == false {
-			ackCh <- v
-		}
-	case <-time.After(m.config.ProbeTimeout):
-		m.logger.Printf("[DEBUG] memberlist: Failed UDP ping: %v (timeout reached)", node.Name)
+	} else if success {
+		return
 	}
 
 	// Get some random live nodes.
@@ -315,6 +290,66 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	m.logger.Printf("[INFO] memberlist: Suspect %s has failed, no acks received", node.Name)
 	s := suspect{Incarnation: node.Incarnation, Node: node.Name, From: m.config.Name}
 	m.suspectNode(&s)
+}
+
+// Ping initiates a ping to the node with the specified name.
+func (m *Memberlist) Ping(node string) (bool, time.Duration, error) {
+	m.nodeLock.RLock()
+	for index := 0; index < len(m.nodes); index++ {
+		if node == m.nodes[index].Name {
+			m.nodeLock.RUnlock()
+			ping := ping{SeqNo: m.nextSeqNo(), Node: node}
+
+			// Setup an ack handler.
+			ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
+			m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
+
+			return m.pingNode(&ping, m.nodes[index], ackCh)
+		}
+	}
+
+	// Node was not found in member list.
+	m.nodeLock.RUnlock()
+	return false, time.Duration(0), fmt.Errorf("Node %s not in member list.", node)
+}
+
+// pingNode handles a single ping with the specified sequence number.
+func (m *Memberlist) pingNode(ping *ping, node *nodeState, ackCh chan ackMessage) (bool, time.Duration, error) {
+	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
+
+	// Send the ping message.
+	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
+		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
+		return false, time.Duration(0), err
+	}
+
+	// Mark the sent time here, which should be after any pre-processing and
+	// system calls to do the actual send. This probably under-reports a bit,
+	// but it's the best we can do.
+	sent := time.Now()
+
+	// Wait for response or round-trip-time.
+	select {
+	case v := <-ackCh:
+		if v.Complete == true {
+			rtt := v.Timestamp.Sub(sent)
+			if m.config.Ping != nil {
+				m.config.Ping.NotifyPingComplete(&node.Node, rtt, v.Payload)
+			}
+			return true, rtt, nil
+		}
+
+		// As an edge case, if we get a timeout, we need to re-enqueue it
+		// here to break out of the select below.
+		if v.Complete == false {
+			ackCh <- v
+		}
+	case <-time.After(m.config.ProbeTimeout):
+		m.logger.Printf("[DEBUG] memberlist: Failed UDP ping: %v (timeout reached)", node.Name)
+	}
+
+	m.logger.Printf("[WARN] memberlist: ping to %s did not return", node.Name)
+	return false, m.config.ProbeTimeout, nil
 }
 
 // resetNodes is used when the tick wraps around. It will reap the
