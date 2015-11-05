@@ -48,6 +48,16 @@ type ackHandler struct {
 	timer   *time.Timer
 }
 
+// NoPingResponseError is used to indicate a 'ping' packet was
+// successfully issued but no response was received
+type NoPingResponseError struct {
+	node string
+}
+
+func (f NoPingResponseError) Error() string {
+	return fmt.Sprintf("No response from node %s", f.node)
+}
+
 // Schedule is used to ensure the Tick is performed periodically. This
 // function is safe to call multiple times. If the memberlist is already
 // scheduled, then it won't do anything.
@@ -217,11 +227,18 @@ func (m *Memberlist) probeNode(node *nodeState) {
 
 	// Send a ping to the node.
 	deadline := time.Now().Add(m.config.ProbeInterval)
-	if success, _, err := m.pingNode(&ping, node, ackCh); err != nil {
-		m.logger.Printf("[ERR] memberlist: Could not ping node: %s", err)
+	if rtt, v, err := m.pingNode(&ping, node.Addr, node.Port, ackCh); err == nil {
+		if m.config.Ping != nil {
+			m.config.Ping.NotifyPingComplete(&node.Node, *rtt, v.Payload)
+		}
 		return
-	} else if success {
-		return
+	} else {
+		switch err.(type) {
+		case NoPingResponseError:
+		default:
+			m.logger.Printf("[ERR] memberlist: Could not ping node: %s", err)
+			return
+		}
 	}
 
 	// Get some random live nodes.
@@ -293,34 +310,25 @@ func (m *Memberlist) probeNode(node *nodeState) {
 }
 
 // Ping initiates a ping to the node with the specified name.
-func (m *Memberlist) Ping(node string) (bool, time.Duration, error) {
-	m.nodeLock.RLock()
-	for index := 0; index < len(m.nodes); index++ {
-		if node == m.nodes[index].Name {
-			m.nodeLock.RUnlock()
-			ping := ping{SeqNo: m.nextSeqNo(), Node: node}
+func (m *Memberlist) Ping(node string, addr net.IP, port uint16) (*time.Duration, error) {
+	ping := ping{SeqNo: m.nextSeqNo(), Node: node}
 
-			// Setup an ack handler.
-			ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
-			m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
+	// Setup an ack handler.
+	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
+	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
 
-			return m.pingNode(&ping, m.nodes[index], ackCh)
-		}
-	}
-
-	// Node was not found in member list.
-	m.nodeLock.RUnlock()
-	return false, time.Duration(0), fmt.Errorf("Node %s not in member list.", node)
+	rtt, _, err := m.pingNode(&ping, addr, port, ackCh)
+	return rtt, err
 }
 
 // pingNode handles a single ping with the specified sequence number.
-func (m *Memberlist) pingNode(ping *ping, node *nodeState, ackCh chan ackMessage) (bool, time.Duration, error) {
-	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
+func (m *Memberlist) pingNode(ping *ping, addr net.IP, port uint16, ackCh chan ackMessage) (*time.Duration, *ackMessage, error) {
+	destAddr := &net.UDPAddr{IP: addr, Port: int(port)}
 
 	// Send the ping message.
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
-		return false, time.Duration(0), err
+		return nil, nil, err
 	}
 
 	// Mark the sent time here, which should be after any pre-processing and
@@ -333,10 +341,7 @@ func (m *Memberlist) pingNode(ping *ping, node *nodeState, ackCh chan ackMessage
 	case v := <-ackCh:
 		if v.Complete == true {
 			rtt := v.Timestamp.Sub(sent)
-			if m.config.Ping != nil {
-				m.config.Ping.NotifyPingComplete(&node.Node, rtt, v.Payload)
-			}
-			return true, rtt, nil
+			return &rtt, &v, nil
 		}
 
 		// As an edge case, if we get a timeout, we need to re-enqueue it
@@ -345,11 +350,11 @@ func (m *Memberlist) pingNode(ping *ping, node *nodeState, ackCh chan ackMessage
 			ackCh <- v
 		}
 	case <-time.After(m.config.ProbeTimeout):
-		m.logger.Printf("[DEBUG] memberlist: Failed UDP ping: %v (timeout reached)", node.Name)
+		m.logger.Printf("[DEBUG] memberlist: Failed UDP ping: %v (timeout reached)", ping.Node)
 	}
 
-	m.logger.Printf("[WARN] memberlist: ping to %s did not return", node.Name)
-	return false, m.config.ProbeTimeout, nil
+	m.logger.Printf("[WARN] memberlist: ping to %s did not return", ping.Node)
+	return &m.config.ProbeTimeout, nil, NoPingResponseError{ping.Node}
 }
 
 // resetNodes is used when the tick wraps around. It will reap the
