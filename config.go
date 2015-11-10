@@ -2,6 +2,7 @@ package memberlist
 
 import (
 	"io"
+	"log"
 	"os"
 	"time"
 )
@@ -136,6 +137,10 @@ type Config struct {
 	// LogOutput is the writer where logs should be sent. If this is not
 	// set, logging will go to stderr by default.
 	LogOutput io.Writer
+	// Logger is a custom logger which you provide. If Logger is set, it will use this for
+	// the internal logger. If this is not set, it will fall back to the behavior for
+	// LogOutput is not set, logging will go to stderr by default.
+	Logger *log.Logger
 }
 
 // DefaultLANConfig returns a sane set of configurations for Memberlist.

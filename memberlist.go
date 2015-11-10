@@ -104,7 +104,10 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	if conf.LogOutput == nil {
 		conf.LogOutput = os.Stderr
 	}
-	logger := log.New(conf.LogOutput, "", log.LstdFlags)
+
+	if conf.Logger == nil {
+		conf.Logger = log.New(conf.LogOutput, "", log.LstdFlags)
+	}
 
 	m := &Memberlist{
 		config:         conf,
@@ -116,7 +119,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		nodeMap:        make(map[string]*nodeState),
 		ackHandlers:    make(map[uint32]*ackHandler),
 		broadcasts:     &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
-		logger:         logger,
+		logger:         conf.Logger,
 	}
 	m.broadcasts.NumNodes = func() int { return len(m.nodes) }
 	go m.tcpListen()
