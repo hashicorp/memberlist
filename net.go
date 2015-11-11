@@ -955,7 +955,7 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 	m.mergeState(remoteNodes)
 
 	// Invoke the delegate for user state
-	if m.config.Delegate != nil {
+	if userBuf != nil && m.config.Delegate != nil{
 		m.config.Delegate.MergeRemoteState(userBuf, join)
 	}
 	return nil
