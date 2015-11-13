@@ -185,6 +185,37 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 	return numSuccess, retErr
 }
 
+func (m *Memberlist) JoinNew(existing []string) (int, []string, error) {
+	numSuccess := 0
+	notjoining := []string{}
+	var retErr error
+	for _, exist := range existing {
+		addrs, port, err := m.resolveAddr(exist)
+		if err != nil {
+			notjoining = append(notjoining, exist)
+			m.logger.Printf("[WARN] memberlist: Failed to resolve %s: %v", exist, err)
+			retErr = err
+			continue
+		}
+
+		for _, addr := range addrs {
+			if err := m.pushPullNode(addr, port, true); err != nil {
+				notjoining = append(notjoining, exist)
+				retErr = err
+				continue
+			}
+			numSuccess++
+		}
+
+	}
+
+	if len(notjoining) == 0 {
+		retErr = nil
+	}
+
+	return numSuccess, notjoining, retErr
+}
+
 // resolveAddr is used to resolve the address into an address,
 // port, and error. If no port is given, use the default
 func (m *Memberlist) resolveAddr(hostStr string) ([][]byte, uint16, error) {
