@@ -64,7 +64,7 @@ For complete documentation, see the associated [Godoc](http://godoc.org/github.c
 ## Protocol
 
 memberlist is based on ["SWIM: Scalable Weakly-consistent Infection-style Process Group Membership Protocol"](http://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf),
-with a few minor adaptations, mostly to increase propogation speed and
+with a few minor adaptations, mostly to increase propagation speed and
 convergence rate.
 
 A high level overview of the memberlist protocol (based on SWIM) is
@@ -118,7 +118,7 @@ in its entirety, along with the memberlist source code.
 ### Changes from SWIM
 
 As mentioned earlier, the memberlist protocol is based on SWIM but includes
-minor changes, mostly to increase propogation speed and convergence rates.
+minor changes, mostly to increase propagation speed and convergence rates.
 
 The changes from SWIM are noted here:
 
@@ -134,7 +134,7 @@ The changes from SWIM are noted here:
   also will periodically send out dedicated gossip messages on their own. This
   feature lets you have a higher gossip rate (for example once per 200ms)
   and a slower failure detection rate (such as once per second), resulting
-  in overall faster convergence rates and data propogation speeds. This feature
+  in overall faster convergence rates and data propagation speeds. This feature
   can be totally disabed as well, if you wish.
 
 * memberlist stores around the state of dead nodes for a set amount of time,
