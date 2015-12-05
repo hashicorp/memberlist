@@ -103,10 +103,17 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	// Set the UDP receive window size
 	setUDPRecvBuf(udpLn)
 
+	if conf.LogOutput != nil && conf.Logger != nil {
+		return nil, fmt.Errorf("Cannot specify both LogOutput and Logger. Please choose a single log configuration setting.")
+	}
+
 	if conf.LogOutput == nil {
 		conf.LogOutput = os.Stderr
 	}
-	logger := log.New(conf.LogOutput, "", log.LstdFlags)
+
+	if conf.Logger == nil {
+		conf.Logger = log.New(conf.LogOutput, "", log.LstdFlags)
+	}
 
 	m := &Memberlist{
 		config:         conf,
@@ -118,7 +125,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		nodeMap:        make(map[string]*nodeState),
 		ackHandlers:    make(map[uint32]*ackHandler),
 		broadcasts:     &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
-		logger:         logger,
+		logger:         conf.Logger,
 	}
 	m.broadcasts.NumNodes = func() int {
 		return m.estNumNodes()

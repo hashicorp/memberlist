@@ -3,6 +3,7 @@ package memberlist
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"reflect"
@@ -227,6 +228,17 @@ func TestCreate_keyringAndSecretKey(t *testing.T) {
 	ringKeys := c.Keyring.GetKeys()
 	if !bytes.Equal(c.SecretKey, ringKeys[0]) {
 		t.Fatalf("Unexpected primary key %v", ringKeys[0])
+	}
+}
+
+func TestCreate_invalidLoggerSettings(t *testing.T) {
+	c := DefaultLANConfig()
+	c.Logger = log.New(ioutil.Discard, "", log.LstdFlags)
+	c.LogOutput = ioutil.Discard
+
+	_, err := Create(c)
+	if err == nil {
+		t.Fatal("Memberlist should not allow both LogOutput and Logger to be set, but it did not raise an error")
 	}
 }
 
