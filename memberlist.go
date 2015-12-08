@@ -107,12 +107,14 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		return nil, fmt.Errorf("Cannot specify both LogOutput and Logger. Please choose a single log configuration setting.")
 	}
 
-	if conf.LogOutput == nil {
-		conf.LogOutput = os.Stderr
+	logDest := conf.LogOutput
+	if logDest == nil {
+		logDest = os.Stderr
 	}
 
-	if conf.Logger == nil {
-		conf.Logger = log.New(conf.LogOutput, "", log.LstdFlags)
+	logger := conf.Logger
+	if logger == nil {
+		logger = log.New(logDest, "", log.LstdFlags)
 	}
 
 	m := &Memberlist{
@@ -125,7 +127,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		nodeMap:        make(map[string]*nodeState),
 		ackHandlers:    make(map[uint32]*ackHandler),
 		broadcasts:     &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
-		logger:         conf.Logger,
+		logger:         logger,
 	}
 	m.broadcasts.NumNodes = func() int {
 		return m.estNumNodes()
