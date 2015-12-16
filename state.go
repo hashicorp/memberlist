@@ -48,6 +48,16 @@ type ackHandler struct {
 	timer   *time.Timer
 }
 
+// NoPingResponseError is used to indicate a 'ping' packet was
+// successfully issued but no response was received
+type NoPingResponseError struct {
+	node string
+}
+
+func (f NoPingResponseError) Error() string {
+	return fmt.Sprintf("No response from node %s", f.node)
+}
+
 // Schedule is used to ensure the Tick is performed periodically. This
 // function is safe to call multiple times. If the memberlist is already
 // scheduled, then it won't do anything.
@@ -209,14 +219,15 @@ START:
 func (m *Memberlist) probeNode(node *nodeState) {
 	defer metrics.MeasureSince([]string{"memberlist", "probeNode"}, time.Now())
 
-	// Send a ping to the node.
 	ping := ping{SeqNo: m.nextSeqNo(), Node: node.Name}
-	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
 
 	// Setup an ack handler.
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
-	deadline := time.Now().Add(m.config.ProbeInterval)
 	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
+
+	// Send a ping to the node.
+	deadline := time.Now().Add(m.config.ProbeInterval)
+	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
 
 	// Send the ping message.
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
@@ -233,10 +244,10 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	select {
 	case v := <-ackCh:
 		if v.Complete == true {
+			rtt := v.Timestamp.Sub(sent)
 			if m.config.Ping != nil {
-				rtt := v.Timestamp.Sub(sent)
 				m.config.Ping.NotifyPingComplete(&node.Node, rtt, v.Payload)
-			}
+				}
 			return
 		}
 
@@ -246,8 +257,10 @@ func (m *Memberlist) probeNode(node *nodeState) {
 			ackCh <- v
 		}
 	case <-time.After(m.config.ProbeTimeout):
-		m.logger.Printf("[DEBUG] memberlist: Failed UDP ping: %v (timeout reached)", node.Name)
+		m.logger.Printf("[DEBUG] memberlist: Failed UDP ping: %v (timeout reached)", ping.Node)
 	}
+
+	m.logger.Printf("[WARN] memberlist: ping to %s did not return", ping.Node)
 
 	// Get some random live nodes.
 	m.nodeLock.RLock()
@@ -315,6 +328,47 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	m.logger.Printf("[INFO] memberlist: Suspect %s has failed, no acks received", node.Name)
 	s := suspect{Incarnation: node.Incarnation, Node: node.Name, From: m.config.Name}
 	m.suspectNode(&s)
+}
+
+// Ping initiates a ping to the node with the specified name.
+func (m *Memberlist) Ping(node string, addr net.IP, port uint16) (time.Duration, error) {
+	ping := ping{SeqNo: m.nextSeqNo(), Node: node}
+
+	// Setup an ack handler.
+	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
+	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
+
+	destAddr := &net.UDPAddr{IP: addr, Port: int(port)}
+
+	// Send the ping message.
+	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
+		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
+		return 0, err
+	}
+
+	// Mark the sent time here, which should be after any pre-processing and
+	// system calls to do the actual send. This probably under-reports a bit,
+	// but it's the best we can do.
+	sent := time.Now()
+
+	// Wait for response or round-trip-time.
+	select {
+	case v := <-ackCh:
+		if v.Complete == true {
+			return v.Timestamp.Sub(sent), nil
+		}
+
+		// As an edge case, if we get a timeout, we need to re-enqueue it
+		// here to break out of the select below.
+		if v.Complete == false {
+			ackCh <- v
+		}
+	case <-time.After(m.config.ProbeTimeout):
+		m.logger.Printf("[DEBUG] memberlist: Failed UDP ping: %v (timeout reached)", ping.Node)
+	}
+
+	m.logger.Printf("[WARN] memberlist: ping to %s did not return", ping.Node)
+	return m.config.ProbeTimeout, NoPingResponseError{ping.Node}
 }
 
 // resetNodes is used when the tick wraps around. It will reap the
