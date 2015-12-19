@@ -326,15 +326,14 @@ func (m *Memberlist) probeNode(node *nodeState) {
 }
 
 // Ping initiates a ping to the node with the specified name.
-func (m *Memberlist) Ping(node string, addr net.IP, port uint16) (time.Duration, error) {
+func (m *Memberlist) Ping(node string, addr net.Addr) (time.Duration, error) {
 	// Prepare a ping message and setup an ack handler.
 	ping := ping{SeqNo: m.nextSeqNo(), Node: node}
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
 	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
 
 	// Send a ping to the node.
-	destAddr := &net.UDPAddr{IP: addr, Port: int(port)}
-	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
+	if err := m.encodeAndSendMsg(addr, pingMsg, &ping); err != nil {
 		return 0, err
 	}
 
