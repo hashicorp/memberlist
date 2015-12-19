@@ -468,7 +468,7 @@ func TestMemberList_SetAckChannel(t *testing.T) {
 	if _, ok := m.ackHandlers[0]; !ok {
 		t.Fatalf("missing handler")
 	}
-	time.Sleep(11 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 
 	if _, ok := m.ackHandlers[0]; ok {
 		t.Fatalf("non-reaped handler")
@@ -484,7 +484,7 @@ func TestMemberList_SetAckHandler(t *testing.T) {
 	if _, ok := m.ackHandlers[0]; !ok {
 		t.Fatalf("missing handler")
 	}
-	time.Sleep(11 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 
 	if _, ok := m.ackHandlers[0]; ok {
 		t.Fatalf("non-reaped handler")
