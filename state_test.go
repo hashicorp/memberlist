@@ -429,6 +429,40 @@ func TestMemberList_ProbeNode(t *testing.T) {
 	}
 }
 
+func TestMemberList_Ping(t *testing.T) {
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
+		c.ProbeTimeout = time.Millisecond
+		c.ProbeInterval = 10 * time.Second
+	})
+	_ = HostMemberlist(addr2.String(), t, nil)
+
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a1, nil, true)
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a2, nil, false)
+
+	// Do a legit ping.
+	n := m1.nodeMap[addr2.String()]
+	rtt, err := m1.Ping(n.Name, addr2, 7946)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if !(rtt > 0) {
+		t.Fatalf("bad: %v", rtt)
+	}
+
+	// This ping has a bad node name so should timeout.
+	_, err = m1.Ping("bad", addr2, 7946)
+	if _, ok := err.(NoPingResponseError); !ok || err == nil {
+		t.Fatalf("bad: %v", err)
+	}
+}
+
 func TestMemberList_ResetNodes(t *testing.T) {
 	m := GetMemberlist(t)
 	a1 := alive{Node: "test1", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
@@ -468,7 +502,7 @@ func TestMemberList_SetAckChannel(t *testing.T) {
 	if _, ok := m.ackHandlers[0]; !ok {
 		t.Fatalf("missing handler")
 	}
-	time.Sleep(11 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 
 	if _, ok := m.ackHandlers[0]; ok {
 		t.Fatalf("non-reaped handler")
@@ -484,7 +518,7 @@ func TestMemberList_SetAckHandler(t *testing.T) {
 	if _, ok := m.ackHandlers[0]; !ok {
 		t.Fatalf("missing handler")
 	}
-	time.Sleep(11 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 
 	if _, ok := m.ackHandlers[0]; ok {
 		t.Fatalf("non-reaped handler")
