@@ -448,7 +448,11 @@ func TestMemberList_Ping(t *testing.T) {
 
 	// Do a legit ping.
 	n := m1.nodeMap[addr2.String()]
-	rtt, err := m1.Ping(n.Name, addr2, 7946)
+	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(addr2.String(), "7946"))
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	rtt, err := m1.Ping(n.Name, addr)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -457,7 +461,7 @@ func TestMemberList_Ping(t *testing.T) {
 	}
 
 	// This ping has a bad node name so should timeout.
-	_, err = m1.Ping("bad", addr2, 7946)
+	_, err = m1.Ping("bad", addr)
 	if _, ok := err.(NoPingResponseError); !ok || err == nil {
 		t.Fatalf("bad: %v", err)
 	}
