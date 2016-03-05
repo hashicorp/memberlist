@@ -199,21 +199,20 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 func (m *Memberlist) resolveAddr(hostStr string) ([][]byte, uint16, error) {
 	ips := make([][]byte, 0)
 	port := uint16(0)
-	host, sport, err := net.SplitHostPort(hostStr)
-	if ae, ok := err.(*net.AddrError); ok && ae.Err == "missing port in address" {
-		// error, port missing - we can solve this
-		port = uint16(m.config.BindPort)
-		host = hostStr
-	} else if err != nil {
-		// error, but not missing port
-		return ips, port, err
-	} else if lport, err := strconv.ParseUint(sport, 10, 16); err != nil {
-		// error, when parsing port
-		return ips, port, err
-	} else {
-		// no error
-		port = uint16(lport)
+
+	if !hasPort(hostStr) {
+		hostStr += ":" + strconv.Itoa(m.config.BindPort)
 	}
+	host, sport, err := net.SplitHostPort(hostStr)
+	if err != nil {
+		return ips, port, err
+	}
+
+	lport, err := strconv.ParseUint(sport, 10, 16)
+	if err != nil {
+		return ips, port, err
+	}
+	port = uint16(lport)
 
 	// Get the addresses that hostPort might resolve to
 	// ResolveTcpAddr requres ipv6 brackets to separate
