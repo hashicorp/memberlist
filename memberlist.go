@@ -15,11 +15,13 @@ multiple routes.
 package memberlist
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -168,18 +170,19 @@ func Create(conf *Config) (*Memberlist, error) {
 func (m *Memberlist) Join(existing []string) (int, error) {
 	// Attempt to join any of them
 	numSuccess := 0
-	var retErr error
+	var errs []string
 	for _, exist := range existing {
 		addrs, port, err := m.resolveAddr(exist)
 		if err != nil {
 			m.logger.Printf("[WARN] memberlist: Failed to resolve %s: %v", exist, err)
-			retErr = err
+			errs = append(errs, err.Error())
 			continue
 		}
 
 		for _, addr := range addrs {
 			if err := m.pushPullNode(addr, port, true); err != nil {
-				retErr = err
+				m.logger.Printf("[INFO] memberlist: Failed to join %s: %v", net.IP(addr), err)
+				errs = append(errs, err.Error())
 				continue
 			}
 			numSuccess++
@@ -187,8 +190,9 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 
 	}
 
-	if numSuccess > 0 {
-		retErr = nil
+	var retErr error
+	if numSuccess == 0 {
+		retErr = errors.New(strings.Join(errs, "; "))
 	}
 
 	return numSuccess, retErr
