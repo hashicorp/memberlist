@@ -103,6 +103,25 @@ func TestIsPrivateIP(t *testing.T) {
 	}
 }
 
+func Test_hasPort(t *testing.T) {
+	cases := []struct {
+		s        string
+		expected bool
+	}{
+		{"", false},
+		{":80", true},
+		{"127.0.0.1", false},
+		{"127.0.0.1:80", true},
+		{"[2001:db8:a0b:12f0::1]", false},
+		{"[2001:db8:a0b:12f0::1]:80", true},
+	}
+	for _, c := range cases {
+		if hasPort(c.s) != c.expected {
+			t.Fatalf("bad: '%s' hasPort was not %v", c.s, c.expected)
+		}
+	}
+}
+
 func TestEncodeDecode(t *testing.T) {
 	msg := &ping{SeqNo: 100}
 	buf, err := encode(pingMsg, msg)
