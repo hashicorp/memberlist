@@ -303,8 +303,8 @@ func TestMemberList_ResolveAddr(t *testing.T) {
 	if _, _, err := m.resolveAddr("[::1]:80"); err != nil {
 		t.Fatalf("Could not understand ipv6 pair: %s", err)
 	}
-	if _, _, err := m.resolveAddr("[::1]"); err == nil {
-		t.Fatalf("Understood bracketed non-pair")
+	if _, _, err := m.resolveAddr("[::1]"); err != nil {
+		t.Fatalf("Could not understand ipv6 non-pair")
 	}
 	if _, _, err := m.resolveAddr(":80"); err == nil {
 		t.Fatalf("Understood hostless port")
