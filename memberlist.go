@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/hashicorp/go-multierror"
 )
 
 type Memberlist struct {
@@ -168,18 +170,21 @@ func Create(conf *Config) (*Memberlist, error) {
 func (m *Memberlist) Join(existing []string) (int, error) {
 	// Attempt to join any of them
 	numSuccess := 0
-	var retErr error
+	var errs error
 	for _, exist := range existing {
 		addrs, port, err := m.resolveAddr(exist)
 		if err != nil {
-			m.logger.Printf("[WARN] memberlist: Failed to resolve %s: %v", exist, err)
-			retErr = err
+			err = fmt.Errorf("Failed to resolve %s: %v", exist, err)
+			errs = multierror.Append(errs, err)
+			m.logger.Printf("[WARN] memberlist: %v", err)
 			continue
 		}
 
 		for _, addr := range addrs {
 			if err := m.pushPullNode(addr, port, true); err != nil {
-				retErr = err
+				err = fmt.Errorf("Failed to join %s: %v", net.IP(addr), err)
+				errs = multierror.Append(errs, err)
+				m.logger.Printf("[DEBUG] memberlist: %v", err)
 				continue
 			}
 			numSuccess++
@@ -188,10 +193,9 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 	}
 
 	if numSuccess > 0 {
-		retErr = nil
+		errs = nil
 	}
-
-	return numSuccess, retErr
+	return numSuccess, errs
 }
 
 // resolveAddr is used to resolve the address into an address,

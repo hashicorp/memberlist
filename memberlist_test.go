@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -409,7 +410,7 @@ func TestMemberlist_Join_Cancel(t *testing.T) {
 	if num != 0 {
 		t.Fatalf("unexpected 0: %d", num)
 	}
-	if err.Error() != "Custom merge canceled" {
+	if !strings.Contains(err.Error(), "Custom merge canceled") {
 		t.Fatalf("unexpected err: %s", err)
 	}
 
