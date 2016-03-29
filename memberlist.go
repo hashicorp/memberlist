@@ -255,8 +255,8 @@ func (m *Memberlist) tcpLookupIP(host string, defaultPort uint16) ([]ipPort, err
 				ips = append(ips, ipPort{rr.A, defaultPort})
 			case (*dns.AAAA):
 				ips = append(ips, ipPort{rr.AAAA, defaultPort})
-			default:
-				m.logger.Printf("[DEBUG] memberlist: Ignoring %T RR in TCP-first answer for '%s'", rr, host)
+			case (*dns.CNAME):
+				m.logger.Printf("[DEBUG] memberlist: Ignoring CNAME RR in TCP-first answer for '%s'", host)
 			}
 		}
 		return ips, nil
