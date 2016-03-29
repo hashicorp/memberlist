@@ -6,11 +6,14 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 var bindLock sync.Mutex
@@ -298,23 +301,128 @@ func TestMemberList_CreateShutdown(t *testing.T) {
 
 func TestMemberList_ResolveAddr(t *testing.T) {
 	m := GetMemberlist(t)
-	if _, _, err := m.resolveAddr("localhost"); err != nil {
+	if _, err := m.resolveAddr("localhost"); err != nil {
 		t.Fatalf("Could not resolve localhost: %s", err)
 	}
-	if _, _, err := m.resolveAddr("[::1]:80"); err != nil {
+	if _, err := m.resolveAddr("[::1]:80"); err != nil {
 		t.Fatalf("Could not understand ipv6 pair: %s", err)
 	}
-	if _, _, err := m.resolveAddr("[::1]"); err != nil {
+	if _, err := m.resolveAddr("[::1]"); err != nil {
 		t.Fatalf("Could not understand ipv6 non-pair")
 	}
-	if _, _, err := m.resolveAddr(":80"); err == nil {
+	if _, err := m.resolveAddr(":80"); err == nil {
 		t.Fatalf("Understood hostless port")
 	}
-	if _, _, err := m.resolveAddr("localhost:80"); err != nil {
+	if _, err := m.resolveAddr("localhost:80"); err != nil {
 		t.Fatalf("Could not understand hostname port combo: %s", err)
 	}
-	if _, _, err := m.resolveAddr("localhost:80000"); err == nil {
+	if _, err := m.resolveAddr("localhost:80000"); err == nil {
 		t.Fatalf("Understood too high port")
+	}
+	if _, err := m.resolveAddr("127.0.0.1:80"); err != nil {
+		t.Fatalf("Could not understand hostname port combo: %s", err)
+	}
+	if _, err := m.resolveAddr("[2001:db8:a0b:12f0::1]:80"); err != nil {
+		t.Fatalf("Could not understand hostname port combo: %s", err)
+	}
+}
+
+type dnsHandler struct {
+	t *testing.T
+}
+
+func (h dnsHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+	if len(r.Question) != 1 {
+		h.t.Fatalf("bad: %#v", r.Question)
+	}
+
+	name := "join.service.consul."
+	question := r.Question[0]
+	if question.Name != name || question.Qtype != dns.TypeANY {
+		h.t.Fatalf("bad: %#v", question)
+	}
+
+	m := new(dns.Msg)
+	m.SetReply(r)
+	m.Authoritative = true
+	m.RecursionAvailable = false
+	m.Answer = append(m.Answer, &dns.A{
+		Hdr: dns.RR_Header{
+			Name:   name,
+			Rrtype: dns.TypeA,
+			Class:  dns.ClassINET},
+		A: net.ParseIP("127.0.0.1"),
+	})
+	m.Answer = append(m.Answer, &dns.AAAA{
+		Hdr: dns.RR_Header{
+			Name:   name,
+			Rrtype: dns.TypeAAAA,
+			Class:  dns.ClassINET},
+		AAAA: net.ParseIP("2001:db8:a0b:12f0::1"),
+	})
+	if err := w.WriteMsg(m); err != nil {
+		h.t.Fatalf("err: %v", err)
+	}
+}
+
+func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
+	bind := "127.0.0.1:8600"
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	server := &dns.Server{
+		Addr:              bind,
+		Handler:           dnsHandler{t},
+		Net:               "tcp",
+		NotifyStartedFunc: wg.Done,
+	}
+	defer server.Shutdown()
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+	}()
+	wg.Wait()
+
+	tmpFile, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	content := []byte(fmt.Sprintf("nameserver %s", bind))
+	if _, err := tmpFile.Write(content); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	m := GetMemberlist(t)
+	m.config.DNSConfigPath = tmpFile.Name()
+	m.setAlive()
+	m.schedule()
+	defer m.Shutdown()
+
+	// Try with and without the trailing dot.
+	hosts := []string{
+		"join.service.consul.",
+		"join.service.consul",
+	}
+	for _, host := range hosts {
+		ips, err := m.resolveAddr(host)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		port := uint16(m.config.BindPort)
+		expected := []ipPort{
+			ipPort{net.ParseIP("127.0.0.1"), port},
+			ipPort{net.ParseIP("2001:db8:a0b:12f0::1"), port},
+		}
+		if !reflect.DeepEqual(ips, expected) {
+			t.Fatalf("bad: %#v", ips)
+		}
 	}
 }
 
