@@ -183,7 +183,7 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 
 		for _, addr := range addrs {
 			if err := m.pushPullNode(addr.ip, addr.port, true); err != nil {
-				err = fmt.Errorf("Failed to join %s: %v", net.IP(addr.ip), err)
+				err = fmt.Errorf("Failed to join %s: %v", addr.ip, err)
 				errs = multierror.Append(errs, err)
 				m.logger.Printf("[DEBUG] memberlist: %v", err)
 				continue
@@ -200,7 +200,7 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 
 // ipPort holds information about a node we want to try to join.
 type ipPort struct {
-	ip   []byte
+	ip   net.IP
 	port uint16
 }
 
@@ -240,9 +240,9 @@ func (m *Memberlist) tcpLookupIP(host string, defaultPort uint16) ([]ipPort, err
 		// Do the lookup.
 		c := new(dns.Client)
 		c.Net = "tcp"
-		m := new(dns.Msg)
-		m.SetQuestion(dn, dns.TypeANY)
-		in, _, err := c.Exchange(m, server)
+		msg := new(dns.Msg)
+		msg.SetQuestion(dn, dns.TypeANY)
+		in, _, err := c.Exchange(msg, server)
 		if err != nil {
 			return nil, err
 		}
@@ -255,6 +255,8 @@ func (m *Memberlist) tcpLookupIP(host string, defaultPort uint16) ([]ipPort, err
 				ips = append(ips, ipPort{rr.A, defaultPort})
 			case (*dns.AAAA):
 				ips = append(ips, ipPort{rr.AAAA, defaultPort})
+			default:
+				m.logger.Printf("[DEBUG] memberlist: Ignoring %T RR in TCP-first answer for '%s'", rr, host)
 			}
 		}
 		return ips, nil
