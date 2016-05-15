@@ -148,7 +148,7 @@ func (m *Memberlist) pushPullTrigger(stop <-chan struct{}) {
 	}
 }
 
-// Deschedule is used to stop the background maintenence. This is safe
+// Deschedule is used to stop the background maintenance. This is safe
 // to call multiple times.
 func (m *Memberlist) deschedule() {
 	m.tickerLock.Lock()
@@ -1001,7 +1001,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 			m.aliveNode(&a, nil, false)
 
 		case stateDead:
-			// If the remote node belives a node is dead, we prefer to
+			// If the remote node believes a node is dead, we prefer to
 			// suspect that node instead of declaring it dead instantly
 			fallthrough
 		case stateSuspect:

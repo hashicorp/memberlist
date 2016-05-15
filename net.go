@@ -121,7 +121,7 @@ type dead struct {
 }
 
 // pushPullHeader is used to inform the
-// otherside how many states we are transfering
+// otherside how many states we are transferring
 type pushPullHeader struct {
 	Nodes        int
 	UserStateLen int  // Encodes the byte lengh of user state
@@ -134,7 +134,7 @@ type userMsgHeader struct {
 }
 
 // pushNodeState is used for pushPullReq when we are
-// transfering out node states
+// transferring out node states
 type pushNodeState struct {
 	Name        string
 	Addr        []byte
