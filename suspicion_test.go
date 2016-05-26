@@ -1,0 +1,64 @@
+package memberlist
+
+import (
+	"testing"
+	"time"
+)
+
+func TestSuspicion(t *testing.T) {
+	const k = 3
+	const min = 500 * time.Millisecond
+	const max = 2 * time.Second
+
+	cases := []struct {
+		confirmations []string
+		expected      time.Duration
+	}{
+		{[]string{}, max},
+		{[]string{"foo"}, 1250 * time.Millisecond},
+		{[]string{"foo", "foo", "foo"}, 1250 * time.Millisecond},
+		{[]string{"foo", "bar"}, 810 * time.Millisecond},
+		{[]string{"foo", "bar", "baz"}, min},
+		{[]string{"foo", "bar", "baz", "zoo"}, min},
+	}
+	for i, c := range cases {
+		ch := make(chan time.Duration, 1)
+		start := time.Now()
+		f := func() {
+			ch <- time.Now().Sub(start)
+		}
+
+		s := newSuspicion(k, min, max, f)
+		for _, peer := range c.confirmations {
+			s.Corroborate(peer)
+		}
+
+		// Wait until right before the timeout and make sure the
+		// timer hasn't fired.
+		fudge := 100 * time.Millisecond
+		time.Sleep(c.expected - fudge)
+		select {
+		case d := <-ch:
+			t.Fatalf("case %d: should not have fired (9.6f)", i, d.Seconds())
+		default:
+		}
+
+		// Wait through the timeout and a little after and make sure it
+		// fires.
+		time.Sleep(2 * fudge)
+		select {
+		case <-ch:
+		default:
+			t.Fatalf("case %d: should have fired", i)
+		}
+
+		// Corroborate after to make sure it handles a negative remaining
+		// time correctly.
+		s.Corroborate("late")
+		select {
+		case d := <-ch:
+			t.Fatalf("case %d: should not have fired (9.6f)", i, d.Seconds())
+		default:
+		}
+	}
+}

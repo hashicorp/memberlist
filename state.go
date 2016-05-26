@@ -854,6 +854,12 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		return
 	}
 
+	// See if there's a suspicion timer we can corroborate
+	if timer, ok := m.nodeTimers[s.Node]; ok && s.From != m.config.Name {
+		timer.Corroborate(s.From)
+		return
+	}
+
 	// Ignore non-alive nodes
 	if state.State != stateAlive {
 		return
@@ -894,9 +900,17 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	changeTime := time.Now()
 	state.StateChange = changeTime
 
-	// Setup a timeout for this
+	// Setup a suspicion timer. Given that we don't have any known phase
+	// relationship with our peers, we set up k such that we hit the nominal
+	// timeout two probe intervals short of what we expect given the suspicion
+	// multiplier.
+	k := m.config.SuspicionMult - 2
+	if k < 1 {
+		k = 1
+	}
 	timeout := suspicionTimeout(m.config.SuspicionMult, m.estNumNodes(), m.config.ProbeInterval)
-	time.AfterFunc(timeout, func() {
+	bound := time.Duration(m.config.SuspicionMaxTimeoutMult) * timeout
+	f := func() {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]
 		timeout := ok && state.State == stateSuspect && state.StateChange == changeTime
@@ -905,12 +919,12 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		if timeout {
 			m.suspectTimeout(state)
 		}
-	})
+	}
+	m.nodeTimers[s.Node] = newSuspicion(k, timeout, bound, f)
 }
 
 // suspectTimeout is invoked when a suspect timeout has occurred
 func (m *Memberlist) suspectTimeout(n *nodeState) {
-	// Construct a dead message
 	m.logger.Printf("[INFO] memberlist: Marking %s as failed, suspect timeout reached", n.Name)
 	d := dead{Incarnation: n.Incarnation, Node: n.Name, From: m.config.Name}
 	m.deadNode(&d)

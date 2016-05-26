@@ -36,6 +36,7 @@ func testConfig() *Config {
 	config := DefaultLANConfig()
 	config.BindAddr = getBindAddr().String()
 	config.Name = config.BindAddr
+	config.SuspicionMaxTimeoutMult = 1
 	return config
 }
 
