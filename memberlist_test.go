@@ -237,6 +237,7 @@ func TestCreate_keyringAndSecretKey(t *testing.T) {
 
 func TestCreate_invalidLoggerSettings(t *testing.T) {
 	c := DefaultLANConfig()
+	c.BindAddr = getBindAddr().String()
 	c.Logger = log.New(ioutil.Discard, "", log.LstdFlags)
 	c.LogOutput = ioutil.Discard
 
@@ -1115,6 +1116,11 @@ func TestMemberlist_Join_Prototocol_Compatibility(t *testing.T) {
 }
 
 func TestMemberlist_Join_IPv6(t *testing.T) {
+	// Since this binds to all interfaces we need to exclude other tests
+	// from grabbing an interface.
+	bindLock.Lock()
+	defer bindLock.Unlock()
+
 	c1 := DefaultLANConfig()
 	c1.Name = "A"
 	c1.BindAddr = "[::1]"
