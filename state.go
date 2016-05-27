@@ -854,9 +854,9 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		return
 	}
 
-	// See if there's a suspicion timer we can corroborate
+	// See if there's a suspicion timer we can confirm
 	if timer, ok := m.nodeTimers[s.Node]; ok && s.From != m.config.Name {
-		timer.Corroborate(s.From)
+		timer.Confirm(s.From)
 		return
 	}
 

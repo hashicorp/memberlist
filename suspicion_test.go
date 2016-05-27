@@ -33,15 +33,20 @@ func TestSuspicion(t *testing.T) {
 			ch <- time.Now().Sub(start)
 		}
 
+		// Create the timer and add the requested confirmations. Wait
+		// the fudge amount to help make sure we calculate the timeout
+		// overall, and don't accumulate extra time.
 		s := newSuspicion(k, min, max, f)
+		fudge := 25 * time.Millisecond
 		for _, peer := range c.confirmations {
-			s.Corroborate(peer)
+			time.Sleep(fudge)
+			s.Confirm(peer)
 		}
 
 		// Wait until right before the timeout and make sure the
 		// timer hasn't fired.
-		fudge := 25 * time.Millisecond
-		time.Sleep(c.expected - fudge)
+		already := time.Duration(len(c.confirmations)) * fudge
+		time.Sleep(c.expected - already - fudge)
 		select {
 		case d := <-ch:
 			t.Fatalf("case %d: should not have fired (%9.6f)", i, d.Seconds())
@@ -57,9 +62,9 @@ func TestSuspicion(t *testing.T) {
 			t.Fatalf("case %d: should have fired", i)
 		}
 
-		// Corroborate after to make sure it handles a negative remaining
+		// Confirm after to make sure it handles a negative remaining
 		// time correctly and doesn't fire again.
-		s.Corroborate("late")
+		s.Confirm("late")
 		time.Sleep(c.expected + 2*fudge)
 		select {
 		case d := <-ch:

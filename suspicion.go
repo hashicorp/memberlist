@@ -56,9 +56,9 @@ func newSuspicion(k int, min time.Duration, max time.Duration, f func(int32)) *s
 	return s
 }
 
-// Corroborate registers that a possibly new peer has also determined the given
+// Confirm registers that a possibly new peer has also determined the given
 // node is suspect.
-func (s *suspicion) Corroborate(from string) {
+func (s *suspicion) Confirm(from string) {
 	// Only allow one confirmation from each possible peer.
 	if _, ok := s.confirmations[from]; ok {
 		return
