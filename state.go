@@ -927,17 +927,13 @@ func (m *Memberlist) suspectNode(s *suspect) {
 				metrics.IncrCounter([]string{"memberlist", "degraded", "suspect"}, 1)
 			}
 
-			m.suspectTimeout(state)
+			m.logger.Printf("[INFO] memberlist: Marking %s as failed, suspect timeout reached (%d peer confirmations)",
+				state.Name, numConfirmations)
+			d := dead{Incarnation: state.Incarnation, Node: state.Name, From: m.config.Name}
+			m.deadNode(&d)
 		}
 	}
 	m.nodeTimers[s.Node] = newSuspicion(k, timeout, bound, f)
-}
-
-// suspectTimeout is invoked when a suspect timeout has occurred
-func (m *Memberlist) suspectTimeout(n *nodeState) {
-	m.logger.Printf("[INFO] memberlist: Marking %s as failed, suspect timeout reached", n.Name)
-	d := dead{Incarnation: n.Incarnation, Node: n.Name, From: m.config.Name}
-	m.deadNode(&d)
 }
 
 // deadNode is invoked by the network layer when we get a message
