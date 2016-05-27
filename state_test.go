@@ -111,8 +111,8 @@ func TestMemberList_ProbeNode_Suspect_Dogpile(t *testing.T) {
 	}{
 		{1, 0, 500 * time.Millisecond},  // n=2, k=3 (max timeout disabled)
 		{2, 0, 500 * time.Millisecond},  // n=3, k=3
-		{3, 0, 1000 * time.Millisecond}, // n=4, k=3 (max timeout starts to take effect)
-		{4, 0, 1000 * time.Millisecond}, // n=5, k=3
+		{3, 0, 500 * time.Millisecond},  // n=4, k=3
+		{4, 0, 1000 * time.Millisecond}, // n=5, k=3 (max timeout starts to take effect)
 		{5, 0, 1000 * time.Millisecond}, // n=6, k=3
 		{5, 1, 750 * time.Millisecond},  // n=6, k=3 (confirmations start to lower timeout)
 		{5, 2, 604 * time.Millisecond},  // n=6, k=3

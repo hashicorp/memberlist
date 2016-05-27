@@ -910,9 +910,10 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		k = 1
 	}
 	n := m.estNumNodes()
+	peersAvailable := n-2 >= k // take ourselves out plus the node being probed
 	timeout := suspicionTimeout(m.config.SuspicionMult, n, m.config.ProbeInterval)
 	bound := time.Duration(m.config.SuspicionMaxTimeoutMult) * timeout
-	if n <= k {
+	if !peersAvailable {
 		bound = timeout
 	}
 	f := func(numConfirmations int32) {
@@ -922,7 +923,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		m.nodeLock.Unlock()
 
 		if timeout {
-			if numConfirmations < int32(k) {
+			if peersAvailable && numConfirmations < int32(k) {
 				metrics.IncrCounter([]string{"memberlist", "degraded", "suspect"}, 1)
 			}
 
