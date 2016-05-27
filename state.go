@@ -903,13 +903,18 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	// Setup a suspicion timer. Given that we don't have any known phase
 	// relationship with our peers, we set up k such that we hit the nominal
 	// timeout two probe intervals short of what we expect given the suspicion
-	// multiplier.
+	// multiplier. If there aren't enough peers then we just use the nominal
+	// timer, since we know this algorithm no longer makes sense.
 	k := m.config.SuspicionMult - 2
 	if k < 1 {
 		k = 1
 	}
-	timeout := suspicionTimeout(m.config.SuspicionMult, m.estNumNodes(), m.config.ProbeInterval)
+	n := m.estNumNodes()
+	timeout := suspicionTimeout(m.config.SuspicionMult, n, m.config.ProbeInterval)
 	bound := time.Duration(m.config.SuspicionMaxTimeoutMult) * timeout
+	if n <= k {
+		bound = timeout
+	}
 	f := func() {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]
