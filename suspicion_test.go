@@ -11,20 +11,25 @@ func TestSuspicion(t *testing.T) {
 	const max = 2 * time.Second
 
 	cases := []struct {
-		confirmations []string
-		expected      time.Duration
+		numConfirmations int32
+		confirmations    []string
+		expected         time.Duration
 	}{
-		{[]string{}, max},
-		{[]string{"foo"}, 1250 * time.Millisecond},
-		{[]string{"foo", "foo", "foo"}, 1250 * time.Millisecond},
-		{[]string{"foo", "bar"}, 810 * time.Millisecond},
-		{[]string{"foo", "bar", "baz"}, min},
-		{[]string{"foo", "bar", "baz", "zoo"}, min},
+		{0, []string{}, max},
+		{1, []string{"foo"}, 1250 * time.Millisecond},
+		{1, []string{"foo", "foo", "foo"}, 1250 * time.Millisecond},
+		{2, []string{"foo", "bar"}, 810 * time.Millisecond},
+		{3, []string{"foo", "bar", "baz"}, min},
+		{4, []string{"foo", "bar", "baz", "zoo"}, min},
 	}
 	for i, c := range cases {
 		ch := make(chan time.Duration, 1)
 		start := time.Now()
-		f := func() {
+		f := func(numConfirmations int32) {
+			if numConfirmations != c.numConfirmations {
+				t.Errorf("case %d: bad %d != %d", i, numConfirmations, c.numConfirmations)
+			}
+
 			ch <- time.Now().Sub(start)
 		}
 
@@ -39,7 +44,7 @@ func TestSuspicion(t *testing.T) {
 		time.Sleep(c.expected - fudge)
 		select {
 		case d := <-ch:
-			t.Fatalf("case %d: should not have fired (9.6f)", i, d.Seconds())
+			t.Fatalf("case %d: should not have fired (%9.6f)", i, d.Seconds())
 		default:
 		}
 
@@ -53,11 +58,12 @@ func TestSuspicion(t *testing.T) {
 		}
 
 		// Corroborate after to make sure it handles a negative remaining
-		// time correctly.
+		// time correctly and doesn't fire again.
 		s.Corroborate("late")
+		time.Sleep(c.expected + 2*fudge)
 		select {
 		case d := <-ch:
-			t.Fatalf("case %d: should not have fired (9.6f)", i, d.Seconds())
+			t.Fatalf("case %d: should not have fired (%9.6f)", i, d.Seconds())
 		default:
 		}
 	}

@@ -2,6 +2,7 @@ package memberlist
 
 import (
 	"math"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,23 +29,31 @@ type suspicion struct {
 	// timer is the underlying timer that implements the timeout.
 	timer *time.Timer
 
+	// n is the number of independent confirmations we've seen. This must
+	// be updated using atomic instructions to prevent contention with the
+	// timer callback.
+	n int32
+
 	// confirmations is a map of "from" nodes that have confirmed a given
-	// node is suspect. This prevents double counting, and also serves as
-	// our source of truth for counting confirmations.
+	// node is suspect. This prevents double counting.
 	confirmations map[string]struct{}
 }
 
 // newSuspicion returns a timer started with the max time, and that will drive
 // to the min time after seeing k or more confirmations.
-func newSuspicion(k int, min time.Duration, max time.Duration, f func()) *suspicion {
-	return &suspicion{
+func newSuspicion(k int, min time.Duration, max time.Duration, f func(int32)) *suspicion {
+	s := &suspicion{
 		k:             float64(k),
 		min:           min.Seconds(),
 		max:           max.Seconds(),
 		start:         time.Now(),
-		timer:         time.AfterFunc(max, f),
 		confirmations: make(map[string]struct{}),
 	}
+	f_wrap := func() {
+		f(atomic.LoadInt32(&s.n))
+	}
+	s.timer = time.AfterFunc(max, f_wrap)
+	return s
 }
 
 // Corroborate registers that a possibly new peer has also determined the given
@@ -57,13 +66,14 @@ func (s *suspicion) Corroborate(from string) {
 	s.confirmations[from] = struct{}{}
 
 	// Compute the new timeout given the current number of confirmations.
-	n := float64(len(s.confirmations))
+	n := float64(atomic.AddInt32(&s.n, 1))
 	timeout := math.Max(s.min, s.max-(s.max-s.min)*math.Log(n+1.0)/math.Log(s.k+1.0))
 
-	// Reset the timer. Note we don't care if this returns false (the timer
-	// already fired). We have to take into account the amount of time that
+	// Reset the timer. We have to take into account the amount of time that
 	// has passed so far, so we get the right overall timeout.
 	remaining := math.Max(0.0, s.start.Sub(time.Now()).Seconds()+timeout)
 	duration := time.Duration(math.Floor(1000.0*remaining)) * time.Millisecond
-	s.timer.Reset(duration)
+	if s.timer.Stop() {
+		s.timer.Reset(duration)
+	}
 }

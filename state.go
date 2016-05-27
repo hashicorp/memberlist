@@ -915,13 +915,17 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	if n <= k {
 		bound = timeout
 	}
-	f := func() {
+	f := func(numConfirmations int32) {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]
 		timeout := ok && state.State == stateSuspect && state.StateChange == changeTime
 		m.nodeLock.Unlock()
 
 		if timeout {
+			if numConfirmations < int32(k) {
+				metrics.IncrCounter([]string{"memberlist", "degraded", "suspect"}, 1)
+			}
+
 			m.suspectTimeout(state)
 		}
 	}
