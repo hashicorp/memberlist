@@ -40,7 +40,7 @@ func TestSuspicion(t *testing.T) {
 
 		// Wait until right before the timeout and make sure the
 		// timer hasn't fired.
-		fudge := 100 * time.Millisecond
+		fudge := 25 * time.Millisecond
 		time.Sleep(c.expected - fudge)
 		select {
 		case d := <-ch:
