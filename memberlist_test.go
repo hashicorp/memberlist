@@ -36,7 +36,6 @@ func testConfig() *Config {
 	config := DefaultLANConfig()
 	config.BindAddr = getBindAddr().String()
 	config.Name = config.BindAddr
-	config.SuspicionMaxTimeoutMult = 1
 	return config
 }
 
@@ -709,6 +708,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	c.BindPort = m1.config.BindPort
 	c.ProbeInterval = time.Millisecond
 	c.ProbeTimeout = 100 * time.Microsecond
+	c.SuspicionMaxTimeoutMult = 1
 
 	m2, err := Create(c)
 	if err != nil {
