@@ -694,6 +694,9 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		}
 	}
 
+	// Clear out any suspicion timer that may be in effect.
+	delete(m.nodeTimers, a.Node)
+
 	// Check if we've never seen this node before, and if not, then
 	// store this node in our node map.
 	if !ok {
@@ -855,7 +858,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	}
 
 	// See if there's a suspicion timer we can confirm
-	if timer, ok := m.nodeTimers[s.Node]; ok && s.From != m.config.Name {
+	if timer, ok := m.nodeTimers[s.Node]; ok {
 		timer.Confirm(s.From)
 		return
 	}
@@ -920,6 +923,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]
 		timeout := ok && state.State == stateSuspect && state.StateChange == changeTime
+		delete(m.nodeTimers, s.Node)
 		m.nodeLock.Unlock()
 
 		if timeout {
@@ -933,7 +937,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 			m.deadNode(&d)
 		}
 	}
-	m.nodeTimers[s.Node] = newSuspicion(k, timeout, bound, f)
+	m.nodeTimers[s.Node] = newSuspicion(s.From, k, timeout, bound, f)
 }
 
 // deadNode is invoked by the network layer when we get a message
@@ -952,6 +956,9 @@ func (m *Memberlist) deadNode(d *dead) {
 	if d.Incarnation < state.Incarnation {
 		return
 	}
+
+	// Clear out any suspicion timer that may be in effect.
+	delete(m.nodeTimers, d.Node)
 
 	// Ignore if node is already dead
 	if state.State == stateDead {

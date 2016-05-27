@@ -12,15 +12,16 @@ func TestSuspicion(t *testing.T) {
 
 	cases := []struct {
 		numConfirmations int32
+		from             string
 		confirmations    []string
 		expected         time.Duration
 	}{
-		{0, []string{}, max},
-		{1, []string{"foo"}, 1250 * time.Millisecond},
-		{1, []string{"foo", "foo", "foo"}, 1250 * time.Millisecond},
-		{2, []string{"foo", "bar"}, 810 * time.Millisecond},
-		{3, []string{"foo", "bar", "baz"}, min},
-		{4, []string{"foo", "bar", "baz", "zoo"}, min},
+		{0, "me", []string{}, max},
+		{1, "me", []string{"me", "foo"}, 1250 * time.Millisecond},
+		{1, "me", []string{"me", "foo", "foo", "foo"}, 1250 * time.Millisecond},
+		{2, "me", []string{"me", "foo", "bar"}, 810 * time.Millisecond},
+		{3, "me", []string{"me", "foo", "bar", "baz"}, min},
+		{4, "me", []string{"me", "foo", "bar", "baz", "zoo"}, min},
 	}
 	for i, c := range cases {
 		ch := make(chan time.Duration, 1)
@@ -36,7 +37,7 @@ func TestSuspicion(t *testing.T) {
 		// Create the timer and add the requested confirmations. Wait
 		// the fudge amount to help make sure we calculate the timeout
 		// overall, and don't accumulate extra time.
-		s := newSuspicion(k, min, max, f)
+		s := newSuspicion(c.from, k, min, max, f)
 		fudge := 25 * time.Millisecond
 		for _, peer := range c.confirmations {
 			time.Sleep(fudge)

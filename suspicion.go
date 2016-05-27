@@ -40,8 +40,10 @@ type suspicion struct {
 }
 
 // newSuspicion returns a timer started with the max time, and that will drive
-// to the min time after seeing k or more confirmations.
-func newSuspicion(k int, min time.Duration, max time.Duration, f func(int32)) *suspicion {
+// to the min time after seeing k or more confirmations. The from node will be
+// excluded from confirmations since we might get our own suspicion message
+// gossiped back to us.
+func newSuspicion(from string, k int, min time.Duration, max time.Duration, f func(int32)) *suspicion {
 	s := &suspicion{
 		k:             float64(k),
 		min:           min.Seconds(),
@@ -49,6 +51,7 @@ func newSuspicion(k int, min time.Duration, max time.Duration, f func(int32)) *s
 		start:         time.Now(),
 		confirmations: make(map[string]struct{}),
 	}
+	s.confirmations[from] = struct{}{}
 	f_wrap := func() {
 		f(atomic.LoadInt32(&s.n))
 	}
