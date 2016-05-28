@@ -933,7 +933,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 
 		if timeout {
 			if peersAvailable && numConfirmations < k {
-				metrics.IncrCounter([]string{"memberlist", "degraded", "suspect"}, 1)
+				metrics.IncrCounter([]string{"memberlist", "degraded", "timeout"}, 1)
 			}
 
 			m.logger.Printf("[INFO] memberlist: Marking %s as failed, suspect timeout reached (%d peer confirmations)",
