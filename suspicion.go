@@ -11,9 +11,8 @@ import (
 // a node is suspect.
 type suspicion struct {
 	// k is the number of independent confirmations we'd like to see in
-	// order to drive the timer to its minimum value. This is a float so
-	// we don't have to cast it later.
-	k float64
+	// order to drive the timer to its minimum value.
+	k int32
 
 	// min is the minimum timer value in seconds.
 	min float64
@@ -43,9 +42,9 @@ type suspicion struct {
 // to the min time after seeing k or more confirmations. The from node will be
 // excluded from confirmations since we might get our own suspicion message
 // gossiped back to us.
-func newSuspicion(from string, k int, min time.Duration, max time.Duration, f func(int32)) *suspicion {
+func newSuspicion(from string, k int, min time.Duration, max time.Duration, f func(int)) *suspicion {
 	s := &suspicion{
-		k:             float64(k),
+		k:             int32(k),
 		min:           min.Seconds(),
 		max:           max.Seconds(),
 		start:         time.Now(),
@@ -53,24 +52,31 @@ func newSuspicion(from string, k int, min time.Duration, max time.Duration, f fu
 	}
 	s.confirmations[from] = struct{}{}
 	f_wrap := func() {
-		f(atomic.LoadInt32(&s.n))
+		f(int(atomic.LoadInt32(&s.n)))
 	}
 	s.timer = time.AfterFunc(max, f_wrap)
 	return s
 }
 
 // Confirm registers that a possibly new peer has also determined the given
-// node is suspect.
-func (s *suspicion) Confirm(from string) {
+// node is suspect. This returns true if this was new information, and false
+// if it was a duplicate confirmation, or if we've got enough confirmations to
+// hit the minimum.
+func (s *suspicion) Confirm(from string) bool {
+	// If we've got enough confirmations then stop accepting them.
+	if atomic.LoadInt32(&s.n) >= s.k {
+		return false
+	}
+
 	// Only allow one confirmation from each possible peer.
 	if _, ok := s.confirmations[from]; ok {
-		return
+		return false
 	}
 	s.confirmations[from] = struct{}{}
 
 	// Compute the new timeout given the current number of confirmations.
 	n := float64(atomic.AddInt32(&s.n, 1))
-	timeout := math.Max(s.min, s.max-(s.max-s.min)*math.Log(n+1.0)/math.Log(s.k+1.0))
+	timeout := math.Max(s.min, s.max-(s.max-s.min)*math.Log(n+1.0)/math.Log(float64(s.k)+1.0))
 
 	// Reset the timer. We have to take into account the amount of time that
 	// has passed so far, so we get the right overall timeout.
@@ -79,4 +85,5 @@ func (s *suspicion) Confirm(from string) {
 	if s.timer.Stop() {
 		s.timer.Reset(duration)
 	}
+	return true
 }

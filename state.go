@@ -857,9 +857,14 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		return
 	}
 
-	// See if there's a suspicion timer we can confirm
+	// See if there's a suspicion timer we can confirm. If the info is new
+	// to us we will go ahead and re-gossip it. This allows for multiple
+	// independent confirmations to flow even when a node probes a node
+	// that's already suspect.
 	if timer, ok := m.nodeTimers[s.Node]; ok {
-		timer.Confirm(s.From)
+		if timer.Confirm(s.From) {
+			m.encodeAndBroadcast(s.Node, suspectMsg, s)
+		}
 		return
 	}
 
@@ -919,7 +924,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	if !peersAvailable {
 		bound = timeout
 	}
-	f := func(numConfirmations int32) {
+	f := func(numConfirmations int) {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]
 		timeout := ok && state.State == stateSuspect && state.StateChange == changeTime
@@ -927,7 +932,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		m.nodeLock.Unlock()
 
 		if timeout {
-			if peersAvailable && numConfirmations < int32(k) {
+			if peersAvailable && numConfirmations < k {
 				metrics.IncrCounter([]string{"memberlist", "degraded", "suspect"}, 1)
 			}
 
