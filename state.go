@@ -928,7 +928,6 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]
 		timeout := ok && state.State == stateSuspect && state.StateChange == changeTime
-		delete(m.nodeTimers, s.Node)
 		m.nodeLock.Unlock()
 
 		if timeout {
