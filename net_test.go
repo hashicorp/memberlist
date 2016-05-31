@@ -47,9 +47,13 @@ func TestHandleCompoundPing(t *testing.T) {
 	udp.WriteTo(compound.Bytes(), addr)
 
 	// Wait for responses
+	doneCh := make(chan struct{}, 1)
 	go func() {
-		time.Sleep(2 * time.Second)
-		panic("timeout")
+		select {
+		case <-doneCh:
+		case <-time.After(2 * time.Second):
+			panic("timeout")
+		}
 	}()
 
 	for i := 0; i < 3; i++ {
@@ -74,6 +78,8 @@ func TestHandleCompoundPing(t *testing.T) {
 			t.Fatalf("bad sequence no")
 		}
 	}
+
+	doneCh <- struct{}{}
 }
 
 func TestHandlePing(t *testing.T) {
@@ -107,9 +113,13 @@ func TestHandlePing(t *testing.T) {
 	udp.WriteTo(buf.Bytes(), addr)
 
 	// Wait for response
+	doneCh := make(chan struct{}, 1)
 	go func() {
-		time.Sleep(2 * time.Second)
-		panic("timeout")
+		select {
+		case <-doneCh:
+		case <-time.After(2 * time.Second):
+			panic("timeout")
+		}
 	}()
 
 	in := make([]byte, 1500)
@@ -132,6 +142,8 @@ func TestHandlePing(t *testing.T) {
 	if ack.SeqNo != 42 {
 		t.Fatalf("bad sequence no")
 	}
+
+	doneCh <- struct{}{}
 }
 
 func TestHandlePing_WrongNode(t *testing.T) {
@@ -210,9 +222,13 @@ func TestHandleIndirectPing(t *testing.T) {
 	udp.WriteTo(buf.Bytes(), addr)
 
 	// Wait for response
+	doneCh := make(chan struct{}, 1)
 	go func() {
-		time.Sleep(2 * time.Second)
-		panic("timeout")
+		select {
+		case <-doneCh:
+		case <-time.After(2 * time.Second):
+			panic("timeout")
+		}
 	}()
 
 	in := make([]byte, 1500)
@@ -235,6 +251,8 @@ func TestHandleIndirectPing(t *testing.T) {
 	if ack.SeqNo != 100 {
 		t.Fatalf("bad sequence no")
 	}
+
+	doneCh <- struct{}{}
 }
 
 func TestTCPPing(t *testing.T) {
@@ -562,9 +580,13 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	udp.WriteTo(buf.Bytes(), addr)
 
 	// Wait for response
+	doneCh := make(chan struct{}, 1)
 	go func() {
-		time.Sleep(2 * time.Second)
-		panic("timeout")
+		select {
+		case <-doneCh:
+		case <-time.After(2 * time.Second):
+			panic("timeout")
+		}
 	}()
 
 	in := make([]byte, 1500)
@@ -608,6 +630,8 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	if aliveout.Node != "rand" || aliveout.Incarnation != 10 {
 		t.Fatalf("bad mesg")
 	}
+
+	doneCh <- struct{}{}
 }
 
 func TestEncryptDecryptState(t *testing.T) {

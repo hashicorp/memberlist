@@ -754,6 +754,9 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		return
 	}
 
+	// Clear out any suspicion timer that may be in effect.
+	delete(m.nodeTimers, a.Node)
+
 	// Store the old state and meta data
 	oldState := state.State
 	oldMeta := state.Meta
@@ -854,6 +857,17 @@ func (m *Memberlist) suspectNode(s *suspect) {
 		return
 	}
 
+	// See if there's a suspicion timer we can confirm. If the info is new
+	// to us we will go ahead and re-gossip it. This allows for multiple
+	// independent confirmations to flow even when a node probes a node
+	// that's already suspect.
+	if timer, ok := m.nodeTimers[s.Node]; ok {
+		if timer.Confirm(s.From) {
+			m.encodeAndBroadcast(s.Node, suspectMsg, s)
+		}
+		return
+	}
+
 	// Ignore non-alive nodes
 	if state.State != stateAlive {
 		return
@@ -894,26 +908,41 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	changeTime := time.Now()
 	state.StateChange = changeTime
 
-	// Setup a timeout for this
-	timeout := suspicionTimeout(m.config.SuspicionMult, m.estNumNodes(), m.config.ProbeInterval)
-	time.AfterFunc(timeout, func() {
+	// Setup a suspicion timer. Given that we don't have any known phase
+	// relationship with our peers, we set up k such that we hit the nominal
+	// timeout two probe intervals short of what we expect given the suspicion
+	// multiplier.
+	k := m.config.SuspicionMult - 2
+
+	// If there aren't enough nodes to give the expected confirmations, just
+	// set k to 0 to say that we don't expect any. Note we subtract 2 from n
+	// here to take out ourselves and the node being probed.
+	n := m.estNumNodes()
+	if n-2 < k {
+		k = 0
+	}
+
+	// Compute the timeouts based on the size of the cluster.
+	min := suspicionTimeout(m.config.SuspicionMult, n, m.config.ProbeInterval)
+	max := time.Duration(m.config.SuspicionMaxTimeoutMult) * min
+	fn := func(numConfirmations int) {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]
 		timeout := ok && state.State == stateSuspect && state.StateChange == changeTime
 		m.nodeLock.Unlock()
 
 		if timeout {
-			m.suspectTimeout(state)
-		}
-	})
-}
+			if k > 0 && numConfirmations < k {
+				metrics.IncrCounter([]string{"memberlist", "degraded", "timeout"}, 1)
+			}
 
-// suspectTimeout is invoked when a suspect timeout has occurred
-func (m *Memberlist) suspectTimeout(n *nodeState) {
-	// Construct a dead message
-	m.logger.Printf("[INFO] memberlist: Marking %s as failed, suspect timeout reached", n.Name)
-	d := dead{Incarnation: n.Incarnation, Node: n.Name, From: m.config.Name}
-	m.deadNode(&d)
+			m.logger.Printf("[INFO] memberlist: Marking %s as failed, suspect timeout reached (%d peer confirmations)",
+				state.Name, numConfirmations)
+			d := dead{Incarnation: state.Incarnation, Node: state.Name, From: m.config.Name}
+			m.deadNode(&d)
+		}
+	}
+	m.nodeTimers[s.Node] = newSuspicion(s.From, k, min, max, fn)
 }
 
 // deadNode is invoked by the network layer when we get a message
@@ -932,6 +961,9 @@ func (m *Memberlist) deadNode(d *dead) {
 	if d.Incarnation < state.Incarnation {
 		return
 	}
+
+	// Clear out any suspicion timer that may be in effect.
+	delete(m.nodeTimers, d.Node)
 
 	// Ignore if node is already dead
 	if state.State == stateDead {

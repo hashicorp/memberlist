@@ -103,6 +103,80 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	}
 }
 
+func TestMemberList_ProbeNode_Suspect_Dogpile(t *testing.T) {
+	cases := []struct {
+		numPeers      int
+		confirmations int
+		expected      time.Duration
+	}{
+		{1, 0, 500 * time.Millisecond},  // n=2, k=3 (max timeout disabled)
+		{2, 0, 500 * time.Millisecond},  // n=3, k=3
+		{3, 0, 500 * time.Millisecond},  // n=4, k=3
+		{4, 0, 1000 * time.Millisecond}, // n=5, k=3 (max timeout starts to take effect)
+		{5, 0, 1000 * time.Millisecond}, // n=6, k=3
+		{5, 1, 750 * time.Millisecond},  // n=6, k=3 (confirmations start to lower timeout)
+		{5, 2, 604 * time.Millisecond},  // n=6, k=3
+		{5, 3, 500 * time.Millisecond},  // n=6, k=3 (timeout driven to nominal value)
+		{5, 4, 500 * time.Millisecond},  // n=6, k=3
+	}
+	for i, c := range cases {
+		// Create the main memberlist under test.
+		addr := getBindAddr()
+		m := HostMemberlist(addr.String(), t, func(c *Config) {
+			c.ProbeTimeout = time.Millisecond
+			c.ProbeInterval = 100 * time.Millisecond
+			c.SuspicionMult = 5
+			c.SuspicionMaxTimeoutMult = 2
+		})
+		a := alive{Node: addr.String(), Addr: []byte(addr), Port: 7946, Incarnation: 1}
+		m.aliveNode(&a, nil, true)
+
+		// Make all but one peer be an real, alive instance.
+		var peers []*Memberlist
+		for j := 0; j < c.numPeers-1; j++ {
+			peerAddr := getBindAddr()
+			peers = append(peers, HostMemberlist(peerAddr.String(), t, nil))
+			a = alive{Node: peerAddr.String(), Addr: []byte(peerAddr), Port: 7946, Incarnation: 1}
+			m.aliveNode(&a, nil, false)
+		}
+
+		// Just use a bogus address for the last peer so it doesn't respond
+		// to pings, but tell the memberlist it's alive.
+		badPeerAddr := getBindAddr()
+		a = alive{Node: badPeerAddr.String(), Addr: []byte(badPeerAddr), Port: 7946, Incarnation: 1}
+		m.aliveNode(&a, nil, false)
+
+		// Force a probe, which should start us into the suspect state.
+		n := m.nodeMap[badPeerAddr.String()]
+		m.probeNode(n)
+		if n.State != stateSuspect {
+			t.Fatalf("case %d: expected node to be suspect", i)
+		}
+
+		// Add the requested number of confirmations.
+		for j := 0; j < c.confirmations; j++ {
+			from := fmt.Sprintf("peer%d", j)
+			s := suspect{Node: badPeerAddr.String(), Incarnation: 1, From: from}
+			m.suspectNode(&s)
+		}
+
+		// Wait until right before the timeout and make sure the timer
+		// hasn't fired.
+		fudge := 25 * time.Millisecond
+		time.Sleep(c.expected - fudge)
+		if n.State != stateSuspect {
+			t.Fatalf("case %d: expected node to still be suspect", i)
+		}
+
+		// Wait through the timeout and a little after to make sure the
+		// timer fires.
+		time.Sleep(2 * fudge)
+		if n.State != stateDead {
+			t.Fatalf("case %d: expected node to be dead", i)
+		}
+	}
+}
+
 func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 	addr1 := getBindAddr()
 	addr2 := getBindAddr()
