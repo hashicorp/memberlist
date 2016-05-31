@@ -45,7 +45,8 @@ type suspicion struct {
 // newSuspicion returns a timer started with the max time, and that will drive
 // to the min time after seeing k or more confirmations. The from node will be
 // excluded from confirmations since we might get our own suspicion message
-// gossiped back to us.
+// gossiped back to us. The minimum time will be used if no confirmations are
+// called for (k <= 0).
 func newSuspicion(from string, k int, min time.Duration, max time.Duration, fn func(int)) *suspicion {
 	s := &suspicion{
 		k:             int32(k),
@@ -53,12 +54,28 @@ func newSuspicion(from string, k int, min time.Duration, max time.Duration, fn f
 		max:           max,
 		confirmations: make(map[string]struct{}),
 	}
+
+	// Exclude the from node from any confirmations.
 	s.confirmations[from] = struct{}{}
+
+	// Pass the number of confirmations into the timeout function for
+	// easy telemetry.
 	s.timeoutFn = func() {
 		fn(int(atomic.LoadInt32(&s.n)))
 	}
-	s.timer = time.AfterFunc(max, s.timeoutFn)
-	s.start = time.Now() // capture after the timer starts
+
+	// If there aren't any confirmations to be made then take the min
+	// time from the start.
+	timeout := max
+	if k < 1 {
+		timeout = min
+	}
+	s.timer = time.AfterFunc(timeout, s.timeoutFn)
+
+	// Capture the start time right after starting the timer above so
+	// we should always err on the side of a little longer timeout if
+	// there's any preemption that separates this and the step above.
+	s.start = time.Now()
 	return s
 }
 

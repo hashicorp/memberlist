@@ -911,27 +911,28 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	// Setup a suspicion timer. Given that we don't have any known phase
 	// relationship with our peers, we set up k such that we hit the nominal
 	// timeout two probe intervals short of what we expect given the suspicion
-	// multiplier. If there aren't enough peers then we just use the nominal
-	// timer, since we know this algorithm no longer makes sense.
+	// multiplier.
 	k := m.config.SuspicionMult - 2
-	if k < 1 {
-		k = 1
-	}
+
+	// If there aren't enough nodes to give the expected confirmations, just
+	// set k to 0 to say that we don't expect any. Note we subtract 2 from n
+	// here to take out ourselves and the node being probed.
 	n := m.estNumNodes()
-	peersAvailable := n-2 >= k // take ourselves out plus the node being probed
-	timeout := suspicionTimeout(m.config.SuspicionMult, n, m.config.ProbeInterval)
-	bound := time.Duration(m.config.SuspicionMaxTimeoutMult) * timeout
-	if !peersAvailable {
-		bound = timeout
+	if n-2 < k {
+		k = 0
 	}
-	f := func(numConfirmations int) {
+
+	// Compute the timeouts based on the size of the cluster.
+	min := suspicionTimeout(m.config.SuspicionMult, n, m.config.ProbeInterval)
+	max := time.Duration(m.config.SuspicionMaxTimeoutMult) * min
+	fn := func(numConfirmations int) {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]
 		timeout := ok && state.State == stateSuspect && state.StateChange == changeTime
 		m.nodeLock.Unlock()
 
 		if timeout {
-			if peersAvailable && numConfirmations < k {
+			if k > 0 && numConfirmations < k {
 				metrics.IncrCounter([]string{"memberlist", "degraded", "timeout"}, 1)
 			}
 
@@ -941,7 +942,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 			m.deadNode(&d)
 		}
 	}
-	m.nodeTimers[s.Node] = newSuspicion(s.From, k, timeout, bound, f)
+	m.nodeTimers[s.Node] = newSuspicion(s.From, k, min, max, fn)
 }
 
 // deadNode is invoked by the network layer when we get a message

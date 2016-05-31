@@ -158,6 +158,26 @@ func TestSuspicion_Timer(t *testing.T) {
 	}
 }
 
+func TestSuspicion_Timer_ZeroK(t *testing.T) {
+	ch := make(chan struct{}, 1)
+	f := func(int) {
+		ch <- struct{}{}
+	}
+
+	// This should select the min time since there are no expected
+	// confirmations to accelerate the timer.
+	s := newSuspicion("me", 0, 25*time.Millisecond, 30*time.Second, f)
+	if s.Confirm("foo") {
+		t.Fatalf("should not provide new information")
+	}
+
+	select {
+	case <-ch:
+	case <-time.After(50 * time.Millisecond):
+		t.Fatalf("should have fired")
+	}
+}
+
 func TestSuspicion_Timer_Immediate(t *testing.T) {
 	ch := make(chan struct{}, 1)
 	f := func(int) {
