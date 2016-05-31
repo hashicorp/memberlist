@@ -694,9 +694,6 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		}
 	}
 
-	// Clear out any suspicion timer that may be in effect.
-	delete(m.nodeTimers, a.Node)
-
 	// Check if we've never seen this node before, and if not, then
 	// store this node in our node map.
 	if !ok {
@@ -756,6 +753,9 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 	if a.Incarnation < state.Incarnation && isLocalNode {
 		return
 	}
+
+	// Clear out any suspicion timer that may be in effect.
+	delete(m.nodeTimers, a.Node)
 
 	// Store the old state and meta data
 	oldState := state.State
