@@ -5,7 +5,31 @@ import (
 	"time"
 )
 
-func TestSuspicion(t *testing.T) {
+func TestSuspicion_remainingSuspicionTime(t *testing.T) {
+	cases := []struct {
+		n        int32
+		k        int32
+		elapsed  time.Duration
+		min      time.Duration
+		max      time.Duration
+		expected time.Duration
+	}{
+		{0, 3, 0, 2 * time.Second, 30 * time.Second, 30 * time.Second},
+		{1, 3, 2 * time.Second, 2 * time.Second, 30 * time.Second, 14 * time.Second},
+		{2, 3, 3 * time.Second, 2 * time.Second, 30 * time.Second, 4810 * time.Millisecond},
+		{3, 3, 4 * time.Second, 2 * time.Second, 30 * time.Second, -2 * time.Second},
+		{4, 3, 5 * time.Second, 2 * time.Second, 30 * time.Second, -3 * time.Second},
+		{5, 3, 10 * time.Second, 2 * time.Second, 30 * time.Second, -8 * time.Second},
+	}
+	for i, c := range cases {
+		remaining := remainingSuspicionTime(c.n, c.k, c.elapsed, c.min, c.max)
+		if remaining != c.expected {
+			t.Errorf("case %d: remaining %9.6f != expected %9.6f", i, remaining.Seconds(), c.expected.Seconds())
+		}
+	}
+}
+
+func TestSuspicion_Timer(t *testing.T) {
 	const k = 3
 	const min = 500 * time.Millisecond
 	const max = 2 * time.Second
@@ -131,5 +155,24 @@ func TestSuspicion(t *testing.T) {
 			t.Fatalf("case %d: should not have fired (%9.6f)", i, d.Seconds())
 		default:
 		}
+	}
+}
+
+func TestSuspicion_Timer_Immediate(t *testing.T) {
+	ch := make(chan struct{}, 1)
+	f := func(int) {
+		ch <- struct{}{}
+	}
+
+	// This should underflow the timeout and fire immediately.
+	s := newSuspicion("me", 1, 100*time.Millisecond, 30*time.Second, f)
+	time.Sleep(200 * time.Millisecond)
+	s.Confirm("foo")
+
+	// Wait a little while since the function gets called in a goroutine.
+	select {
+	case <-ch:
+	case <-time.After(25 * time.Millisecond):
+		t.Fatalf("should have fired")
 	}
 }
