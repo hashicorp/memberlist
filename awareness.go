@@ -3,6 +3,8 @@ package memberlist
 import (
 	"sync"
 	"time"
+
+	"github.com/armon/go-metrics"
 )
 
 // awareness manages a simple metric for tracking the estimated health of the
@@ -33,13 +35,19 @@ func newAwareness(max int) *awareness {
 // change the overall score if it's railed at one of the extremes.
 func (a *awareness) ApplyDelta(delta int) {
 	a.Lock()
+	initial := a.score
 	a.score += delta
 	if a.score < 0 {
 		a.score = 0
 	} else if a.score > a.max {
 		a.score = a.max
 	}
+	final := a.score
 	a.Unlock()
+
+	if initial != final {
+		metrics.SetGauge([]string{"memberlist", "health", "score"}, float32(final))
+	}
 }
 
 // ScaleTimeout takes the given duration and scales it based on the current
