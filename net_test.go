@@ -187,6 +187,94 @@ func TestHandlePing_WrongNode(t *testing.T) {
 	}
 }
 
+func TestHandlePing_Refute(t *testing.T) {
+	m := GetMemberlist(t)
+	m.config.EnableCompression = false
+	if err := m.setAlive(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	defer m.Shutdown()
+
+	var udp *net.UDPConn
+	for port := 60000; port < 61000; port++ {
+		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
+		udpLn, err := net.ListenPacket("udp", udpAddr)
+		if err == nil {
+			udp = udpLn.(*net.UDPConn)
+			break
+		}
+	}
+
+	if udp == nil {
+		t.Fatalf("no udp listener")
+	}
+
+	// Encode a ping with a refute hint set.
+	ping := ping{SeqNo: 42, YouShouldRefute: true}
+	buf, err := encode(pingMsg, ping)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	// Send
+	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.BindPort}
+	udp.WriteTo(buf.Bytes(), addr)
+
+	// Wait for response
+	doneCh := make(chan struct{}, 1)
+	go func() {
+		select {
+		case <-doneCh:
+		case <-time.After(2 * time.Second):
+			panic("timeout")
+		}
+	}()
+
+	in := make([]byte, 1500)
+	n, _, err := udp.ReadFrom(in)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	in = in[0:n]
+
+	msgType := messageType(in[0])
+	if msgType != compoundMsg {
+		t.Fatalf("bad response %v", in)
+	}
+
+	// get the parts
+	trunc, parts, err := decodeCompoundMessage(in[1:])
+	if trunc != 0 {
+		t.Fatalf("unexpected truncation")
+	}
+	if len(parts) != 2 {
+		t.Fatalf("unexpected parts %v", parts)
+	}
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	var ack ackResp
+	if err := decode(parts[0][1:], &ack); err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	if ack.SeqNo != 42 {
+		t.Fatalf("bad sequence no")
+	}
+
+	var aliveout alive
+	if err := decode(parts[1][1:], &aliveout); err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	if aliveout.Node != m.config.Name {
+		t.Fatalf("bad mesg")
+	}
+
+	doneCh <- struct{}{}
+}
+
 func TestHandleIndirectPing(t *testing.T) {
 	m := GetMemberlist(t)
 	m.config.EnableCompression = false
@@ -250,6 +338,99 @@ func TestHandleIndirectPing(t *testing.T) {
 
 	if ack.SeqNo != 100 {
 		t.Fatalf("bad sequence no")
+	}
+
+	doneCh <- struct{}{}
+}
+
+func TestHandleIndirectPing_Refute(t *testing.T) {
+	m := GetMemberlist(t)
+	m.config.EnableCompression = false
+	if err := m.setAlive(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	defer m.Shutdown()
+
+	var udp *net.UDPConn
+	for port := 60000; port < 61000; port++ {
+		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
+		udpLn, err := net.ListenPacket("udp", udpAddr)
+		if err == nil {
+			udp = udpLn.(*net.UDPConn)
+			break
+		}
+	}
+
+	if udp == nil {
+		t.Fatalf("no udp listener")
+	}
+
+	// Encode an indirect ping
+	ind := indirectPingReq{
+		SeqNo:           100,
+		Target:          net.ParseIP(m.config.BindAddr),
+		Port:            uint16(m.config.BindPort),
+		YouShouldRefute: true,
+	}
+	buf, err := encode(indirectPingMsg, &ind)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	// Send
+	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.BindPort}
+	udp.WriteTo(buf.Bytes(), addr)
+
+	// Wait for response
+	doneCh := make(chan struct{}, 1)
+	go func() {
+		select {
+		case <-doneCh:
+		case <-time.After(2 * time.Second):
+			panic("timeout")
+		}
+	}()
+
+	in := make([]byte, 1500)
+	n, _, err := udp.ReadFrom(in)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	in = in[0:n]
+
+	msgType := messageType(in[0])
+	if msgType != compoundMsg {
+		t.Fatalf("bad response %v", in)
+	}
+
+	// get the parts
+	trunc, parts, err := decodeCompoundMessage(in[1:])
+	if trunc != 0 {
+		t.Fatalf("unexpected truncation")
+	}
+	if len(parts) != 2 {
+		t.Fatalf("unexpected parts %v", parts)
+	}
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	var ack ackResp
+	if err := decode(parts[0][1:], &ack); err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	if ack.SeqNo != 100 {
+		t.Fatalf("bad sequence no")
+	}
+
+	var aliveout alive
+	if err := decode(parts[1][1:], &aliveout); err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	if aliveout.Node != m.config.Name {
+		t.Fatalf("bad mesg")
 	}
 
 	doneCh <- struct{}{}

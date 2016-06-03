@@ -374,7 +374,8 @@ func TestDecodeCompoundMessage_Trunc(t *testing.T) {
 	msgs := [][]byte{buf.Bytes(), buf.Bytes(), buf.Bytes()}
 	compound := makeCompoundMessage(msgs)
 
-	trunc, parts, err := decodeCompoundMessage(compound.Bytes()[1:38])
+	bytes := compound.Bytes()
+	trunc, parts, err := decodeCompoundMessage(bytes[1 : len(bytes)-1])
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}

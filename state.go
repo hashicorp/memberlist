@@ -228,8 +228,16 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		metrics.IncrCounter([]string{"memberlist", "degraded", "probe"}, 1)
 	}
 
+	// youShouldRefute lets the node being probed that it might want to
+	// preemptively tee up a refutation that it's suspect or alive.
+	youShouldRefute := node.State != stateAlive
+
 	// Prepare a ping message and setup an ack handler.
-	ping := ping{SeqNo: m.nextSeqNo(), Node: node.Name}
+	ping := ping{
+		SeqNo:           m.nextSeqNo(),
+		Node:            node.Name,
+		YouShouldRefute: youShouldRefute,
+	}
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
 	nackCh := make(chan struct{}, m.config.IndirectChecks+1)
 	m.setProbeChannels(ping.SeqNo, ackCh, nackCh, probeInterval)
@@ -291,7 +299,13 @@ func (m *Memberlist) probeNode(node *nodeState) {
 
 	// Attempt an indirect ping.
 	expectedNacks := 0
-	ind := indirectPingReq{SeqNo: ping.SeqNo, Target: node.Addr, Port: node.Port, Node: node.Name}
+	ind := indirectPingReq{
+		SeqNo:           ping.SeqNo,
+		Target:          node.Addr,
+		Port:            node.Port,
+		Node:            node.Name,
+		YouShouldRefute: youShouldRefute,
+	}
 	for _, peer := range kNodes {
 		// We only expect nack to be sent from peers who understand
 		// version 4 of the protocol.
@@ -733,7 +747,7 @@ func (m *Memberlist) invokeNackHandler(nack nackResp) {
 // are suspect or dead. It will make sure the incarnation number beats the given
 // accusedInc value, or you can supply 0 to just get the next incarnation number.
 // This alters the node state that's passed in so this MUST be called while the
-// nodeLock is held.
+// nodeLock is held for writing.
 func (m *Memberlist) refute(me *nodeState, accusedInc uint32) {
 	// Make sure the incarnation number beats the accusation.
 	inc := m.nextIncarnation()
