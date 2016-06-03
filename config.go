@@ -205,7 +205,7 @@ func DefaultLANConfig() *Config {
 		ProbeTimeout:            500 * time.Millisecond, // Reasonable RTT time for LAN
 		ProbeInterval:           1 * time.Second,        // Failure check every second
 		DisableTcpPings:         false,                  // TCP pings are safe, even with mixed versions
-		AwarenessMaxMultiplier:  7,                      // Probe interval backs off to (7 + 1) seconds
+		AwarenessMaxMultiplier:  8,                      // Probe interval backs off to 8 seconds
 
 		GossipNodes:    3,                      // Gossip to 3 nodes
 		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly

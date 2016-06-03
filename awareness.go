@@ -14,7 +14,8 @@ import (
 type awareness struct {
 	sync.RWMutex
 
-	// max is the upper threshold for the score (inclusive).
+	// max is the upper threshold for the timeout scale (the score will be
+	// constrained to be from 0 <= score < max).
 	max int
 
 	// score is the current awareness score. Lower values are healthier and
@@ -39,8 +40,8 @@ func (a *awareness) ApplyDelta(delta int) {
 	a.score += delta
 	if a.score < 0 {
 		a.score = 0
-	} else if a.score > a.max {
-		a.score = a.max
+	} else if a.score > (a.max - 1) {
+		a.score = (a.max - 1)
 	}
 	final := a.score
 	a.Unlock()
