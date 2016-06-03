@@ -82,6 +82,12 @@ type ping struct {
 	// the intended recipient. This is to protect again an agent
 	// restart with a new name.
 	Node string
+
+	// YouShouldRefute is a courtesy flag that's sent during a probe to
+	// tell the node being probed that it's currently in the suspect or dead
+	// state from the perspective of the prober so it can start right away
+	// trying to refute that.
+	YouShouldRefute bool
 }
 
 // indirect ping sent to an indirect ndoe
@@ -90,7 +96,19 @@ type indirectPingReq struct {
 	Target []byte
 	Port   uint16
 	Node   string
-	Nack   bool // true if we'd like a nack back
+
+	// Nack is set to true if the requester would like to arrange for a
+	// nack to be returned if the node doesn't respond to the probe in
+	// time. This keeps us from having to check the version information
+	// on the node doing the probing, which simplifies the protocol.
+	Nack bool
+
+	// YouShouldRefute is a courtesy flag that's sent during a probe to
+	// tell the node being probed that it's currently in the suspect or dead
+	// state from the perspective of the prober so it can start right away
+	// trying to refute that. The peer helping with the indirect probe does
+	// not care about this, it simply propagates it in the ping.
+	YouShouldRefute bool
 }
 
 // ack response is sent for a ping
@@ -434,11 +452,14 @@ func (m *Memberlist) handlePing(buf []byte, from net.Addr) {
 		m.logger.Printf("[ERR] memberlist: Failed to decode ping request: %s %s", err, LogAddress(from))
 		return
 	}
-	// If node is provided, verify that it is for us
+
+	// If node is provided, verify that it is for us.
 	if p.Node != "" && p.Node != m.config.Name {
 		m.logger.Printf("[WARN] memberlist: Got ping for unexpected node '%s' %s", p.Node, LogAddress(from))
 		return
 	}
+
+	// Fire back an ack.
 	var ack ackResp
 	ack.SeqNo = p.SeqNo
 	if m.config.Ping != nil {
@@ -446,6 +467,17 @@ func (m *Memberlist) handlePing(buf []byte, from net.Addr) {
 	}
 	if err := m.encodeAndSendMsg(from, ackRespMsg, &ack); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ack: %s %s", err, LogAddress(from))
+	}
+
+	// If the prober tipped us off that it thinks we might be suspect or
+	// dead then fire off a refutation.
+	if p.YouShouldRefute {
+		m.nodeLock.Lock()
+		if me, ok := m.nodeMap[m.config.Name]; ok {
+			m.refute(me, 0)
+			m.logger.Printf("[WARN] memberlist: Refuting based on hint sent during probe from %s", LogAddress(from))
+		}
+		m.nodeLock.Unlock()
 	}
 }
 
@@ -464,7 +496,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 
 	// Send a ping to the correct host.
 	localSeqNo := m.nextSeqNo()
-	ping := ping{SeqNo: localSeqNo, Node: ind.Node}
+	ping := ping{SeqNo: localSeqNo, Node: ind.Node, YouShouldRefute: ind.YouShouldRefute}
 	destAddr := &net.UDPAddr{IP: ind.Target, Port: int(ind.Port)}
 
 	// Setup a response handler to relay the ack
