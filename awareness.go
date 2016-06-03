@@ -51,6 +51,14 @@ func (a *awareness) ApplyDelta(delta int) {
 	}
 }
 
+// GetHealthScore returns the raw health score.
+func (a *awareness) GetHealthScore() int {
+	a.RLock()
+	score := a.score
+	a.RUnlock()
+	return score
+}
+
 // ScaleTimeout takes the given duration and scales it based on the current
 // score. Less healthyness will lead to longer timeouts.
 func (a *awareness) ScaleTimeout(timeout time.Duration) time.Duration {

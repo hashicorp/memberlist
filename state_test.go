@@ -525,8 +525,8 @@ func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
 
 	// Start the health in a degraded state.
 	m1.awareness.ApplyDelta(1)
-	if m1.awareness.score != 1 {
-		t.Fatalf("bad: %d", m1.awareness.score)
+	if score := m1.GetHealthScore(); score != 1 {
+		t.Fatalf("bad: %d", score)
 	}
 
 	// Have node m1 probe m4.
@@ -553,8 +553,8 @@ func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
 
 	// We should have gotten all the nacks, so our score should remain the
 	// same, since we didn't get a successful probe.
-	if m1.awareness.score != 1 {
-		t.Fatalf("bad: %d", m1.awareness.score)
+	if score := m1.GetHealthScore(); score != 1 {
+		t.Fatalf("bad: %d", score)
 	}
 }
 
@@ -580,8 +580,8 @@ func TestMemberList_ProbeNode_Awareness_Improved(t *testing.T) {
 
 	// Start the health in a degraded state.
 	m1.awareness.ApplyDelta(1)
-	if m1.awareness.score != 1 {
-		t.Fatalf("bad: %d", m1.awareness.score)
+	if score := m1.GetHealthScore(); score != 1 {
+		t.Fatalf("bad: %d", score)
 	}
 
 	// Have node m1 probe m2.
@@ -594,8 +594,8 @@ func TestMemberList_ProbeNode_Awareness_Improved(t *testing.T) {
 	}
 
 	// Our score should have improved since we did a good probe.
-	if m1.awareness.score != 0 {
-		t.Fatalf("bad: %d", m1.awareness.score)
+	if score := m1.GetHealthScore(); score != 0 {
+		t.Fatalf("bad: %d", score)
 	}
 }
 
@@ -645,8 +645,8 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 	m1.aliveNode(&a4, nil, false)
 
 	// Make sure health looks good.
-	if m1.awareness.score != 0 {
-		t.Fatalf("bad: %d", m1.awareness.score)
+	if score := m1.GetHealthScore(); score != 0 {
+		t.Fatalf("bad: %d", score)
 	}
 
 	// Have node m1 probe m4.
@@ -667,8 +667,8 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 
 	// We should have gotten dinged for the missed nack.
 	time.Sleep(probeTimeMax)
-	if m1.awareness.score != 2 {
-		t.Fatalf("bad: %d", m1.awareness.score)
+	if score := m1.GetHealthScore(); score != 2 {
+		t.Fatalf("bad: %d", score)
 	}
 }
 
@@ -708,8 +708,8 @@ func TestMemberList_ProbeNode_Awareness_OldProtocol(t *testing.T) {
 	m1.aliveNode(&a4, nil, false)
 
 	// Make sure health looks good.
-	if m1.awareness.score != 0 {
-		t.Fatalf("bad: %d", m1.awareness.score)
+	if score := m1.GetHealthScore(); score != 0 {
+		t.Fatalf("bad: %d", score)
 	}
 
 	// Have node m1 probe m4.
@@ -736,8 +736,8 @@ func TestMemberList_ProbeNode_Awareness_OldProtocol(t *testing.T) {
 
 	// Since we are using the old protocol here, we should have gotten dinged
 	// for a failed health check.
-	if m1.awareness.score != 1 {
-		t.Fatalf("bad: %d", m1.awareness.score)
+	if score := m1.GetHealthScore(); score != 1 {
+		t.Fatalf("bad: %d", score)
 	}
 }
 
@@ -1330,8 +1330,8 @@ func TestMemberList_SuspectNode_Refute(t *testing.T) {
 	m.broadcasts.Reset()
 
 	// Make sure health is in a good state
-	if m.awareness.score != 0 {
-		t.Fatalf("bad: %d", m.awareness.score)
+	if score := m.GetHealthScore(); score != 0 {
+		t.Fatalf("bad: %d", score)
 	}
 
 	s := suspect{Node: m.config.Name, Incarnation: 1}
@@ -1353,8 +1353,8 @@ func TestMemberList_SuspectNode_Refute(t *testing.T) {
 	}
 
 	// Health should have been dinged
-	if m.awareness.score != 1 {
-		t.Fatalf("bad: %d", m.awareness.score)
+	if score := m.GetHealthScore(); score != 1 {
+		t.Fatalf("bad: %d", score)
 	}
 }
 
@@ -1489,8 +1489,8 @@ func TestMemberList_DeadNode_Refute(t *testing.T) {
 	m.broadcasts.Reset()
 
 	// Make sure health is in a good state
-	if m.awareness.score != 0 {
-		t.Fatalf("bad: %d", m.awareness.score)
+	if score := m.GetHealthScore(); score != 0 {
+		t.Fatalf("bad: %d", score)
 	}
 
 	d := dead{Node: m.config.Name, Incarnation: 1}
@@ -1512,8 +1512,8 @@ func TestMemberList_DeadNode_Refute(t *testing.T) {
 	}
 
 	// We should have been dinged
-	if m.awareness.score != 1 {
-		t.Fatalf("bad: %d", m.awareness.score)
+	if score := m.GetHealthScore(); score != 1 {
+		t.Fatalf("bad: %d", score)
 	}
 }
 

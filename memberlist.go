@@ -629,6 +629,13 @@ func (m *Memberlist) anyAlive() bool {
 	return false
 }
 
+// GetHealthScore gives this instance's idea of how well it is meeting the soft
+// real-time requirements of the protocol. Lower numbers are better, and zero
+// means "totally healthy".
+func (m *Memberlist) GetHealthScore() int {
+	return m.awareness.GetHealthScore()
+}
+
 // ProtocolVersion returns the protocol version currently in use by
 // this memberlist.
 func (m *Memberlist) ProtocolVersion() uint8 {

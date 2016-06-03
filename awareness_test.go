@@ -30,7 +30,7 @@ func TestAwareness(t *testing.T) {
 	a := newAwareness(8)
 	for i, c := range cases {
 		a.ApplyDelta(c.delta)
-		if a.score != c.score {
+		if a.GetHealthScore() != c.score {
 			t.Errorf("case %d: score mismatch %d != %d", i, a.score, c.score)
 		}
 		if timeout := a.ScaleTimeout(1 * time.Second); timeout != c.timeout {
