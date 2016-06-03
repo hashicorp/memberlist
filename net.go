@@ -468,7 +468,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 	destAddr := &net.UDPAddr{IP: ind.Target, Port: int(ind.Port)}
 
 	// Setup a response handler to relay the ack
-	cancelCh := make(chan struct{}, 1)
+	cancelCh := make(chan struct{})
 	respHandler := func(payload []byte, timestamp time.Time) {
 		// Try to prevent the nack if we've caught it in time.
 		close(cancelCh)
