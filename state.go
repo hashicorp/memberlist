@@ -633,6 +633,11 @@ func (m *Memberlist) nextIncarnation() uint32 {
 	return atomic.AddUint32(&m.incarnation, 1)
 }
 
+// skipIncarnation adds the positive offset to the incarnation number.
+func (m *Memberlist) skipIncarnation(offset uint32) uint32 {
+	return atomic.AddUint32(&m.incarnation, offset)
+}
+
 // estNumNodes is used to get the current estimate of the number of nodes
 func (m *Memberlist) estNumNodes() int {
 	return int(atomic.LoadUint32(&m.numNodes))
@@ -722,6 +727,37 @@ func (m *Memberlist) invokeNackHandler(nack nackResp) {
 		return
 	}
 	ah.nackFn()
+}
+
+// refute gossips an alive message in response to incoming information that we
+// are suspect or dead. It will make sure the incarnation number beats the given
+// accusedInc value, or you can supply 0 to just get the next incarnation number.
+// This alters the node state that's passed in so this MUST be called while the
+// nodeLock is held.
+func (m *Memberlist) refute(me *nodeState, accusedInc uint32) {
+	// Make sure the incarnation number beats the accusation.
+	inc := m.nextIncarnation()
+	if accusedInc >= inc {
+		inc = m.skipIncarnation(accusedInc - inc + 1)
+	}
+	me.Incarnation = inc
+
+	// Decrease our health because we are being asked to refute a problem.
+	m.awareness.ApplyDelta(1)
+
+	// Format and broadcast an alive message.
+	a := alive{
+		Incarnation: inc,
+		Node:        me.Name,
+		Addr:        me.Addr,
+		Port:        me.Port,
+		Meta:        me.Meta,
+		Vsn: []uint8{
+			me.PMin, me.PMax, me.PCur,
+			me.DMin, me.DMax, me.DCur,
+		},
+	}
+	m.encodeAndBroadcast(me.Addr.String(), aliveMsg, a)
 }
 
 // aliveNode is invoked by the network layer when we get a message about a
@@ -855,22 +891,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 			return
 		}
 
-		inc := m.nextIncarnation()
-		for a.Incarnation >= inc {
-			inc = m.nextIncarnation()
-		}
-		state.Incarnation = inc
-
-		// Send the refutation.
-		a := alive{
-			Incarnation: inc,
-			Node:        state.Name,
-			Addr:        state.Addr,
-			Port:        state.Port,
-			Meta:        state.Meta,
-			Vsn:         versions,
-		}
-		m.encodeBroadcastNotify(a.Node, aliveMsg, a, notify)
+		m.refute(state, a.Incarnation)
 		m.logger.Printf("[WARN] memberlist: Refuting an alive message")
 	} else {
 		m.encodeBroadcastNotify(a.Node, aliveMsg, a, notify)
@@ -945,28 +966,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 
 	// If this is us we need to refute, otherwise re-broadcast
 	if state.Name == m.config.Name {
-		inc := m.nextIncarnation()
-		for s.Incarnation >= inc {
-			inc = m.nextIncarnation()
-		}
-		state.Incarnation = inc
-
-		// Factor the suspected-ness into our health awareness so we
-		// slow down the failure detector.
-		m.awareness.ApplyDelta(1)
-
-		a := alive{
-			Incarnation: inc,
-			Node:        state.Name,
-			Addr:        state.Addr,
-			Port:        state.Port,
-			Meta:        state.Meta,
-			Vsn: []uint8{
-				state.PMin, state.PMax, state.PCur,
-				state.DMin, state.DMax, state.DCur,
-			},
-		}
-		m.encodeAndBroadcast(s.Node, aliveMsg, a)
+		m.refute(state, s.Incarnation)
 		m.logger.Printf("[WARN] memberlist: Refuting a suspect message (from: %s)", s.From)
 		return // Do not mark ourself suspect
 	} else {
@@ -1048,28 +1048,7 @@ func (m *Memberlist) deadNode(d *dead) {
 	if state.Name == m.config.Name {
 		// If we are not leaving we need to refute
 		if !m.leave {
-			inc := m.nextIncarnation()
-			for d.Incarnation >= inc {
-				inc = m.nextIncarnation()
-			}
-			state.Incarnation = inc
-
-			// Factor the dead-ness into our health awareness so we
-			// slow down the failure detector.
-			m.awareness.ApplyDelta(1)
-
-			a := alive{
-				Incarnation: inc,
-				Node:        state.Name,
-				Addr:        state.Addr,
-				Port:        state.Port,
-				Meta:        state.Meta,
-				Vsn: []uint8{
-					state.PMin, state.PMax, state.PCur,
-					state.DMin, state.DMax, state.DCur,
-				},
-			}
-			m.encodeAndBroadcast(d.Node, aliveMsg, a)
+			m.refute(state, d.Incarnation)
 			m.logger.Printf("[WARN] memberlist: Refuting a dead message (from: %s)", d.From)
 			return // Do not mark ourself dead
 		}
