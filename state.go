@@ -42,10 +42,11 @@ type nodeState struct {
 	StateChange time.Time     // Time last state change happened
 }
 
-// ackHandler is used to register handlers for incoming acks
+// ackHandler is used to register handlers for incoming acks and nacks.
 type ackHandler struct {
-	handler func([]byte, time.Time)
-	timer   *time.Timer
+	ackFn  func([]byte, time.Time)
+	nackFn func()
+	timer  *time.Timer
 }
 
 // NoPingResponseError is used to indicate a 'ping' packet was
@@ -219,13 +220,22 @@ START:
 func (m *Memberlist) probeNode(node *nodeState) {
 	defer metrics.MeasureSince([]string{"memberlist", "probeNode"}, time.Now())
 
+	// We use our health awareness to scale the overall probe interval, so we
+	// slow down if we detect problems. The ticker that calls us can handle
+	// us running over the base interval, and will skip missed ticks.
+	probeInterval := m.awareness.ScaleTimeout(m.config.ProbeInterval)
+	if probeInterval > m.config.ProbeInterval {
+		metrics.IncrCounter([]string{"memberlist", "degraded", "probe"}, 1)
+	}
+
 	// Prepare a ping message and setup an ack handler.
 	ping := ping{SeqNo: m.nextSeqNo(), Node: node.Name}
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
-	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
+	nackCh := make(chan struct{}, m.config.IndirectChecks+1)
+	m.setProbeChannels(ping.SeqNo, ackCh, nackCh, probeInterval)
 
 	// Send a ping to the node.
-	deadline := time.Now().Add(m.config.ProbeInterval)
+	deadline := time.Now().Add(probeInterval)
 	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
@@ -236,6 +246,16 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// system calls to do the actual send. This probably under-reports a bit,
 	// but it's the best we can do.
 	sent := time.Now()
+
+	// Arrange for our self-awareness to get updated. At this point we've
+	// sent the ping, so any return statement means the probe succeeded
+	// which will improve our health until we get to the failure scenarios
+	// at the end of this function, which will alter this delta variable
+	// accordingly.
+	awarenessDelta := -1
+	defer func() {
+		m.awareness.ApplyDelta(awarenessDelta)
+	}()
 
 	// Wait for response or round-trip-time.
 	select {
@@ -254,6 +274,12 @@ func (m *Memberlist) probeNode(node *nodeState) {
 			ackCh <- v
 		}
 	case <-time.After(m.config.ProbeTimeout):
+		// Note that we don't scale this timeout based on awareness and
+		// the health score. That's because we don't really expect waiting
+		// longer to help get UDP through. Since health does extend the
+		// probe interval it will give the TCP fallback more time, which
+		// is more active in dealing with lost packets, and it gives more
+		// time to wait for indirect acks/nacks.
 		m.logger.Printf("[DEBUG] memberlist: Failed UDP ping: %v (timeout reached)", node.Name)
 	}
 
@@ -264,8 +290,15 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	m.nodeLock.RUnlock()
 
 	// Attempt an indirect ping.
+	expectedNacks := 0
 	ind := indirectPingReq{SeqNo: ping.SeqNo, Target: node.Addr, Port: node.Port, Node: node.Name}
 	for _, peer := range kNodes {
+		// We only expect nack to be sent from peers who understand
+		// version 4 of the protocol.
+		if ind.Nack = peer.PMax >= 4; ind.Nack {
+			expectedNacks++
+		}
+
 		destAddr := &net.UDPAddr{IP: peer.Addr, Port: int(peer.Port)}
 		if err := m.encodeAndSendMsg(destAddr, indirectPingMsg, &ind); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send indirect ping: %s", err)
@@ -319,7 +352,23 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		}
 	}
 
-	// No acks received from target, suspect
+	// Update our self-awareness based on the results of this failed probe.
+	// If we don't have peers who will send nacks then we penalize for any
+	// failed probe as a simple health metric. If we do have peers to nack
+	// verify, then we can use that as a more sophisticated measure of self-
+	// health because we assume them to be working, and they can help us
+	// decide if the probed node was really dead or if it was something wrong
+	// with ourselves.
+	awarenessDelta = 0
+	if expectedNacks > 0 {
+		if nackCount := len(nackCh); nackCount < expectedNacks {
+			awarenessDelta += 2 * (expectedNacks - nackCount)
+		}
+	} else {
+		awarenessDelta += 1
+	}
+
+	// No acks received from target, suspect it as failed.
 	m.logger.Printf("[INFO] memberlist: Suspect %s has failed, no acks received", node.Name)
 	s := suspect{Incarnation: node.Incarnation, Node: node.Name, From: m.config.Name}
 	m.suspectNode(&s)
@@ -330,7 +379,7 @@ func (m *Memberlist) Ping(node string, addr net.Addr) (time.Duration, error) {
 	// Prepare a ping message and setup an ack handler.
 	ping := ping{SeqNo: m.nextSeqNo(), Node: node}
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
-	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
+	m.setProbeChannels(ping.SeqNo, ackCh, nil, m.config.ProbeInterval)
 
 	// Send a ping to the node.
 	if err := m.encodeAndSendMsg(addr, pingMsg, &ping); err != nil {
@@ -595,19 +644,27 @@ type ackMessage struct {
 	Timestamp time.Time
 }
 
-// setAckChannel is used to attach a channel to receive a message when an ack with a given
-// sequence number is received. The `complete` field of the message will be false on timeout
-func (m *Memberlist) setAckChannel(seqNo uint32, ch chan ackMessage, timeout time.Duration) {
-	// Create a handler function
-	handler := func(payload []byte, timestamp time.Time) {
+// setProbeChannels is used to attach the ackCh to receive a message when an ack
+// with a given sequence number is received. The `complete` field of the message
+// will be false on timeout. Any nack messages will cause an empty struct to be
+// passed to the nackCh, which can be nil if not needed.
+func (m *Memberlist) setProbeChannels(seqNo uint32, ackCh chan ackMessage, nackCh chan struct{}, timeout time.Duration) {
+	// Create handler functions for acks and nacks
+	ackFn := func(payload []byte, timestamp time.Time) {
 		select {
-		case ch <- ackMessage{true, payload, timestamp}:
+		case ackCh <- ackMessage{true, payload, timestamp}:
+		default:
+		}
+	}
+	nackFn := func() {
+		select {
+		case nackCh <- struct{}{}:
 		default:
 		}
 	}
 
-	// Add the handler
-	ah := &ackHandler{handler, nil}
+	// Add the handlers
+	ah := &ackHandler{ackFn, nackFn, nil}
 	m.ackLock.Lock()
 	m.ackHandlers[seqNo] = ah
 	m.ackLock.Unlock()
@@ -618,18 +675,19 @@ func (m *Memberlist) setAckChannel(seqNo uint32, ch chan ackMessage, timeout tim
 		delete(m.ackHandlers, seqNo)
 		m.ackLock.Unlock()
 		select {
-		case ch <- ackMessage{false, nil, time.Now()}:
+		case ackCh <- ackMessage{false, nil, time.Now()}:
 		default:
 		}
 	})
 }
 
-// setAckHandler is used to attach a handler to be invoked when an
-// ack with a given sequence number is received. If a timeout is reached,
-// the handler is deleted
-func (m *Memberlist) setAckHandler(seqNo uint32, handler func([]byte, time.Time), timeout time.Duration) {
+// setAckHandler is used to attach a handler to be invoked when an ack with a
+// given sequence number is received. If a timeout is reached, the handler is
+// deleted. This is used for indirect pings so does not configure a function
+// for nacks.
+func (m *Memberlist) setAckHandler(seqNo uint32, ackFn func([]byte, time.Time), timeout time.Duration) {
 	// Add the handler
-	ah := &ackHandler{handler, nil}
+	ah := &ackHandler{ackFn, nil, nil}
 	m.ackLock.Lock()
 	m.ackHandlers[seqNo] = ah
 	m.ackLock.Unlock()
@@ -642,7 +700,7 @@ func (m *Memberlist) setAckHandler(seqNo uint32, handler func([]byte, time.Time)
 	})
 }
 
-// Invokes an Ack handler if any is associated, and reaps the handler immediately
+// Invokes an ack handler if any is associated, and reaps the handler immediately
 func (m *Memberlist) invokeAckHandler(ack ackResp, timestamp time.Time) {
 	m.ackLock.Lock()
 	ah, ok := m.ackHandlers[ack.SeqNo]
@@ -652,7 +710,18 @@ func (m *Memberlist) invokeAckHandler(ack ackResp, timestamp time.Time) {
 		return
 	}
 	ah.timer.Stop()
-	ah.handler(ack.Payload, timestamp)
+	ah.ackFn(ack.Payload, timestamp)
+}
+
+// Invokes nack handler if any is associated.
+func (m *Memberlist) invokeNackHandler(nack nackResp) {
+	m.ackLock.Lock()
+	ah, ok := m.ackHandlers[nack.SeqNo]
+	m.ackLock.Unlock()
+	if !ok || ah.nackFn == nil {
+		return
+	}
+	ah.nackFn()
 }
 
 // aliveNode is invoked by the network layer when we get a message about a
@@ -792,6 +861,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		}
 		state.Incarnation = inc
 
+		// Send the refutation.
 		a := alive{
 			Incarnation: inc,
 			Node:        state.Name,
@@ -880,6 +950,10 @@ func (m *Memberlist) suspectNode(s *suspect) {
 			inc = m.nextIncarnation()
 		}
 		state.Incarnation = inc
+
+		// Factor the suspected-ness into our health awareness so we
+		// slow down the failure detector.
+		m.awareness.ApplyDelta(1)
 
 		a := alive{
 			Incarnation: inc,
@@ -979,6 +1053,10 @@ func (m *Memberlist) deadNode(d *dead) {
 				inc = m.nextIncarnation()
 			}
 			state.Incarnation = inc
+
+			// Factor the dead-ness into our health awareness so we
+			// slow down the failure detector.
+			m.awareness.ApplyDelta(1)
 
 			a := alive{
 				Incarnation: inc,

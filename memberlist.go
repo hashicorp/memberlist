@@ -47,6 +47,7 @@ type Memberlist struct {
 	nodes      []*nodeState          // Known nodes
 	nodeMap    map[string]*nodeState // Maps Addr.String() -> NodeState
 	nodeTimers map[string]*suspicion // Maps Addr.String() -> suspicion timer
+	awareness  *awareness
 
 	tickerLock sync.Mutex
 	tickers    []*time.Ticker
@@ -131,6 +132,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		handoff:        make(chan msgHandoff, 1024),
 		nodeMap:        make(map[string]*nodeState),
 		nodeTimers:     make(map[string]*suspicion),
+		awareness:      newAwareness(conf.AwarenessMaxMultiplier),
 		ackHandlers:    make(map[uint32]*ackHandler),
 		broadcasts:     &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
 		logger:         logger,

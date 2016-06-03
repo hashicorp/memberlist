@@ -472,6 +472,275 @@ func TestMemberList_ProbeNode_FallbackTCP_OldProtocol(t *testing.T) {
 	}
 }
 
+func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	addr3 := getBindAddr()
+	addr4 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+	ip3 := []byte(addr3)
+	ip4 := []byte(addr4)
+
+	var probeTimeMin time.Duration
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
+		c.ProbeTimeout = 10 * time.Millisecond
+		c.ProbeInterval = 200 * time.Millisecond
+		probeTimeMin = 2*c.ProbeInterval - 50*time.Millisecond
+	})
+	defer m1.Shutdown()
+
+	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
+		c.ProbeTimeout = 10 * time.Millisecond
+		c.ProbeInterval = 200 * time.Millisecond
+	})
+	defer m2.Shutdown()
+
+	m3 := HostMemberlist(addr3.String(), t, func(c *Config) {
+		c.ProbeTimeout = 10 * time.Millisecond
+		c.ProbeInterval = 200 * time.Millisecond
+	})
+	defer m3.Shutdown()
+
+	// This will enable nacks by invoking the latest protocol version.
+	vsn := []uint8{
+		ProtocolVersionMin,
+		ProtocolVersionMax,
+		m1.config.ProtocolVersion,
+		m1.config.DelegateProtocolMin,
+		m1.config.DelegateProtocolMax,
+		m1.config.DelegateProtocolVersion,
+	}
+
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1, Vsn: vsn}
+	m1.aliveNode(&a1, nil, true)
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1, Vsn: vsn}
+	m1.aliveNode(&a2, nil, false)
+	a3 := alive{Node: addr3.String(), Addr: ip3, Port: 7946, Incarnation: 1, Vsn: vsn}
+	m1.aliveNode(&a3, nil, false)
+
+	// Node 4 never gets started.
+	a4 := alive{Node: addr4.String(), Addr: ip4, Port: 7946, Incarnation: 1, Vsn: vsn}
+	m1.aliveNode(&a4, nil, false)
+
+	// Start the health in a degraded state.
+	m1.awareness.ApplyDelta(1)
+	if m1.awareness.score != 1 {
+		t.Fatalf("bad: %d", m1.awareness.score)
+	}
+
+	// Have node m1 probe m4.
+	n := m1.nodeMap[addr4.String()]
+	startProbe := time.Now()
+	m1.probeNode(n)
+	probeTime := time.Now().Sub(startProbe)
+
+	// Node should be reported suspect.
+	if n.State != stateSuspect {
+		t.Fatalf("expect node to be suspect")
+	}
+
+	// Make sure we timed out approximately on time (note that we accounted
+	// for the slowed-down failure detector in the probeTimeMin calculation.
+	if probeTime < probeTimeMin {
+		t.Fatalf("probed too quickly, %9.6f", probeTime.Seconds())
+	}
+
+	// Confirm at least one of the peers attempted an indirect probe.
+	if m2.sequenceNum != 1 && m3.sequenceNum != 1 {
+		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
+	}
+
+	// We should have gotten all the nacks, so our score should remain the
+	// same, since we didn't get a successful probe.
+	if m1.awareness.score != 1 {
+		t.Fatalf("bad: %d", m1.awareness.score)
+	}
+}
+
+func TestMemberList_ProbeNode_Awareness_Improved(t *testing.T) {
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
+		c.ProbeTimeout = 10 * time.Millisecond
+		c.ProbeInterval = 200 * time.Millisecond
+	})
+	defer m1.Shutdown()
+
+	m2 := HostMemberlist(addr2.String(), t, nil)
+	defer m2.Shutdown()
+
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a1, nil, true)
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a2, nil, false)
+
+	// Start the health in a degraded state.
+	m1.awareness.ApplyDelta(1)
+	if m1.awareness.score != 1 {
+		t.Fatalf("bad: %d", m1.awareness.score)
+	}
+
+	// Have node m1 probe m2.
+	n := m1.nodeMap[addr2.String()]
+	m1.probeNode(n)
+
+	// Node should be reported alive.
+	if n.State != stateAlive {
+		t.Fatalf("expect node to be suspect")
+	}
+
+	// Our score should have improved since we did a good probe.
+	if m1.awareness.score != 0 {
+		t.Fatalf("bad: %d", m1.awareness.score)
+	}
+}
+
+func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	addr3 := getBindAddr()
+	addr4 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+	ip3 := []byte(addr3)
+	ip4 := []byte(addr4)
+
+	var probeTimeMax time.Duration
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
+		c.ProbeTimeout = 10 * time.Millisecond
+		c.ProbeInterval = 200 * time.Millisecond
+		probeTimeMax = c.ProbeInterval + 50*time.Millisecond
+	})
+	defer m1.Shutdown()
+
+	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
+		c.ProbeTimeout = 10 * time.Millisecond
+		c.ProbeInterval = 200 * time.Millisecond
+	})
+	defer m2.Shutdown()
+
+	// This will enable nacks by invoking the latest protocol version.
+	vsn := []uint8{
+		ProtocolVersionMin,
+		ProtocolVersionMax,
+		m1.config.ProtocolVersion,
+		m1.config.DelegateProtocolMin,
+		m1.config.DelegateProtocolMax,
+		m1.config.DelegateProtocolVersion,
+	}
+
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1, Vsn: vsn}
+	m1.aliveNode(&a1, nil, true)
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1, Vsn: vsn}
+	m1.aliveNode(&a2, nil, false)
+
+	// Node 3 and node 4 never get started.
+	a3 := alive{Node: addr3.String(), Addr: ip3, Port: 7946, Incarnation: 1, Vsn: vsn}
+	m1.aliveNode(&a3, nil, false)
+	a4 := alive{Node: addr4.String(), Addr: ip4, Port: 7946, Incarnation: 1, Vsn: vsn}
+	m1.aliveNode(&a4, nil, false)
+
+	// Make sure health looks good.
+	if m1.awareness.score != 0 {
+		t.Fatalf("bad: %d", m1.awareness.score)
+	}
+
+	// Have node m1 probe m4.
+	n := m1.nodeMap[addr4.String()]
+	startProbe := time.Now()
+	m1.probeNode(n)
+	probeTime := time.Now().Sub(startProbe)
+
+	// Node should be reported suspect.
+	if n.State != stateSuspect {
+		t.Fatalf("expect node to be suspect")
+	}
+
+	// Make sure we timed out approximately on time.
+	if probeTime > probeTimeMax {
+		t.Fatalf("took to long to probe, %9.6f", probeTime.Seconds())
+	}
+
+	// We should have gotten dinged for the missed nack.
+	time.Sleep(probeTimeMax)
+	if m1.awareness.score != 2 {
+		t.Fatalf("bad: %d", m1.awareness.score)
+	}
+}
+
+func TestMemberList_ProbeNode_Awareness_OldProtocol(t *testing.T) {
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	addr3 := getBindAddr()
+	addr4 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+	ip3 := []byte(addr3)
+	ip4 := []byte(addr4)
+
+	var probeTimeMax time.Duration
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
+		c.ProbeTimeout = 10 * time.Millisecond
+		c.ProbeInterval = 200 * time.Millisecond
+		probeTimeMax = c.ProbeInterval + 20*time.Millisecond
+	})
+	defer m1.Shutdown()
+
+	m2 := HostMemberlist(addr2.String(), t, nil)
+	defer m2.Shutdown()
+
+	m3 := HostMemberlist(addr3.String(), t, nil)
+	defer m3.Shutdown()
+
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a1, nil, true)
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a2, nil, false)
+	a3 := alive{Node: addr3.String(), Addr: ip3, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a3, nil, false)
+
+	// Node 4 never gets started.
+	a4 := alive{Node: addr4.String(), Addr: ip4, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a4, nil, false)
+
+	// Make sure health looks good.
+	if m1.awareness.score != 0 {
+		t.Fatalf("bad: %d", m1.awareness.score)
+	}
+
+	// Have node m1 probe m4.
+	n := m1.nodeMap[addr4.String()]
+	startProbe := time.Now()
+	m1.probeNode(n)
+	probeTime := time.Now().Sub(startProbe)
+
+	// Node should be reported suspect.
+	if n.State != stateSuspect {
+		t.Fatalf("expect node to be suspect")
+	}
+
+	// Make sure we timed out approximately on time.
+	if probeTime > probeTimeMax {
+		t.Fatalf("took to long to probe, %9.6f", probeTime.Seconds())
+	}
+
+	// Confirm at least one of the peers attempted an indirect probe.
+	time.Sleep(probeTimeMax)
+	if m2.sequenceNum != 1 && m3.sequenceNum != 1 {
+		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
+	}
+
+	// Since we are using the old protocol here, we should have gotten dinged
+	// for a failed health check.
+	if m1.awareness.score != 1 {
+		t.Fatalf("bad: %d", m1.awareness.score)
+	}
+}
+
 func TestMemberList_ProbeNode(t *testing.T) {
 	addr1 := getBindAddr()
 	addr2 := getBindAddr()
@@ -571,11 +840,11 @@ func TestMemberList_NextSeq(t *testing.T) {
 	}
 }
 
-func TestMemberList_SetAckChannel(t *testing.T) {
+func TestMemberList_setProbeChannels(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
 	ch := make(chan ackMessage, 1)
-	m.setAckChannel(0, ch, 10*time.Millisecond)
+	m.setProbeChannels(0, ch, nil, 10*time.Millisecond)
 
 	if _, ok := m.ackHandlers[0]; !ok {
 		t.Fatalf("missing handler")
@@ -587,7 +856,7 @@ func TestMemberList_SetAckChannel(t *testing.T) {
 	}
 }
 
-func TestMemberList_SetAckHandler(t *testing.T) {
+func TestMemberList_setAckHandler(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
 	f := func([]byte, time.Time) {}
@@ -603,7 +872,7 @@ func TestMemberList_SetAckHandler(t *testing.T) {
 	}
 }
 
-func TestMemberList_InvokeAckHandler(t *testing.T) {
+func TestMemberList_invokeAckHandler(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
 	// Does nothing
@@ -624,27 +893,89 @@ func TestMemberList_InvokeAckHandler(t *testing.T) {
 	}
 }
 
-func TestMemberList_InvokeAckHandler_Channel(t *testing.T) {
+func TestMemberList_invokeAckHandler_Channel_Ack(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
 	ack := ackResp{0, []byte{0, 0, 0}}
+
 	// Does nothing
 	m.invokeAckHandler(ack, time.Now())
 
-	ch := make(chan ackMessage, 1)
-	m.setAckChannel(0, ch, 10*time.Millisecond)
+	ackCh := make(chan ackMessage, 1)
+	nackCh := make(chan struct{}, 1)
+	m.setProbeChannels(0, ackCh, nackCh, 10*time.Millisecond)
 
 	// Should send message
 	m.invokeAckHandler(ack, time.Now())
 
 	select {
-	case v := <-ch:
+	case v := <-ackCh:
 		if v.Complete != true {
 			t.Fatalf("Bad value")
 		}
 		if bytes.Compare(v.Payload, ack.Payload) != 0 {
 			t.Fatalf("wrong payload. expected: %v; actual: %v", ack.Payload, v.Payload)
 		}
+
+	case <-nackCh:
+		t.Fatalf("should not get a nack")
+
+	default:
+		t.Fatalf("message not sent")
+	}
+
+	if _, ok := m.ackHandlers[0]; ok {
+		t.Fatalf("non-reaped handler")
+	}
+}
+
+func TestMemberList_invokeAckHandler_Channel_Nack(t *testing.T) {
+	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
+
+	nack := nackResp{0}
+
+	// Does nothing.
+	m.invokeNackHandler(nack)
+
+	ackCh := make(chan ackMessage, 1)
+	nackCh := make(chan struct{}, 1)
+	m.setProbeChannels(0, ackCh, nackCh, 10*time.Millisecond)
+
+	// Should send message.
+	m.invokeNackHandler(nack)
+
+	select {
+	case <-ackCh:
+		t.Fatalf("should not get an ack")
+
+	case <-nackCh:
+		// Good.
+
+	default:
+		t.Fatalf("message not sent")
+	}
+
+	// Getting a nack doesn't reap the handler so that we can still forward
+	// an ack up to the reap time, if we get one.
+	if _, ok := m.ackHandlers[0]; !ok {
+		t.Fatalf("handler should not be reaped")
+	}
+
+	ack := ackResp{0, []byte{0, 0, 0}}
+	m.invokeAckHandler(ack, time.Now())
+
+	select {
+	case v := <-ackCh:
+		if v.Complete != true {
+			t.Fatalf("Bad value")
+		}
+		if bytes.Compare(v.Payload, ack.Payload) != 0 {
+			t.Fatalf("wrong payload. expected: %v; actual: %v", ack.Payload, v.Payload)
+		}
+
+	case <-nackCh:
+		t.Fatalf("should not get a nack")
+
 	default:
 		t.Fatalf("message not sent")
 	}
@@ -998,6 +1329,11 @@ func TestMemberList_SuspectNode_Refute(t *testing.T) {
 	// Clear queue
 	m.broadcasts.Reset()
 
+	// Make sure health is in a good state
+	if m.awareness.score != 0 {
+		t.Fatalf("bad: %d", m.awareness.score)
+	}
+
 	s := suspect{Node: m.config.Name, Incarnation: 1}
 	m.suspectNode(&s)
 
@@ -1014,6 +1350,11 @@ func TestMemberList_SuspectNode_Refute(t *testing.T) {
 	// Should be alive mesg
 	if messageType(m.broadcasts.bcQueue[0].b.Message()[0]) != aliveMsg {
 		t.Fatalf("expected queued alive msg")
+	}
+
+	// Health should have been dinged
+	if m.awareness.score != 1 {
+		t.Fatalf("bad: %d", m.awareness.score)
 	}
 }
 
@@ -1147,6 +1488,11 @@ func TestMemberList_DeadNode_Refute(t *testing.T) {
 	// Clear queue
 	m.broadcasts.Reset()
 
+	// Make sure health is in a good state
+	if m.awareness.score != 0 {
+		t.Fatalf("bad: %d", m.awareness.score)
+	}
+
 	d := dead{Node: m.config.Name, Incarnation: 1}
 	m.deadNode(&d)
 
@@ -1163,6 +1509,11 @@ func TestMemberList_DeadNode_Refute(t *testing.T) {
 	// Should be alive mesg
 	if messageType(m.broadcasts.bcQueue[0].b.Message()[0]) != aliveMsg {
 		t.Fatalf("expected queued alive msg")
+	}
+
+	// We should have been dinged
+	if m.awareness.score != 1 {
+		t.Fatalf("bad: %d", m.awareness.score)
 	}
 }
 
