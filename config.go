@@ -108,6 +108,11 @@ type Config struct {
 	// indirect UDP pings.
 	DisableTcpPings bool
 
+	// AwarenessMaxMultiplier will increase the probe interval if the node
+	// becomes aware that it might be degraded and not meeting the soft real
+	// time requirements to reliably probe other nodes.
+	AwarenessMaxMultiplier int
+
 	// GossipInterval and GossipNodes are used to configure the gossip
 	// behavior of memberlist.
 	//
@@ -200,6 +205,7 @@ func DefaultLANConfig() *Config {
 		ProbeTimeout:            500 * time.Millisecond, // Reasonable RTT time for LAN
 		ProbeInterval:           1 * time.Second,        // Failure check every second
 		DisableTcpPings:         false,                  // TCP pings are safe, even with mixed versions
+		AwarenessMaxMultiplier:  8,                      // Probe interval backs off to 8 seconds
 
 		GossipNodes:    3,                      // Gossip to 3 nodes
 		GossipInterval: 200 * time.Millisecond, // Gossip more rapidly
