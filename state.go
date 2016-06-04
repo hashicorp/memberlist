@@ -234,12 +234,37 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	nackCh := make(chan struct{}, m.config.IndirectChecks+1)
 	m.setProbeChannels(ping.SeqNo, ackCh, nackCh, probeInterval)
 
-	// Send a ping to the node.
+	// Send a ping to the node. If this node looks like it's suspect or dead,
+	// also tack on a suspect message so that it has a chance to refute as
+	// soon as possible.
 	deadline := time.Now().Add(probeInterval)
 	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
-	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
-		return
+	if node.State == stateAlive {
+		if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
+			return
+		}
+	} else {
+		var msgs [][]byte
+		if buf, err := encode(pingMsg, &ping); err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to encode ping message: %s", err)
+			return
+		} else {
+			msgs = append(msgs, buf.Bytes())
+		}
+		s := suspect{Incarnation: node.Incarnation, Node: node.Name, From: m.config.Name}
+		if buf, err := encode(suspectMsg, &s); err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to encode suspect message: %s", err)
+			return
+		} else {
+			msgs = append(msgs, buf.Bytes())
+		}
+
+		compound := makeCompoundMessage(msgs)
+		if err := m.rawSendMsgUDP(destAddr, compound.Bytes()); err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to send compound ping and suspect message to %s: %s", destAddr, err)
+			return
+		}
 	}
 
 	// Mark the sent time here, which should be after any pre-processing and
