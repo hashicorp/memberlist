@@ -741,6 +741,47 @@ func TestMemberList_ProbeNode_Awareness_OldProtocol(t *testing.T) {
 	}
 }
 
+func TestMemberList_ProbeNode_Buddy(t *testing.T) {
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
+		c.ProbeTimeout = time.Millisecond
+		c.ProbeInterval = 10 * time.Millisecond
+	})
+	m2 := HostMemberlist(addr2.String(), t, nil)
+
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
+
+	m1.aliveNode(&a1, nil, true)
+	m1.aliveNode(&a2, nil, false)
+	m2.aliveNode(&a2, nil, true)
+
+	// Force the state to suspect so we piggyback a suspect message with the ping.
+	// We should see this get refuted later, and the ping will succeed.
+	n := m1.nodeMap[addr2.String()]
+	n.State = stateSuspect
+	m1.probeNode(n)
+
+	// Make sure a ping was sent.
+	if m1.sequenceNum != 1 {
+		t.Fatalf("bad seqno %v", m1.sequenceNum)
+	}
+
+	// Check a broadcast is queued.
+	if num := m2.broadcasts.NumQueued(); num != 1 {
+		t.Fatalf("expected only one queued message: %d", num)
+	}
+
+	// Should be alive msg.
+	if messageType(m2.broadcasts.bcQueue[0].b.Message()[0]) != aliveMsg {
+		t.Fatalf("expected queued alive msg")
+	}
+}
+
 func TestMemberList_ProbeNode(t *testing.T) {
 	addr1 := getBindAddr()
 	addr2 := getBindAddr()
