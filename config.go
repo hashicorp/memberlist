@@ -179,6 +179,11 @@ type Config struct {
 	// behavior for using LogOutput. You cannot specify both LogOutput and Logger
 	// at the same time.
 	Logger *log.Logger
+
+	// Size of Memberlist's internal channel which handles UDP messages. The
+	// size of this determines the size of the queue which Memberlist will keep
+	// while UDP messages are handled.
+	HandoffQueueDepth int
 }
 
 // DefaultLANConfig returns a sane set of configurations for Memberlist.
@@ -216,6 +221,8 @@ func DefaultLANConfig() *Config {
 		Keyring:   nil,
 
 		DNSConfigPath: "/etc/resolv.conf",
+
+		HandoffQueueDepth: 1024,
 	}
 }
 
@@ -231,6 +238,7 @@ func DefaultWANConfig() *Config {
 	conf.ProbeInterval = 5 * time.Second
 	conf.GossipNodes = 4 // Gossip less frequently, but to an additional node
 	conf.GossipInterval = 500 * time.Millisecond
+	conf.HandoffQueueDepth = 1024
 	return conf
 }
 
@@ -247,6 +255,7 @@ func DefaultLocalConfig() *Config {
 	conf.ProbeTimeout = 200 * time.Millisecond
 	conf.ProbeInterval = time.Second
 	conf.GossipInterval = 100 * time.Millisecond
+	conf.HandoffQueueDepth = 1024
 	return conf
 }
 
