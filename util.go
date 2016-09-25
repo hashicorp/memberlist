@@ -331,15 +331,14 @@ func isLoopbackIP(ip_str string) bool {
 // "ipv6::addr" or "[ipv6::address]:port",
 // return true if the string includes a port.
 func hasPort(s string) bool {
-	if s == "" {
+	last := strings.LastIndex(s, ":")
+	if last == -1 {
 		return false
 	}
-	last := strings.LastIndex(s, ":")
 	if s[0] == '[' {
-		return last > strings.LastIndex(s, "]")
+		return s[last-1] == ']'
 	}
-	first := strings.Index(s, ":")
-	return first != -1 && first == last
+	return strings.Index(s, ":") == last
 }
 
 // compressPayload takes an opaque input buffer, compresses it
