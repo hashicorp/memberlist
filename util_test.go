@@ -112,6 +112,8 @@ func Test_hasPort(t *testing.T) {
 		{":80", true},
 		{"127.0.0.1", false},
 		{"127.0.0.1:80", true},
+		{"::1", false},
+		{"2001:db8:a0b:12f0::1", false},
 		{"[2001:db8:a0b:12f0::1]", false},
 		{"[2001:db8:a0b:12f0::1]:80", true},
 	}
