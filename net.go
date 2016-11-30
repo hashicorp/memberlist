@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/armon/go-metrics"
@@ -32,7 +34,7 @@ const (
 	// understand version 4 or greater.
 	ProtocolVersion2Compatible = 2
 
-	ProtocolVersionMax = 4
+	ProtocolVersionMax = 5
 )
 
 // messageType is an integer ID of a type of message that can be received
@@ -338,6 +340,21 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time
 		buf = plain
 	}
 
+	// Look for a checksum and use it validate the contents of the packet if the sender
+	// understands ProtocolVersion >= 5
+	fromAddr := strings.Split(from.String(), ":")[0]
+	m.nodeLock.RLock()
+	node, ok := m.nodeMap[fromAddr]
+	m.nodeLock.RUnlock()
+	if ok && node.PMax >= 5 {
+		crc := crc32.ChecksumIEEE(buf[:len(buf)-4])
+		expected := binary.BigEndian.Uint32(buf[len(buf)-4:])
+		if crc != expected {
+			m.logger.Printf("[ERR] memberlist: Invalid checksum for UDP packet: %d, %d", crc, expected)
+			return
+		}
+	}
+
 	// Handle the command
 	m.handleCommand(buf, from, timestamp)
 }
@@ -629,6 +646,19 @@ func (m *Memberlist) rawSendMsgUDP(to net.Addr, msg []byte) error {
 				msg = buf.Bytes()
 			}
 		}
+	}
+
+	// Add a CRC to the end of the payload if the recipient understands
+	// ProtocolVersion >= 5
+	toAddr := strings.Split(to.String(), ":")[0]
+	m.nodeLock.RLock()
+	node, ok := m.nodeMap[toAddr]
+	m.nodeLock.RUnlock()
+	if ok && node.PMax >= 5 {
+		crc := crc32.ChecksumIEEE(msg)
+		sum := make([]byte, 4)
+		binary.BigEndian.PutUint32(sum, crc)
+		msg = append(msg, sum...)
 	}
 
 	// Check if we have encryption enabled
