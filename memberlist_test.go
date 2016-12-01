@@ -1003,18 +1003,18 @@ func TestMemberlist_SendTo(t *testing.T) {
 	// Wait for a little while
 	time.Sleep(3 * time.Millisecond)
 
-	// Ensure we got the messages with the proper checksum appended
+	// Ensure we got the messages
 	if len(d1.msgs) != 1 {
 		t.Fatalf("should have 1 messages!")
 	}
-	if !reflect.DeepEqual(d1.msgs[0], append([]byte("pong"), 246, 78, 34, 143)) {
+	if !reflect.DeepEqual(d1.msgs[0], []byte("pong")) {
 		t.Fatalf("bad msg %v", d1.msgs[0])
 	}
 
 	if len(d2.msgs) != 1 {
 		t.Fatalf("should have 1 messages!")
 	}
-	if !reflect.DeepEqual(d2.msgs[0], append([]byte("ping"), 242, 195, 94, 61)) {
+	if !reflect.DeepEqual(d2.msgs[0], []byte("ping")) {
 		t.Fatalf("bad msg %v", d2.msgs[0])
 	}
 }
