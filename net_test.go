@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/hashicorp/go-msgpack/codec"
 	"io"
+	"log"
 	"net"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hashicorp/go-msgpack/codec"
 )
 
 func TestHandleCompoundPing(t *testing.T) {
@@ -663,5 +665,118 @@ func TestEncryptDecryptState(t *testing.T) {
 
 	if !reflect.DeepEqual(state, plain) {
 		t.Fatalf("Decrypt failed: %v", plain)
+	}
+}
+
+func TestRawSendUdp_CRC(t *testing.T) {
+	m := GetMemberlist(t)
+	m.config.EnableCompression = false
+	defer m.Shutdown()
+
+	var udp *net.UDPConn
+	for port := 60000; port < 61000; port++ {
+		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
+		udpLn, err := net.ListenPacket("udp", udpAddr)
+		if err == nil {
+			udp = udpLn.(*net.UDPConn)
+			break
+		}
+	}
+
+	if udp == nil {
+		t.Fatalf("no udp listener")
+	}
+
+	// Pass a nil node with no nodes registered, should result in no checksum
+	payload := []byte{3, 3, 3, 3}
+	m.rawSendMsgUDP(udp.LocalAddr(), nil, payload)
+
+	in := make([]byte, 1500)
+	n, _, err := udp.ReadFrom(in)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	in = in[0:n]
+
+	if len(in) != 4 {
+		t.Fatalf("bad: %v", in)
+	}
+
+	// Pass a non-nil node with PMax >= 5, should result in a checksum
+	m.rawSendMsgUDP(udp.LocalAddr(), &Node{PMax: 5}, payload)
+
+	in = make([]byte, 1500)
+	n, _, err = udp.ReadFrom(in)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	in = in[0:n]
+
+	if len(in) != 9 {
+		t.Fatalf("bad: %v", in)
+	}
+
+	// Register a node with PMax >= 5 to be looked up, should result in a checksum
+	m.nodeMap["127.0.0.1"] = &nodeState{
+		Node: Node{PMax: 5},
+	}
+	m.rawSendMsgUDP(udp.LocalAddr(), nil, payload)
+
+	in = make([]byte, 1500)
+	n, _, err = udp.ReadFrom(in)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	in = in[0:n]
+
+	if len(in) != 9 {
+		t.Fatalf("bad: %v", in)
+	}
+}
+
+func TestIngestPacket_CRC(t *testing.T) {
+	m := GetMemberlist(t)
+	m.config.EnableCompression = false
+	defer m.Shutdown()
+
+	var udp *net.UDPConn
+	for port := 60000; port < 61000; port++ {
+		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
+		udpLn, err := net.ListenPacket("udp", udpAddr)
+		if err == nil {
+			udp = udpLn.(*net.UDPConn)
+			break
+		}
+	}
+
+	if udp == nil {
+		t.Fatalf("no udp listener")
+	}
+
+	// Get a message with a checksum
+	payload := []byte{3, 3, 3, 3}
+	m.rawSendMsgUDP(udp.LocalAddr(), &Node{PMax: 5}, payload)
+
+	in := make([]byte, 1500)
+	n, _, err := udp.ReadFrom(in)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	in = in[0:n]
+
+	if len(in) != 9 {
+		t.Fatalf("bad: %v", in)
+	}
+
+	// Corrupt the checksum
+	in[1] <<= 1
+
+	logs := &bytes.Buffer{}
+	logger := log.New(logs, "", 0)
+	m.logger = logger
+	m.ingestPacket(in, udp.LocalAddr(), time.Now())
+
+	if !strings.Contains(logs.String(), "invalid checksum") {
+		t.Fatalf("bad: %s", logs.String())
 	}
 }
