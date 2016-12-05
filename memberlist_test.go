@@ -367,8 +367,6 @@ func (h dnsHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
-	t.Skip()
-
 	bind := "127.0.0.1:8600"
 
 	var wg sync.WaitGroup
@@ -382,7 +380,7 @@ func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
 	defer server.Shutdown()
 
 	go func() {
-		if err := server.ListenAndServe(); err != nil {
+		if err := server.ListenAndServe(); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
 			t.Fatalf("err: %v", err)
 		}
 	}()
@@ -420,7 +418,7 @@ func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
 		}
 		port := uint16(m.config.BindPort)
 		expected := []ipPort{
-			ipPort{net.ParseIP("127.0.0.1"), port},
+			ipPort{net.ParseIP("127.0.0.1").To4(), port},
 			ipPort{net.ParseIP("2001:db8:a0b:12f0::1"), port},
 		}
 		if !reflect.DeepEqual(ips, expected) {
