@@ -495,18 +495,8 @@ func (m *Memberlist) SendTo(to net.Addr, msg []byte) error {
 	buf[0] = byte(userMsg)
 	buf = append(buf, msg...)
 
-	// Lookup node from address
-	toAddr := strings.Split(to.String(), ":")[0]
-	m.nodeLock.RLock()
-	nodeState, ok := m.nodeMap[toAddr]
-	m.nodeLock.RUnlock()
-	var node *Node
-	if ok {
-		node = &nodeState.Node
-	}
-
 	// Send the message
-	return m.rawSendMsgUDP(to, node, buf)
+	return m.rawSendMsgUDP(to, nil, buf)
 }
 
 // SendToUDP is used to directly send a message to another node, without

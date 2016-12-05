@@ -8,7 +8,6 @@ import (
 	"hash/crc32"
 	"io"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/armon/go-metrics"
@@ -342,12 +341,11 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time
 	}
 
 	// See if there's a checksum included to verify the contents of the message
-	msgType := messageType(buf[0])
-	if msgType == hasCrcMsg {
+	if len(buf) >= 5 && messageType(buf[0]) == hasCrcMsg {
 		crc := crc32.ChecksumIEEE(buf[5:])
 		expected := binary.BigEndian.Uint32(buf[1:5])
 		if crc != expected {
-			m.logger.Printf("[WARN] memberlist: Got invalid checksum for UDP packet: %d, %d", crc, expected)
+			m.logger.Printf("[WARN] memberlist: Got invalid checksum for UDP packet: %x, %x", crc, expected)
 			return
 		}
 		m.handleCommand(buf[5:], from, timestamp)
@@ -613,19 +611,9 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	}
 	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
 
-	// Lookup node from address
-	toAddr := strings.Split(to.String(), ":")[0]
-	m.nodeLock.RLock()
-	nodeState, ok := m.nodeMap[toAddr]
-	m.nodeLock.RUnlock()
-	var node *Node
-	if ok {
-		node = &nodeState.Node
-	}
-
 	// Fast path if nothing to piggypack
 	if len(extra) == 0 {
-		return m.rawSendMsgUDP(to, node, msg)
+		return m.rawSendMsgUDP(to, nil, msg)
 	}
 
 	// Join all the messages
@@ -637,7 +625,7 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	compound := makeCompoundMessage(msgs)
 
 	// Send the message
-	return m.rawSendMsgUDP(to, node, compound.Bytes())
+	return m.rawSendMsgUDP(to, nil, compound.Bytes())
 }
 
 // rawSendMsgUDP is used to send a UDP message to another host without modification
@@ -655,14 +643,29 @@ func (m *Memberlist) rawSendMsgUDP(addr net.Addr, node *Node, msg []byte) error 
 		}
 	}
 
+	// Try to look up the destination node
+	if node == nil {
+		toAddr, _, err := net.SplitHostPort(addr.String())
+		if err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to parse address %q: %v", addr.String(), err)
+			return err
+		}
+		m.nodeLock.RLock()
+		nodeState, ok := m.nodeMap[toAddr]
+		m.nodeLock.RUnlock()
+		if ok {
+			node = &nodeState.Node
+		}
+	}
+
 	// Add a CRC to the end of the payload if the recipient understands
 	// ProtocolVersion >= 5
 	if node != nil && node.PMax >= 5 {
 		crc := crc32.ChecksumIEEE(msg)
-		sum := make([]byte, 5)
-		sum[0] = byte(hasCrcMsg)
-		binary.BigEndian.PutUint32(sum[1:], crc)
-		msg = append(sum, msg...)
+		header := make([]byte, 5, 5+len(msg))
+		header[0] = byte(hasCrcMsg)
+		binary.BigEndian.PutUint32(header[1:], crc)
+		msg = append(header, msg...)
 	}
 
 	// Check if we have encryption enabled
