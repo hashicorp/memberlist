@@ -155,8 +155,9 @@ func randomOffset(n int) int {
 // suspicionTimeout computes the timeout that should be used when
 // a node is suspected
 func suspicionTimeout(suspicionMult, n int, interval time.Duration) time.Duration {
-	nodeScale := math.Ceil(math.Log10(float64(n + 1)))
-	timeout := time.Duration(suspicionMult) * time.Duration(nodeScale) * interval
+	nodeScale := math.Max(1.0, math.Log10(math.Max(1.0, float64(n))))
+	// multiply by 1000 to keep some precision because time.Duration is an int64 type
+	timeout := time.Duration(suspicionMult) * time.Duration(nodeScale*1000) * interval / 1000
 	return timeout
 }
 
