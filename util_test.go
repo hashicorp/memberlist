@@ -158,9 +158,19 @@ func TestRandomOffset_Zero(t *testing.T) {
 }
 
 func TestSuspicionTimeout(t *testing.T) {
-	timeout := suspicionTimeout(3, 10, time.Second)
-	if timeout != 6*time.Second {
-		t.Fatalf("bad timeout")
+	timeouts := map[int]time.Duration{
+		5:    1000 * time.Millisecond,
+		10:   1000 * time.Millisecond,
+		50:   1698 * time.Millisecond,
+		100:  2000 * time.Millisecond,
+		500:  2698 * time.Millisecond,
+		1000: 3000 * time.Millisecond,
+	}
+	for n, expected := range timeouts {
+		timeout := suspicionTimeout(3, n, time.Second) / 3
+		if timeout != expected {
+			t.Fatalf("bad: %v, %v", expected, timeout)
+		}
 	}
 }
 
