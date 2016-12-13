@@ -295,9 +295,16 @@ func TestKRandomNodes(t *testing.T) {
 		})
 	}
 
-	s1 := kRandomNodes(3, []string{"test0"}, nodes)
-	s2 := kRandomNodes(3, []string{"test0"}, nodes)
-	s3 := kRandomNodes(3, []string{"test0"}, nodes)
+	filterFunc := func(n *nodeState) bool {
+		if n.Name == "test0" || n.State != stateAlive {
+			return true
+		}
+		return false
+	}
+
+	s1 := kRandomNodes(3, nodes, filterFunc)
+	s2 := kRandomNodes(3, nodes, filterFunc)
+	s3 := kRandomNodes(3, nodes, filterFunc)
 
 	if reflect.DeepEqual(s1, s2) {
 		t.Fatalf("unexpected equal")
