@@ -1680,6 +1680,54 @@ func TestMemberlist_Gossip(t *testing.T) {
 	}
 }
 
+func TestMemberlist_GossipToDead(t *testing.T) {
+	ch := make(chan NodeEvent, 2)
+
+	addr1 := getBindAddr()
+	addr2 := getBindAddr()
+	ip1 := []byte(addr1)
+	ip2 := []byte(addr2)
+
+	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
+		c.GossipInterval = time.Millisecond
+		c.GossipToTheDeadTime = 100 * time.Millisecond
+	})
+	m2 := HostMemberlist(addr2.String(), t, func(c *Config) {
+		c.Events = &ChannelEventDelegate{ch}
+	})
+
+	defer m1.Shutdown()
+	defer m2.Shutdown()
+
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a1, nil, true)
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
+	m1.aliveNode(&a2, nil, false)
+
+	// Shouldn't send anything to m2 here, node has been dead for 2x the GossipToTheDeadTime
+	m1.nodeMap[addr2.String()].State = stateDead
+	m1.nodeMap[addr2.String()].StateChange = time.Now().Add(-200 * time.Millisecond)
+	m1.gossip()
+
+	select {
+	case <-ch:
+		t.Fatalf("shouldn't get gossip")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Should gossip to m2 because its state has changed within GossipToTheDeadTime
+	m1.nodeMap[addr2.String()].StateChange = time.Now().Add(-20 * time.Millisecond)
+	m1.gossip()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-ch:
+		case <-time.After(50 * time.Millisecond):
+			t.Fatalf("timeout")
+		}
+	}
+}
+
 func TestMemberlist_PushPull(t *testing.T) {
 	addr1 := getBindAddr()
 	addr2 := getBindAddr()
