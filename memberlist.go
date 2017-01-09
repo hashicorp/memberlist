@@ -371,14 +371,19 @@ func (m *Memberlist) setAlive() error {
 				if !IsPrivateIP(ip.String()) {
 					continue
 				}
-
 				advertiseAddr = ip
-				break
+				// if the ip is a loopback addr, keep trying other interface addresses.
+				// if no other privateIP addresses are found, the loopback will be used.
+				if !isLoopbackIP(ip.String()) {
+					break
+				}
 			}
 
 			// Failed to find private IP, error
 			if advertiseAddr == nil {
 				return fmt.Errorf("No private IP address found, and explicit IP not provided")
+			} else {
+				m.logger.Printf("[DEBUG] memberlist: %s selected as advertiseAddr for node", net.IP(advertiseAddr).String())
 			}
 
 		} else {
