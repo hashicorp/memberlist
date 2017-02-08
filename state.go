@@ -484,7 +484,7 @@ func (m *Memberlist) gossip() {
 	m.nodeLock.RUnlock()
 
 	// Compute the bytes available
-	bytesAvail := udpSendBuf - compoundHeaderOverhead
+	bytesAvail := m.config.UDPBufferSize - compoundHeaderOverhead
 	if m.config.EncryptionEnabled() {
 		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
