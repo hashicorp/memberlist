@@ -862,8 +862,7 @@ func TestMemberList_ResetNodes(t *testing.T) {
 	d := dead{Node: "test2", Incarnation: 1}
 	m.deadNode(&d)
 
-	oldGossipToTheDeadTime := m.config.GossipToTheDeadTime
-	m.config.GossipToTheDeadTime = 3 * time.Second
+	m.config.GossipToTheDeadTime = 200 * time.Millisecond
 	m.resetNodes()
 	if len(m.nodes) != 3 {
 		t.Fatalf("Bad length")
@@ -880,8 +879,6 @@ func TestMemberList_ResetNodes(t *testing.T) {
 	if _, ok := m.nodeMap["test2"]; ok {
 		t.Fatalf("test2 should be unmapped")
 	}
-
-	m.config.GossipToTheDeadTime = oldGossipToTheDeadTime
 }
 
 func TestMemberList_NextSeq(t *testing.T) {
