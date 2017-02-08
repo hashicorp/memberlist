@@ -8,12 +8,10 @@ import (
 	"io"
 	"math"
 	"math/rand"
-	"net"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/go-msgpack/codec"
-	sockaddr "github.com/hashicorp/go-sockaddr"
 )
 
 // pushPullScale is the minimum number of nodes
@@ -49,17 +47,6 @@ func encode(msgType messageType, in interface{}) (*bytes.Buffer, error) {
 	enc := codec.NewEncoder(buf, &hd)
 	err := enc.Encode(in)
 	return buf, err
-}
-
-// GetPrivateIP returns the first private IP address found in a list of
-// addresses.
-func GetPrivateIP(addresses []net.Addr) (net.IP, error) {
-	ip, err := sockaddr.GetPrivateIP()
-	if err != nil {
-		return nil, err
-	}
-
-	return net.ParseIP(ip), nil
 }
 
 // Returns a random offset between 0 and n
