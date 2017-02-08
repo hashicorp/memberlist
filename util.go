@@ -8,7 +8,6 @@ import (
 	"io"
 	"math"
 	"math/rand"
-	"net"
 	"strings"
 	"time"
 
@@ -22,19 +21,6 @@ import (
 // while the 65th will triple it.
 const pushPullScaleThreshold = 32
 
-/*
- * Contains an entry for each private block:
- * 10.0.0.0/8
- * 100.64.0.0/10
- * 127.0.0.0/8
- * 169.254.0.0/16
- * 172.16.0.0/12
- * 192.168.0.0/16
- */
-var privateBlocks []*net.IPNet
-
-var loopbackBlock *net.IPNet
-
 const (
 	// Constant litWidth 2-8
 	lzwLitWidth = 8
@@ -43,51 +29,6 @@ const (
 func init() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UnixNano())
-
-	// Add each private block
-	privateBlocks = make([]*net.IPNet, 6)
-
-	_, block, err := net.ParseCIDR("10.0.0.0/8")
-	if err != nil {
-		panic(fmt.Sprintf("Bad cidr. Got %v", err))
-	}
-	privateBlocks[0] = block
-
-	_, block, err = net.ParseCIDR("100.64.0.0/10")
-	if err != nil {
-		panic(fmt.Sprintf("Bad cidr. Got %v", err))
-	}
-	privateBlocks[1] = block
-
-	_, block, err = net.ParseCIDR("127.0.0.0/8")
-	if err != nil {
-		panic(fmt.Sprintf("Bad cidr. Got %v", err))
-	}
-	privateBlocks[2] = block
-
-	_, block, err = net.ParseCIDR("169.254.0.0/16")
-	if err != nil {
-		panic(fmt.Sprintf("Bad cidr. Got %v", err))
-	}
-	privateBlocks[3] = block
-
-	_, block, err = net.ParseCIDR("172.16.0.0/12")
-	if err != nil {
-		panic(fmt.Sprintf("Bad cidr. Got %v", err))
-	}
-	privateBlocks[4] = block
-
-	_, block, err = net.ParseCIDR("192.168.0.0/16")
-	if err != nil {
-		panic(fmt.Sprintf("Bad cidr. Got %v", err))
-	}
-	privateBlocks[5] = block
-
-	_, block, err = net.ParseCIDR("127.0.0.0/8")
-	if err != nil {
-		panic(fmt.Sprintf("Bad cidr. Got %v", err))
-	}
-	loopbackBlock = block
 }
 
 // Decode reverses the encode operation on a byte slice input
@@ -106,42 +47,6 @@ func encode(msgType messageType, in interface{}) (*bytes.Buffer, error) {
 	enc := codec.NewEncoder(buf, &hd)
 	err := enc.Encode(in)
 	return buf, err
-}
-
-// GetPrivateIP returns the first private IP address found in a list of
-// addresses.
-func GetPrivateIP(addresses []net.Addr) (net.IP, error) {
-	var candidates []net.IP
-
-	// Find private IPv4 address
-	for _, rawAddr := range addresses {
-		var ip net.IP
-		switch addr := rawAddr.(type) {
-		case *net.IPAddr:
-			ip = addr.IP
-		case *net.IPNet:
-			ip = addr.IP
-		default:
-			continue
-		}
-
-		if ip.To4() == nil {
-			continue
-		}
-		if !IsPrivateIP(ip.String()) {
-			continue
-		}
-		candidates = append(candidates, ip)
-	}
-	numIps := len(candidates)
-	switch numIps {
-	case 0:
-		return nil, fmt.Errorf("No private IP address found")
-	case 1:
-		return candidates[0], nil
-	default:
-		return nil, fmt.Errorf("Multiple private IPs found. Please configure one.")
-	}
 }
 
 // Returns a random offset between 0 and n
@@ -303,23 +208,6 @@ func decodeCompoundMessage(buf []byte) (trunc int, parts [][]byte, err error) {
 		parts = append(parts, slice)
 	}
 	return
-}
-
-// Returns if the given IP is in a private block
-func IsPrivateIP(ip_str string) bool {
-	ip := net.ParseIP(ip_str)
-	for _, priv := range privateBlocks {
-		if priv.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
-// Returns if the given IP is in a loopback block
-func isLoopbackIP(ip_str string) bool {
-	ip := net.ParseIP(ip_str)
-	return loopbackBlock.Contains(ip)
 }
 
 // Given a string of the form "host", "host:port",
