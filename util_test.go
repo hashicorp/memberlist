@@ -156,29 +156,50 @@ func TestPushPullScale(t *testing.T) {
 func TestMoveDeadNodes(t *testing.T) {
 	nodes := []*nodeState{
 		&nodeState{
-			State: stateDead,
+			State:       stateDead,
+			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State: stateAlive,
+			State:       stateAlive,
+			StateChange: time.Now().Add(-20 * time.Second),
+		},
+		// This dead node should not be moved, as its state changed
+		// less than the specified GossipToTheDead time ago
+		&nodeState{
+			State:       stateDead,
+			StateChange: time.Now().Add(-10 * time.Second),
 		},
 		&nodeState{
-			State: stateAlive,
+			State:       stateAlive,
+			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State: stateDead,
+			State:       stateDead,
+			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State: stateAlive,
+			State:       stateAlive,
+			StateChange: time.Now().Add(-20 * time.Second),
 		},
 	}
 
-	idx := moveDeadNodes(nodes)
-	if idx != 3 {
+	idx := moveDeadNodes(nodes, (15 * time.Second))
+	if idx != 4 {
 		t.Fatalf("bad index")
 	}
 	for i := 0; i < idx; i++ {
-		if nodes[i].State != stateAlive {
-			t.Fatalf("Bad state %d", i)
+		fmt.Println("index %d, state %d", i, nodes[i].State)
+		switch i {
+		case 2:
+			// Recently dead node remains at index 2,
+			// since nodes are swapped out to move to end.
+			if nodes[i].State != stateDead {
+				t.Fatalf("Bad state %d", i)
+			}
+		default:
+			if nodes[i].State != stateAlive {
+				t.Fatalf("Bad state %d", i)
+			}
 		}
 	}
 	for i := idx; i < len(nodes); i++ {
