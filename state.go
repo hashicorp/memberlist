@@ -496,13 +496,19 @@ func (m *Memberlist) gossip() {
 			return
 		}
 
-		// Create a compound message
-		compound := makeCompoundMessage(msgs)
-
-		// Send the compound message
 		destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
-		if err := m.rawSendMsgUDP(destAddr, &node.Node, compound.Bytes()); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
+
+		if len(msgs) == 1 {
+			// Send single message as is
+			if err := m.rawSendMsgUDP(destAddr, &node.Node, msgs[0]); err != nil {
+				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
+			}
+		} else {
+			// Otherwise create and send a compound message
+			compound := makeCompoundMessage(msgs)
+			if err := m.rawSendMsgUDP(destAddr, &node.Node, compound.Bytes()); err != nil {
+				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
+			}
 		}
 	}
 }
