@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-msgpack/codec"
+	"github.com/sean-/seed"
 )
 
 // pushPullScale is the minimum number of nodes
@@ -27,8 +28,7 @@ const (
 )
 
 func init() {
-	// Seed the random number generator
-	rand.Seed(time.Now().UnixNano())
+	seed.Init()
 }
 
 // Decode reverses the encode operation on a byte slice input
