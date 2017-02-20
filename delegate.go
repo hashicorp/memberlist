@@ -13,7 +13,8 @@ type Delegate interface {
 	// Care should be taken that this method does not block, since doing
 	// so would block the entire UDP packet receive loop. Additionally, the byte
 	// slice may be modified after the call returns, so it should be copied if needed.
-	NotifyMsg([]byte)
+	// return data as a response to this connection(udp or tcp)
+	NotifyMsg([]byte) []byte
 
 	// GetBroadcasts is called when user data messages can be broadcast.
 	// It can return a list of buffers to send. Each buffer should assume an

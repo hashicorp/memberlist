@@ -55,10 +55,11 @@ func (m *MockDelegate) NodeMeta(limit int) []byte {
 	return m.meta
 }
 
-func (m *MockDelegate) NotifyMsg(msg []byte) {
+func (m *MockDelegate) NotifyMsg(msg []byte) []byte {
 	cp := make([]byte, len(msg))
 	copy(cp, msg)
 	m.msgs = append(m.msgs, cp)
+	return nil
 }
 
 func (m *MockDelegate) GetBroadcasts(overhead, limit int) [][]byte {
