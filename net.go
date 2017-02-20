@@ -231,7 +231,7 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 
 	switch msgType {
 	case userMsg:
-		if err := m.readUserMsg(bufConn, dec); err != nil {
+		if err := m.readUserMsg(bufConn, dec, conn); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to receive user message: %s %s", err, LogConn(conn))
 		}
 	case pushPullMsg:
@@ -571,7 +571,10 @@ func (m *Memberlist) handleDead(buf []byte, from net.Addr) {
 func (m *Memberlist) handleUser(buf []byte, from net.Addr) {
 	d := m.config.Delegate
 	if d != nil {
-		d.NotifyMsg(buf)
+		response := d.NotifyMsg(buf)
+		if len(response) > 0 {
+			m.SendTo(from, response)
+		}
 	}
 }
 
@@ -728,26 +731,12 @@ func (m *Memberlist) sendTCPUserMsg(to net.Addr, sendBuf []byte) error {
 	}
 	defer conn.Close()
 
-	bufConn := bytes.NewBuffer(nil)
-
-	if err := bufConn.WriteByte(byte(userMsg)); err != nil {
+	userMsg, err := m.createUserMsg(sendBuf)
+	if err != nil {
 		return err
 	}
 
-	// Send our node state
-	header := userMsgHeader{UserMsgLen: len(sendBuf)}
-	hd := codec.MsgpackHandle{}
-	enc := codec.NewEncoder(bufConn, &hd)
-
-	if err := enc.Encode(&header); err != nil {
-		return err
-	}
-
-	if _, err := bufConn.Write(sendBuf); err != nil {
-		return err
-	}
-
-	return m.rawSendMsgTCP(conn, bufConn.Bytes())
+	return m.rawSendMsgTCP(conn, userMsg)
 }
 
 // sendAndReceiveState is used to initiate a push/pull over TCP with a remote node
@@ -1045,7 +1034,7 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 }
 
 // readUserMsg is used to decode a userMsg from a TCP stream
-func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
+func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder, conn *net.TCPConn) error {
 	// Read the user message header
 	var header userMsgHeader
 	if err := dec.Decode(&header); err != nil {
@@ -1068,7 +1057,12 @@ func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
 
 		d := m.config.Delegate
 		if d != nil {
-			d.NotifyMsg(userBuf)
+			response := d.NotifyMsg(userBuf)
+			userMsg, err := m.createUserMsg(response)
+			if err != nil {
+				return err
+			}
+			return m.rawSendMsgTCP(conn, userMsg)
 		}
 	}
 
@@ -1120,4 +1114,26 @@ func (m *Memberlist) sendPingAndWaitForAck(destAddr net.Addr, ping ping, deadlin
 	}
 
 	return true, nil
+}
+
+func (m *Memberlist) createUserMsg(msg []byte) ([]byte, error) {
+	bufConn := bytes.NewBuffer(nil)
+
+	if err := bufConn.WriteByte(byte(userMsg)); err != nil {
+		return nil, err
+	}
+
+	// Send our node state
+	header := userMsgHeader{UserMsgLen: len(msg)}
+	hd := codec.MsgpackHandle{}
+	enc := codec.NewEncoder(bufConn, &hd)
+
+	if err := enc.Encode(&header); err != nil {
+		return nil, err
+	}
+
+	if _, err := bufConn.Write(msg); err != nil {
+		return nil, err
+	}
+	return bufConn.Bytes(), nil
 }
