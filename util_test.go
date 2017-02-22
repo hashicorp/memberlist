@@ -188,7 +188,6 @@ func TestMoveDeadNodes(t *testing.T) {
 		t.Fatalf("bad index")
 	}
 	for i := 0; i < idx; i++ {
-		fmt.Println("index %d, state %d", i, nodes[i].State)
 		switch i {
 		case 2:
 			// Recently dead node remains at index 2,
