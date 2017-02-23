@@ -28,7 +28,7 @@ type Transport interface {
 	// FinalAdvertiseAddr is given the user's configured values (which
 	// might be empty) and returns the desired IP and port to advertise to
 	// the rest of the cluster.
-	FinalAdvertiseAddr(addr string, port int) (net.IP, int, error)
+	FinalAdvertiseAddr(ip string, port int) (net.IP, int, error)
 
 	// WriteTo is a packet-oriented interface that fires off the given
 	// payload to the given address in a connectionless fashion. This should

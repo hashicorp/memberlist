@@ -123,38 +123,37 @@ func (t *NetTransport) GetAutoBindPort() int {
 }
 
 // See Transport.
-func (t *NetTransport) FinalAdvertiseAddr(addr string, port int) (net.IP, int, error) {
+func (t *NetTransport) FinalAdvertiseAddr(ip string, port int) (net.IP, int, error) {
 	var advertiseAddr net.IP
 	var advertisePort int
-	if addr != "" {
+	if ip != "" {
 		// If they've supplied an address, use that.
-		ip := net.ParseIP(addr)
-		if ip == nil {
-			return nil, 0, fmt.Errorf("Failed to parse advertise address %q", addr)
+		advertiseAddr = net.ParseIP(ip)
+		if advertiseAddr == nil {
+			return nil, 0, fmt.Errorf("Failed to parse advertise address %q", ip)
 		}
 
 		// Ensure IPv4 conversion if necessary.
-		if ip4 := ip.To4(); ip4 != nil {
-			ip = ip4
+		if ip4 := advertiseAddr.To4(); ip4 != nil {
+			advertiseAddr = ip4
 		}
-		advertiseAddr = ip
 		advertisePort = port
 	} else {
 		if t.config.BindAddrs[0] == "0.0.0.0" {
 			// Otherwise, if we're not bound to a specific IP, let's
 			// use a suitable private IP address.
 			var err error
-			addr, err = sockaddr.GetPrivateIP()
+			ip, err = sockaddr.GetPrivateIP()
 			if err != nil {
 				return nil, 0, fmt.Errorf("Failed to get interface addresses: %v", err)
 			}
-			if addr == "" {
+			if ip == "" {
 				return nil, 0, fmt.Errorf("No private IP address found, and explicit IP not provided")
 			}
 
-			advertiseAddr = net.ParseIP(addr)
+			advertiseAddr = net.ParseIP(ip)
 			if advertiseAddr == nil {
-				return nil, 0, fmt.Errorf("Failed to parse advertise address: %q", addr)
+				return nil, 0, fmt.Errorf("Failed to parse advertise address: %q", ip)
 			}
 		} else {
 			// Use the IP that we're bound to, based on the first
