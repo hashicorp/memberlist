@@ -436,12 +436,8 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 	return nil
 }
 
-// SendTo is used to directly send a message to another node, without the use of
-// the gossip mechanism. This will encode the message as a user-data message,
-// which a delegate will receive through NotifyMsg. The actual data is
-// transmitted in a packet using the transport (UDP for NetTransport), which
-// means this is a best-effort transmission mechanism, and the maximum size of
-// the message is the size of a single UDP datagram, after compression.
+// SendTo is deprecated in favor of SendBestEffort, which requires a node to
+// target.
 func (m *Memberlist) SendTo(to net.Addr, msg []byte) error {
 	// Encode as a user message
 	buf := make([]byte, 1, len(msg)+1)
@@ -452,13 +448,21 @@ func (m *Memberlist) SendTo(to net.Addr, msg []byte) error {
 	return m.rawSendMsgPacket(to.String(), nil, buf)
 }
 
-// SendToUDP is used to directly send a message to another node, without the use
-// of the gossip mechanism. This will encode the message as a user-data message,
-// which a delegate will receive through NotifyMsg. The actual data is
-// transmitted in a packet using the transport (UDP for NetTransport), which
-// means this is a best-effort transmission mechanism, and the maximum size of
-// the message is the size of a single UDP datagram, after compression.
+// SendToUDP is deprecated in favor of SendBestEffort.
 func (m *Memberlist) SendToUDP(to *Node, msg []byte) error {
+	return m.SendBestEffort(to, msg)
+}
+
+// SendToTCP is deprecated in favor of SendReliable.
+func (m *Memberlist) SendToTCP(to *Node, msg []byte) error {
+	return m.SendReliable(to, msg)
+}
+
+// SendBestEffort uses the unreliable packet-oriented interface of the transport
+// to target a user message at the given node (this does not use the gossip
+// mechanism). The maximum size of the message depends on the configured
+// UDPBufferSize for this memberlist instance.
+func (m *Memberlist) SendBestEffort(to *Node, msg []byte) error {
 	// Encode as a user message
 	buf := make([]byte, 1, len(msg)+1)
 	buf[0] = byte(userMsg)
@@ -468,13 +472,11 @@ func (m *Memberlist) SendToUDP(to *Node, msg []byte) error {
 	return m.rawSendMsgPacket(to.Address(), to, buf)
 }
 
-// SendToTCP is used to directly send a message to another node, without the use
-// of the gossip mechanism. This will encode the message as a user-data message,
-// which a delegate will receive through NotifyMsg. The actual data is
-// transmitted over a stream using the transport (TCP for NetTransport), which
-// means delivery is guaranteed if no error is returned. There is no limit to
-// the size of the message.
-func (m *Memberlist) SendToTCP(to *Node, msg []byte) error {
+// SendReliable uses the reliable stream-oriented interface of the transport to
+// target a user message at the given node (this does not use the gossip
+// mechanism). Delivery is guaranteed if no error is returned, and there is no
+// limit on the size of the message.
+func (m *Memberlist) SendReliable(to *Node, msg []byte) error {
 	return m.sendUserMsg(to.Address(), msg)
 }
 

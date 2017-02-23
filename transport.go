@@ -21,7 +21,9 @@ type Packet struct {
 	Timestamp time.Time
 }
 
-// Transport is used to abstract over communicating with other peers.
+// Transport is used to abstract over communicating with other peers. The packet
+// interface is assumed to be best-effort and the stream interface is assumed to
+// be reliable.
 type Transport interface {
 	// FinalAdvertiseAddr is given the user's configured values (which
 	// might be empty) and returns the desired IP and port to advertise to
