@@ -13,8 +13,7 @@ type Config struct {
 
 	// Transport is a hook for providing custom code to communicate with
 	// other nodes. If this is left nil, then memberlist will by default
-	// make a NetTransport using the network-related config items below:
-	// BindAddr, BindPort, and UDPBufferSize.
+	// make a NetTransport using BindAddr and BindPort from this structure.
 	Transport Transport
 
 	// Configuration related to what address to bind to and ports to
