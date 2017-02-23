@@ -15,6 +15,11 @@ import (
 	"github.com/hashicorp/go-msgpack/codec"
 )
 
+// As a regression we left this test very low-level and network-ey, even after
+// we abstracted the transport. We added some basic network-free transport tests
+// in transport_test.go to prove that we didn't hard code some network stuff
+// outside of NetTransport.
+
 func TestHandleCompoundPing(t *testing.T) {
 	m := GetMemberlist(t)
 	m.config.EnableCompression = false
