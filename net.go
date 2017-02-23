@@ -68,8 +68,6 @@ const (
 	MetaMaxSize            = 512 // Maximum size for node meta data
 	compoundHeaderOverhead = 2   // Assumed header overhead
 	compoundOverhead       = 2   // Assumed overhead per entry in compoundHeader
-	udpBufSize             = 65536
-	udpRecvBuf             = 2 * 1024 * 1024
 	userMsgOverhead        = 1
 	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
 	maxPushStateBytes      = 10 * 1024 * 1024
@@ -185,37 +183,23 @@ func (m *Memberlist) encryptionVersion() encryptionVersion {
 	}
 }
 
-// setUDPRecvBuf is used to resize the UDP receive window. The function
-// attempts to set the read buffer to `udpRecvBuf` but backs off until
-// the read buffer can be set.
-func setUDPRecvBuf(c *net.UDPConn) {
-	size := udpRecvBuf
+// streamListen is a long running goroutine that pulls incoming streams from the
+// transport and hands them off for processing.
+func (m *Memberlist) streamListen() {
 	for {
-		if err := c.SetReadBuffer(size); err == nil {
-			break
+		select {
+		case conn := <-m.transport.StreamCh():
+			go m.handleConn(conn)
+
+		case <-m.shutdownCh:
+			return
 		}
-		size = size / 2
 	}
 }
 
-// tcpListen listens for and handles incoming connections
-func (m *Memberlist) tcpListen() {
-	for {
-		conn, err := m.tcpListener.AcceptTCP()
-		if err != nil {
-			if m.shutdown {
-				break
-			}
-			m.logger.Printf("[ERR] memberlist: Error accepting TCP connection: %s", err)
-			continue
-		}
-		go m.handleConn(conn)
-	}
-}
-
-// handleConn handles a single incoming TCP connection
-func (m *Memberlist) handleConn(conn *net.TCPConn) {
-	m.logger.Printf("[DEBUG] memberlist: TCP connection %s", LogConn(conn))
+// handleConn handles a single incoming stream connection from the transport.
+func (m *Memberlist) handleConn(conn net.Conn) {
+	m.logger.Printf("[DEBUG] memberlist: Stream connection %s", LogConn(conn))
 
 	defer conn.Close()
 	metrics.IncrCounter([]string{"memberlist", "tcp", "accept"}, 1)
@@ -279,49 +263,17 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	}
 }
 
-// udpListen listens for and handles incoming UDP packets
-func (m *Memberlist) udpListen() {
-	var n int
-	var addr net.Addr
-	var err error
-	var lastPacket time.Time
+// packetListen is a long running goroutine that pulls packets out of the
+// transport and hands them off for processing.
+func (m *Memberlist) packetListen() {
 	for {
-		// Do a check for potentially blocking operations
-		if !lastPacket.IsZero() && time.Now().Sub(lastPacket) > blockingWarning {
-			diff := time.Now().Sub(lastPacket)
-			m.logger.Printf(
-				"[DEBUG] memberlist: Potential blocking operation. Last command took %v",
-				diff)
+		select {
+		case packet := <-m.transport.PacketCh():
+			m.ingestPacket(packet.Buf, packet.From, packet.Timestamp)
+
+		case <-m.shutdownCh:
+			return
 		}
-
-		// Create a new buffer
-		// TODO: Use Sync.Pool eventually
-		buf := make([]byte, udpBufSize)
-
-		// Read a packet
-		n, addr, err = m.udpListener.ReadFrom(buf)
-		if err != nil {
-			if m.shutdown {
-				break
-			}
-			m.logger.Printf("[ERR] memberlist: Error reading UDP packet: %s", err)
-			continue
-		}
-
-		// Capture the reception time of the packet as close to the
-		// system calls as possible.
-		lastPacket = time.Now()
-
-		// Check the length
-		if n < 1 {
-			m.logger.Printf("[ERR] memberlist: UDP packet too short (%d bytes) %s",
-				len(buf), LogAddress(addr))
-			continue
-		}
-
-		// Ingest this packet
-		metrics.IncrCounter([]string{"memberlist", "udp", "received"}, float32(n))
-		m.ingestPacket(buf[:n], addr, lastPacket)
 	}
 }
 
@@ -392,10 +344,10 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Tim
 	}
 }
 
-// udpHandler processes messages received over UDP, but is decoupled
-// from the listener to avoid blocking the listener which may cause
-// ping/ack messages to be delayed.
-func (m *Memberlist) udpHandler() {
+// packetHandler is a long running goroutine that processes messages received
+// over the packet interface, but is decoupled from the listener to avoid
+// blocking the listener which may cause ping/ack messages to be delayed.
+func (m *Memberlist) packetHandler() {
 	for {
 		select {
 		case msg := <-m.handoff:
@@ -413,7 +365,7 @@ func (m *Memberlist) udpHandler() {
 			case userMsg:
 				m.handleUser(buf, from)
 			default:
-				m.logger.Printf("[ERR] memberlist: UDP msg type (%d) not supported %s (handler)", msgType, LogAddress(from))
+				m.logger.Printf("[ERR] memberlist: Message type (%d) not supported %s (packet handler)", msgType, LogAddress(from))
 			}
 
 		case <-m.shutdownCh:
@@ -681,7 +633,7 @@ func (m *Memberlist) rawSendMsgUDP(addr net.Addr, node *Node, msg []byte) error 
 	}
 
 	metrics.IncrCounter([]string{"memberlist", "udp", "sent"}, float32(len(msg)))
-	_, err := m.udpListener.WriteTo(msg, addr)
+	_, err := m.transport.WriteTo(msg, addr.String())
 	return err
 }
 
@@ -721,8 +673,7 @@ func (m *Memberlist) rawSendMsgTCP(conn net.Conn, sendBuf []byte) error {
 
 // sendTCPUserMsg is used to send a TCP userMsg to another host
 func (m *Memberlist) sendTCPUserMsg(to net.Addr, sendBuf []byte) error {
-	dialer := net.Dialer{Timeout: m.config.TCPTimeout}
-	conn, err := dialer.Dial("tcp", to.String())
+	conn, err := m.transport.DialTimeout(to.String(), m.config.TCPTimeout)
 	if err != nil {
 		return err
 	}
@@ -753,9 +704,8 @@ func (m *Memberlist) sendTCPUserMsg(to net.Addr, sendBuf []byte) error {
 // sendAndReceiveState is used to initiate a push/pull over TCP with a remote node
 func (m *Memberlist) sendAndReceiveState(addr []byte, port uint16, join bool) ([]pushNodeState, []byte, error) {
 	// Attempt to connect
-	dialer := net.Dialer{Timeout: m.config.TCPTimeout}
 	dest := net.TCPAddr{IP: addr, Port: int(port)}
-	conn, err := dialer.Dial("tcp", dest.String())
+	conn, err := m.transport.DialTimeout(dest.String(), m.config.TCPTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1080,8 +1030,7 @@ func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
 // operations, given the deadline. The bool return parameter is true if we
 // we able to round trip a ping to the other node.
 func (m *Memberlist) sendPingAndWaitForAck(destAddr net.Addr, ping ping, deadline time.Time) (bool, error) {
-	dialer := net.Dialer{Deadline: deadline}
-	conn, err := dialer.Dial("tcp", destAddr.String())
+	conn, err := m.transport.DialTimeout(destAddr.String(), m.config.TCPTimeout)
 	if err != nil {
 		// If the node is actually dead we expect this to fail, so we
 		// shouldn't spam the logs with it. After this point, errors
