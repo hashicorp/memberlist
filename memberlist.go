@@ -188,7 +188,8 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 		}
 
 		for _, addr := range addrs {
-			if err := m.pushPullNode(addr.ip, addr.port, true); err != nil {
+			hp := joinHostPort(addr.ip.String(), addr.port)
+			if err := m.pushPullNode(hp, true); err != nil {
 				err = fmt.Errorf("Failed to join %s: %v", addr.ip, err)
 				errs = multierror.Append(errs, err)
 				m.logger.Printf("[DEBUG] memberlist: %v", err)
@@ -476,9 +477,7 @@ func (m *Memberlist) SendToUDP(to *Node, msg []byte) error {
 // means delivery is guaranteed if no error is returned. There is no limit to
 // the size of the message.
 func (m *Memberlist) SendToTCP(to *Node, msg []byte) error {
-	// Send the message
-	destAddr := &net.TCPAddr{IP: to.Addr, Port: int(to.Port)}
-	return m.sendTCPUserMsg(destAddr, msg)
+	return m.sendUserMsg(to.Address(), msg)
 }
 
 // Members returns a list of all known live nodes. The node structures

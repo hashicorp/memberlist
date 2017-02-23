@@ -205,7 +205,7 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 	metrics.IncrCounter([]string{"memberlist", "tcp", "accept"}, 1)
 
 	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
-	msgType, bufConn, dec, err := m.readTCP(conn)
+	msgType, bufConn, dec, err := m.readStream(conn)
 	if err != nil {
 		if err != io.EOF {
 			m.logger.Printf("[ERR] memberlist: failed to receive: %s %s", err, LogConn(conn))
@@ -237,7 +237,7 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 	case pingMsg:
 		var p ping
 		if err := dec.Decode(&p); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to decode TCP ping: %s %s", err, LogConn(conn))
+			m.logger.Printf("[ERR] memberlist: Failed to decode ping: %s %s", err, LogConn(conn))
 			return
 		}
 
@@ -249,13 +249,13 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 		ack := ackResp{p.SeqNo, nil}
 		out, err := encode(ackRespMsg, &ack)
 		if err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to encode TCP ack: %s", err)
+			m.logger.Printf("[ERR] memberlist: Failed to encode ack: %s", err)
 			return
 		}
 
-		err = m.rawSendMsgTCP(conn, out.Bytes())
+		err = m.rawSendMsgStream(conn, out.Bytes())
 		if err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to send TCP ack: %s %s", err, LogConn(conn))
+			m.logger.Printf("[ERR] memberlist: Failed to send ack: %s %s", err, LogConn(conn))
 			return
 		}
 	default:
@@ -637,8 +637,9 @@ func (m *Memberlist) rawSendMsgUDP(addr net.Addr, node *Node, msg []byte) error 
 	return err
 }
 
-// rawSendMsgTCP is used to send a TCP message to another host without modification
-func (m *Memberlist) rawSendMsgTCP(conn net.Conn, sendBuf []byte) error {
+// rawSendMsgStream is used to stream a message to another host without
+// modification, other than applying compression and encryption if enabled.
+func (m *Memberlist) rawSendMsgStream(conn net.Conn, sendBuf []byte) error {
 	// Check if compresion is enabled
 	if m.config.EnableCompression {
 		compBuf, err := compressPayload(sendBuf)
@@ -671,9 +672,9 @@ func (m *Memberlist) rawSendMsgTCP(conn net.Conn, sendBuf []byte) error {
 	return nil
 }
 
-// sendTCPUserMsg is used to send a TCP userMsg to another host
-func (m *Memberlist) sendTCPUserMsg(to net.Addr, sendBuf []byte) error {
-	conn, err := m.transport.DialTimeout(to.String(), m.config.TCPTimeout)
+// sendUserMsg is used to stream a user message to another host.
+func (m *Memberlist) sendUserMsg(addr string, sendBuf []byte) error {
+	conn, err := m.transport.DialTimeout(addr, m.config.TCPTimeout)
 	if err != nil {
 		return err
 	}
@@ -698,14 +699,14 @@ func (m *Memberlist) sendTCPUserMsg(to net.Addr, sendBuf []byte) error {
 		return err
 	}
 
-	return m.rawSendMsgTCP(conn, bufConn.Bytes())
+	return m.rawSendMsgStream(conn, bufConn.Bytes())
 }
 
-// sendAndReceiveState is used to initiate a push/pull over TCP with a remote node
-func (m *Memberlist) sendAndReceiveState(addr []byte, port uint16, join bool) ([]pushNodeState, []byte, error) {
+// sendAndReceiveState is used to initiate a push/pull over a stream with a
+// remote host.
+func (m *Memberlist) sendAndReceiveState(addr string, join bool) ([]pushNodeState, []byte, error) {
 	// Attempt to connect
-	dest := net.TCPAddr{IP: addr, Port: int(port)}
-	conn, err := m.transport.DialTimeout(dest.String(), m.config.TCPTimeout)
+	conn, err := m.transport.DialTimeout(addr, m.config.TCPTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -719,7 +720,7 @@ func (m *Memberlist) sendAndReceiveState(addr []byte, port uint16, join bool) ([
 	}
 
 	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
-	msgType, bufConn, dec, err := m.readTCP(conn)
+	msgType, bufConn, dec, err := m.readStream(conn)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -735,7 +736,7 @@ func (m *Memberlist) sendAndReceiveState(addr []byte, port uint16, join bool) ([
 	return remoteNodes, userState, err
 }
 
-// sendLocalState is invoked to send our local state over a tcp connection
+// sendLocalState is invoked to send our local state over a stream connection.
 func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 	// Setup a deadline
 	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
@@ -793,7 +794,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 	}
 
 	// Get the send buffer
-	return m.rawSendMsgTCP(conn, bufConn.Bytes())
+	return m.rawSendMsgStream(conn, bufConn.Bytes())
 }
 
 // encryptLocalState is used to help encrypt local state before sending
@@ -851,9 +852,9 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 	return decryptPayload(keys, cipherBytes, dataBytes)
 }
 
-// readTCP is used to read the start of a TCP stream.
-// it decrypts and decompresses the stream if necessary
-func (m *Memberlist) readTCP(conn net.Conn) (messageType, io.Reader, *codec.Decoder, error) {
+// readStream is used to read from a stream connection, decrypting and
+// decompressing the stream if necessary.
+func (m *Memberlist) readStream(conn net.Conn) (messageType, io.Reader, *codec.Decoder, error) {
 	// Created a buffered reader
 	var bufConn io.Reader = bufio.NewReader(conn)
 
@@ -994,7 +995,7 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 	return nil
 }
 
-// readUserMsg is used to decode a userMsg from a TCP stream
+// readUserMsg is used to decode a userMsg from a stream.
 func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
 	// Read the user message header
 	var header userMsgHeader
@@ -1025,12 +1026,12 @@ func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
 	return nil
 }
 
-// sendPingAndWaitForAck makes a TCP connection to the given address, sends
+// sendPingAndWaitForAck makes a stream connection to the given address, sends
 // a ping, and waits for an ack. All of this is done as a series of blocking
 // operations, given the deadline. The bool return parameter is true if we
 // we able to round trip a ping to the other node.
-func (m *Memberlist) sendPingAndWaitForAck(destAddr net.Addr, ping ping, deadline time.Time) (bool, error) {
-	conn, err := m.transport.DialTimeout(destAddr.String(), m.config.TCPTimeout)
+func (m *Memberlist) sendPingAndWaitForAck(addr string, ping ping, deadline time.Time) (bool, error) {
+	conn, err := m.transport.DialTimeout(addr, m.config.TCPTimeout)
 	if err != nil {
 		// If the node is actually dead we expect this to fail, so we
 		// shouldn't spam the logs with it. After this point, errors
@@ -1046,17 +1047,17 @@ func (m *Memberlist) sendPingAndWaitForAck(destAddr net.Addr, ping ping, deadlin
 		return false, err
 	}
 
-	if err = m.rawSendMsgTCP(conn, out.Bytes()); err != nil {
+	if err = m.rawSendMsgStream(conn, out.Bytes()); err != nil {
 		return false, err
 	}
 
-	msgType, _, dec, err := m.readTCP(conn)
+	msgType, _, dec, err := m.readStream(conn)
 	if err != nil {
 		return false, err
 	}
 
 	if msgType != ackRespMsg {
-		return false, fmt.Errorf("Unexpected msgType (%d) from TCP ping %s", msgType, LogConn(conn))
+		return false, fmt.Errorf("Unexpected msgType (%d) from ping %s", msgType, LogConn(conn))
 	}
 
 	var ack ackResp
@@ -1065,7 +1066,7 @@ func (m *Memberlist) sendPingAndWaitForAck(destAddr net.Addr, ping ping, deadlin
 	}
 
 	if ack.SeqNo != ping.SeqNo {
-		return false, fmt.Errorf("Sequence number from ack (%d) doesn't match ping (%d) from TCP ping %s", ack.SeqNo, ping.SeqNo, LogConn(conn))
+		return false, fmt.Errorf("Sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo, LogConn(conn))
 	}
 
 	return true, nil

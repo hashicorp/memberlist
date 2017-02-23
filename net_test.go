@@ -290,7 +290,7 @@ func TestTCPPing(t *testing.T) {
 		}
 		defer conn.Close()
 
-		msgType, _, dec, err := m.readTCP(conn)
+		msgType, _, dec, err := m.readStream(conn)
 		if err != nil {
 			t.Fatalf("failed to read ping: %s", err)
 		}
@@ -318,13 +318,13 @@ func TestTCPPing(t *testing.T) {
 			t.Fatalf("failed to encode ack: %s", err)
 		}
 
-		err = m.rawSendMsgTCP(conn, out.Bytes())
+		err = m.rawSendMsgStream(conn, out.Bytes())
 		if err != nil {
 			t.Fatalf("failed to send ack: %s", err)
 		}
 	}()
 	deadline := time.Now().Add(pingTimeout)
-	didContact, err := m.sendPingAndWaitForAck(tcpAddr, pingOut, deadline)
+	didContact, err := m.sendPingAndWaitForAck(tcpAddr.String(), pingOut, deadline)
 	if err != nil {
 		t.Fatalf("error trying to ping: %s", err)
 	}
@@ -341,7 +341,7 @@ func TestTCPPing(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, _, dec, err := m.readTCP(conn)
+		_, _, dec, err := m.readStream(conn)
 		if err != nil {
 			t.Fatalf("failed to read ping: %s", err)
 		}
@@ -357,13 +357,13 @@ func TestTCPPing(t *testing.T) {
 			t.Fatalf("failed to encode ack: %s", err)
 		}
 
-		err = m.rawSendMsgTCP(conn, out.Bytes())
+		err = m.rawSendMsgStream(conn, out.Bytes())
 		if err != nil {
 			t.Fatalf("failed to send ack: %s", err)
 		}
 	}()
 	deadline = time.Now().Add(pingTimeout)
-	didContact, err = m.sendPingAndWaitForAck(tcpAddr, pingOut, deadline)
+	didContact, err = m.sendPingAndWaitForAck(tcpAddr.String(), pingOut, deadline)
 	if err == nil || !strings.Contains(err.Error(), "Sequence number") {
 		t.Fatalf("expected an error from mis-matched sequence number")
 	}
@@ -380,7 +380,7 @@ func TestTCPPing(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, _, _, err = m.readTCP(conn)
+		_, _, _, err = m.readStream(conn)
 		if err != nil {
 			t.Fatalf("failed to read ping: %s", err)
 		}
@@ -391,13 +391,13 @@ func TestTCPPing(t *testing.T) {
 			t.Fatalf("failed to encode bogus msg: %s", err)
 		}
 
-		err = m.rawSendMsgTCP(conn, out.Bytes())
+		err = m.rawSendMsgStream(conn, out.Bytes())
 		if err != nil {
 			t.Fatalf("failed to send bogus msg: %s", err)
 		}
 	}()
 	deadline = time.Now().Add(pingTimeout)
-	didContact, err = m.sendPingAndWaitForAck(tcpAddr, pingOut, deadline)
+	didContact, err = m.sendPingAndWaitForAck(tcpAddr.String(), pingOut, deadline)
 	if err == nil || !strings.Contains(err.Error(), "Unexpected msgType") {
 		t.Fatalf("expected an error from bogus message")
 	}
@@ -410,7 +410,7 @@ func TestTCPPing(t *testing.T) {
 	tcp.Close()
 	deadline = time.Now().Add(pingTimeout)
 	startPing := time.Now()
-	didContact, err = m.sendPingAndWaitForAck(tcpAddr, pingOut, deadline)
+	didContact, err = m.sendPingAndWaitForAck(tcpAddr.String(), pingOut, deadline)
 	pingTime := time.Now().Sub(startPing)
 	if err != nil {
 		t.Fatalf("expected no error during ping on closed socket, got: %s", err)

@@ -34,12 +34,24 @@ type Node struct {
 	DCur uint8  // Current version delegate is speaking
 }
 
+// Address returns the host:port form of a node's address, suitable for use
+// with a transport.
+func (n *Node) Address() string {
+	return joinHostPort(n.Addr.String(), n.Port)
+}
+
 // NodeState is used to manage our state view of another node
 type nodeState struct {
 	Node
 	Incarnation uint32        // Last known incarnation number
 	State       nodeStateType // Current state
 	StateChange time.Time     // Time last state change happened
+}
+
+// Address returns the host:port form of a node's address, suitable for use
+// with a transport.
+func (n *nodeState) Address() string {
+	return n.Node.Address()
 }
 
 // ackHandler is used to register handlers for incoming acks and nacks.
@@ -305,7 +317,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		// probe interval it will give the TCP fallback more time, which
 		// is more active in dealing with lost packets, and it gives more
 		// time to wait for indirect acks/nacks.
-		m.logger.Printf("[DEBUG] memberlist: Failed UDP ping: %v (timeout reached)", node.Name)
+		m.logger.Printf("[DEBUG] memberlist: Failed ping: %v (timeout reached)", node.Name)
 	}
 
 	// Get some random live nodes.
@@ -345,12 +357,11 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// config option to turn this off if desired.
 	fallbackCh := make(chan bool, 1)
 	if (!m.config.DisableTcpPings) && (node.PMax >= 3) {
-		destAddr := &net.TCPAddr{IP: node.Addr, Port: int(node.Port)}
 		go func() {
 			defer close(fallbackCh)
-			didContact, err := m.sendPingAndWaitForAck(destAddr, ping, deadline)
+			didContact, err := m.sendPingAndWaitForAck(node.Address(), ping, deadline)
 			if err != nil {
-				m.logger.Printf("[ERR] memberlist: Failed TCP fallback ping: %s", err)
+				m.logger.Printf("[ERR] memberlist: Failed fallback ping: %s", err)
 			} else {
 				fallbackCh <- didContact
 			}
@@ -375,7 +386,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// any additional time here.
 	for didContact := range fallbackCh {
 		if didContact {
-			m.logger.Printf("[WARN] memberlist: Was able to reach %s via TCP but not UDP, network may be misconfigured and not allowing bidirectional UDP", node.Name)
+			m.logger.Printf("[WARN] memberlist: Was able to connect to %s but other probes failed, network may be misconfigured", node.Name)
 			return
 		}
 	}
@@ -533,17 +544,17 @@ func (m *Memberlist) pushPull() {
 	node := nodes[0]
 
 	// Attempt a push pull
-	if err := m.pushPullNode(node.Addr, node.Port, false); err != nil {
+	if err := m.pushPullNode(node.Address(), false); err != nil {
 		m.logger.Printf("[ERR] memberlist: Push/Pull with %s failed: %s", node.Name, err)
 	}
 }
 
 // pushPullNode does a complete state exchange with a specific node.
-func (m *Memberlist) pushPullNode(addr []byte, port uint16, join bool) error {
+func (m *Memberlist) pushPullNode(addr string, join bool) error {
 	defer metrics.MeasureSince([]string{"memberlist", "pushPullNode"}, time.Now())
 
 	// Attempt to send and receive with the node
-	remote, userState, err := m.sendAndReceiveState(addr, port, join)
+	remote, userState, err := m.sendAndReceiveState(addr, join)
 	if err != nil {
 		return err
 	}

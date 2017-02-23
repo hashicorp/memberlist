@@ -11,7 +11,8 @@ type Packet struct {
 	// Buf has the raw contents of the packet.
 	Buf []byte
 
-	// From has the address of the peer.
+	// From has the address of the peer. This is an actual net.Addr so we
+	// can expose some concrete details about incoming packets.
 	From net.Addr
 
 	// Timestamp is the time when the packet was received. This should be
