@@ -48,6 +48,8 @@ type NetTransport struct {
 	shutdown     int32
 }
 
+// NewNetTransport returns a net transport with the given configuration. On
+// success all the network listeners will be created and listening.
 func NewNetTransport(config *NetTransportConfig) (*NetTransport, error) {
 	// If we reject the empty list outright we can assume that there's at
 	// least one listener of each type later during operation.
@@ -112,12 +114,15 @@ func NewNetTransport(config *NetTransportConfig) (*NetTransport, error) {
 	return &t, nil
 }
 
+// GetAutoBindPort returns the bind port that was automatically given by the
+// kernel, if a bind port of 0 was given.
 func (t *NetTransport) GetAutoBindPort() int {
 	// We made sure there's at least one TCP listener, and that one's
 	// port was applied to all the others for the dynamic bind case.
 	return t.tcpListeners[0].Addr().(*net.TCPAddr).Port
 }
 
+// See Transport.
 func (t *NetTransport) FinalAdvertiseAddr(addr string, port int) (net.IP, int, error) {
 	var advertiseAddr net.IP
 	var advertisePort int
@@ -164,6 +169,7 @@ func (t *NetTransport) FinalAdvertiseAddr(addr string, port int) (net.IP, int, e
 	return advertiseAddr, advertisePort, nil
 }
 
+// See Transport.
 func (t *NetTransport) WriteTo(b []byte, addr string) (time.Time, error) {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
@@ -178,19 +184,23 @@ func (t *NetTransport) WriteTo(b []byte, addr string) (time.Time, error) {
 	return time.Now(), err
 }
 
+// See Transport.
 func (t *NetTransport) PacketCh() <-chan *Packet {
 	return t.packetCh
 }
 
+// See Transport.
 func (t *NetTransport) DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
 	dialer := net.Dialer{Timeout: timeout}
 	return dialer.Dial("tcp", addr)
 }
 
+// See Transport.
 func (t *NetTransport) StreamCh() <-chan net.Conn {
 	return t.streamCh
 }
 
+// See Transport.
 func (t *NetTransport) Shutdown() error {
 	// This will avoid log spam about errors when we shut down.
 	atomic.StoreInt32(&t.shutdown, 1)
@@ -208,6 +218,8 @@ func (t *NetTransport) Shutdown() error {
 	return nil
 }
 
+// tcpListen is a long running goroutine that accepts incoming TCP connections
+// and hands them off to the stream channel.
 func (t *NetTransport) tcpListen(tcpLn *net.TCPListener) {
 	defer t.wg.Done()
 	for {
@@ -225,6 +237,8 @@ func (t *NetTransport) tcpListen(tcpLn *net.TCPListener) {
 	}
 }
 
+// udpListen is a long running goroutine that accepts incoming UDP packets and
+// hands them off to the packet channel.
 func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
 	defer t.wg.Done()
 	for {
