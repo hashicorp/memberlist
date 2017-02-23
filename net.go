@@ -336,11 +336,11 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Tim
 		select {
 		case m.handoff <- msgHandoff{msgType, buf, from}:
 		default:
-			m.logger.Printf("[WARN] memberlist: UDP handler queue full, dropping message (%d) %s", msgType, LogAddress(from))
+			m.logger.Printf("[WARN] memberlist: handler queue full, dropping message (%d) %s", msgType, LogAddress(from))
 		}
 
 	default:
-		m.logger.Printf("[ERR] memberlist: UDP msg type (%d) not supported %s", msgType, LogAddress(from))
+		m.logger.Printf("[ERR] memberlist: msg type (%d) not supported %s", msgType, LogAddress(from))
 	}
 }
 
@@ -409,7 +409,7 @@ func (m *Memberlist) handlePing(buf []byte, from net.Addr) {
 	if m.config.Ping != nil {
 		ack.Payload = m.config.Ping.AckPayload()
 	}
-	if err := m.encodeAndSendMsg(from, ackRespMsg, &ack); err != nil {
+	if err := m.encodeAndSendMsg(from.String(), ackRespMsg, &ack); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ack: %s %s", err, LogAddress(from))
 	}
 }
@@ -430,7 +430,6 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 	// Send a ping to the correct host.
 	localSeqNo := m.nextSeqNo()
 	ping := ping{SeqNo: localSeqNo, Node: ind.Node}
-	destAddr := &net.UDPAddr{IP: ind.Target, Port: int(ind.Port)}
 
 	// Setup a response handler to relay the ack
 	cancelCh := make(chan struct{})
@@ -440,14 +439,15 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 
 		// Forward the ack back to the requestor.
 		ack := ackResp{ind.SeqNo, nil}
-		if err := m.encodeAndSendMsg(from, ackRespMsg, &ack); err != nil {
+		if err := m.encodeAndSendMsg(from.String(), ackRespMsg, &ack); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to forward ack: %s %s", err, LogAddress(from))
 		}
 	}
 	m.setAckHandler(localSeqNo, respHandler, m.config.ProbeTimeout)
 
 	// Send the ping.
-	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
+	addr := joinHostPort(net.IP(ind.Target).String(), ind.Port)
+	if err := m.encodeAndSendMsg(addr, pingMsg, &ping); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s %s", err, LogAddress(from))
 	}
 
@@ -459,7 +459,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 				return
 			case <-time.After(m.config.ProbeTimeout):
 				nack := nackResp{ind.SeqNo}
-				if err := m.encodeAndSendMsg(from, nackRespMsg, &nack); err != nil {
+				if err := m.encodeAndSendMsg(from.String(), nackRespMsg, &nack); err != nil {
 					m.logger.Printf("[ERR] memberlist: Failed to send nack: %s %s", err, LogAddress(from))
 				}
 			}
@@ -541,20 +541,20 @@ func (m *Memberlist) handleCompressed(buf []byte, from net.Addr, timestamp time.
 }
 
 // encodeAndSendMsg is used to combine the encoding and sending steps
-func (m *Memberlist) encodeAndSendMsg(to net.Addr, msgType messageType, msg interface{}) error {
+func (m *Memberlist) encodeAndSendMsg(addr string, msgType messageType, msg interface{}) error {
 	out, err := encode(msgType, msg)
 	if err != nil {
 		return err
 	}
-	if err := m.sendMsg(to, out.Bytes()); err != nil {
+	if err := m.sendMsg(addr, out.Bytes()); err != nil {
 		return err
 	}
 	return nil
 }
 
-// sendMsg is used to send a UDP message to another host. It will opportunistically
-// create a compoundMsg and piggy back other broadcasts
-func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
+// sendMsg is used to send a message via packet to another host. It will
+// opportunistically create a compoundMsg and piggy back other broadcasts.
+func (m *Memberlist) sendMsg(addr string, msg []byte) error {
 	// Check if we can piggy back any messages
 	bytesAvail := m.config.UDPBufferSize - len(msg) - compoundHeaderOverhead
 	if m.config.EncryptionEnabled() {
@@ -564,7 +564,7 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 
 	// Fast path if nothing to piggypack
 	if len(extra) == 0 {
-		return m.rawSendMsgUDP(to, nil, msg)
+		return m.rawSendMsgPacket(addr, nil, msg)
 	}
 
 	// Join all the messages
@@ -576,11 +576,12 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	compound := makeCompoundMessage(msgs)
 
 	// Send the message
-	return m.rawSendMsgUDP(to, nil, compound.Bytes())
+	return m.rawSendMsgPacket(addr, nil, compound.Bytes())
 }
 
-// rawSendMsgUDP is used to send a UDP message to another host without modification
-func (m *Memberlist) rawSendMsgUDP(addr net.Addr, node *Node, msg []byte) error {
+// rawSendMsgPacket is used to send message via packet to another host without
+// modification, other than compression or encryption if enabled.
+func (m *Memberlist) rawSendMsgPacket(addr string, node *Node, msg []byte) error {
 	// Check if we have compression enabled
 	if m.config.EnableCompression {
 		buf, err := compressPayload(msg)
@@ -596,9 +597,9 @@ func (m *Memberlist) rawSendMsgUDP(addr net.Addr, node *Node, msg []byte) error 
 
 	// Try to look up the destination node
 	if node == nil {
-		toAddr, _, err := net.SplitHostPort(addr.String())
+		toAddr, _, err := net.SplitHostPort(addr)
 		if err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to parse address %q: %v", addr.String(), err)
+			m.logger.Printf("[ERR] memberlist: Failed to parse address %q: %v", addr, err)
 			return err
 		}
 		m.nodeLock.RLock()
@@ -633,7 +634,7 @@ func (m *Memberlist) rawSendMsgUDP(addr net.Addr, node *Node, msg []byte) error 
 	}
 
 	metrics.IncrCounter([]string{"memberlist", "udp", "sent"}, float32(len(msg)))
-	_, err := m.transport.WriteTo(msg, addr.String())
+	_, err := m.transport.WriteTo(msg, addr)
 	return err
 }
 

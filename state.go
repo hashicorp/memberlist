@@ -250,9 +250,9 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// also tack on a suspect message so that it has a chance to refute as
 	// soon as possible.
 	deadline := time.Now().Add(probeInterval)
-	destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
+	addr := node.Address()
 	if node.State == stateAlive {
-		if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
+		if err := m.encodeAndSendMsg(addr, pingMsg, &ping); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
 			return
 		}
@@ -273,8 +273,8 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		}
 
 		compound := makeCompoundMessage(msgs)
-		if err := m.rawSendMsgUDP(destAddr, &node.Node, compound.Bytes()); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to send compound ping and suspect message to %s: %s", destAddr, err)
+		if err := m.rawSendMsgPacket(addr, &node.Node, compound.Bytes()); err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to send compound ping and suspect message to %s: %s", addr, err)
 			return
 		}
 	}
@@ -339,8 +339,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 			expectedNacks++
 		}
 
-		destAddr := &net.UDPAddr{IP: peer.Addr, Port: int(peer.Port)}
-		if err := m.encodeAndSendMsg(destAddr, indirectPingMsg, &ind); err != nil {
+		if err := m.encodeAndSendMsg(peer.Address(), indirectPingMsg, &ind); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send indirect ping: %s", err)
 		}
 	}
@@ -421,7 +420,7 @@ func (m *Memberlist) Ping(node string, addr net.Addr) (time.Duration, error) {
 	m.setProbeChannels(ping.SeqNo, ackCh, nil, m.config.ProbeInterval)
 
 	// Send a ping to the node.
-	if err := m.encodeAndSendMsg(addr, pingMsg, &ping); err != nil {
+	if err := m.encodeAndSendMsg(addr.String(), pingMsg, &ping); err != nil {
 		return 0, err
 	}
 
@@ -507,18 +506,17 @@ func (m *Memberlist) gossip() {
 			return
 		}
 
-		destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
-
+		addr := node.Address()
 		if len(msgs) == 1 {
 			// Send single message as is
-			if err := m.rawSendMsgUDP(destAddr, &node.Node, msgs[0]); err != nil {
-				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
+			if err := m.rawSendMsgPacket(addr, &node.Node, msgs[0]); err != nil {
+				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", addr, err)
 			}
 		} else {
 			// Otherwise create and send a compound message
 			compound := makeCompoundMessage(msgs)
-			if err := m.rawSendMsgUDP(destAddr, &node.Node, compound.Bytes()); err != nil {
-				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
+			if err := m.rawSendMsgPacket(addr, &node.Node, compound.Bytes()); err != nil {
+				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", addr, err)
 			}
 		}
 	}

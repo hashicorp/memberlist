@@ -441,8 +441,7 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 // which a delegate will receive through NotifyMsg. The actual data is
 // transmitted in a packet using the transport (UDP for NetTransport), which
 // means this is a best-effort transmission mechanism, and the maximum size of
-// the message is the size of a single UDP datagram, after compression. This
-// method is DEPRECATED in favor or SendToUDP.
+// the message is the size of a single UDP datagram, after compression.
 func (m *Memberlist) SendTo(to net.Addr, msg []byte) error {
 	// Encode as a user message
 	buf := make([]byte, 1, len(msg)+1)
@@ -450,7 +449,7 @@ func (m *Memberlist) SendTo(to net.Addr, msg []byte) error {
 	buf = append(buf, msg...)
 
 	// Send the message
-	return m.rawSendMsgUDP(to, nil, buf)
+	return m.rawSendMsgPacket(to.String(), nil, buf)
 }
 
 // SendToUDP is used to directly send a message to another node, without the use
@@ -466,8 +465,7 @@ func (m *Memberlist) SendToUDP(to *Node, msg []byte) error {
 	buf = append(buf, msg...)
 
 	// Send the message
-	destAddr := &net.UDPAddr{IP: to.Addr, Port: int(to.Port)}
-	return m.rawSendMsgUDP(destAddr, to, buf)
+	return m.rawSendMsgPacket(to.Address(), to, buf)
 }
 
 // SendToTCP is used to directly send a message to another node, without the use

@@ -689,7 +689,7 @@ func TestRawSendUdp_CRC(t *testing.T) {
 
 	// Pass a nil node with no nodes registered, should result in no checksum
 	payload := []byte{3, 3, 3, 3}
-	m.rawSendMsgUDP(udp.LocalAddr(), nil, payload)
+	m.rawSendMsgPacket(udp.LocalAddr().String(), nil, payload)
 
 	in := make([]byte, 1500)
 	n, _, err := udp.ReadFrom(in)
@@ -703,7 +703,7 @@ func TestRawSendUdp_CRC(t *testing.T) {
 	}
 
 	// Pass a non-nil node with PMax >= 5, should result in a checksum
-	m.rawSendMsgUDP(udp.LocalAddr(), &Node{PMax: 5}, payload)
+	m.rawSendMsgPacket(udp.LocalAddr().String(), &Node{PMax: 5}, payload)
 
 	in = make([]byte, 1500)
 	n, _, err = udp.ReadFrom(in)
@@ -720,7 +720,7 @@ func TestRawSendUdp_CRC(t *testing.T) {
 	m.nodeMap["127.0.0.1"] = &nodeState{
 		Node: Node{PMax: 5},
 	}
-	m.rawSendMsgUDP(udp.LocalAddr(), nil, payload)
+	m.rawSendMsgPacket(udp.LocalAddr().String(), nil, payload)
 
 	in = make([]byte, 1500)
 	n, _, err = udp.ReadFrom(in)
@@ -755,7 +755,7 @@ func TestIngestPacket_CRC(t *testing.T) {
 
 	// Get a message with a checksum
 	payload := []byte{3, 3, 3, 3}
-	m.rawSendMsgUDP(udp.LocalAddr(), &Node{PMax: 5}, payload)
+	m.rawSendMsgPacket(udp.LocalAddr().String(), &Node{PMax: 5}, payload)
 
 	in := make([]byte, 1500)
 	n, _, err := udp.ReadFrom(in)
