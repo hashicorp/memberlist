@@ -682,24 +682,19 @@ func (m *Memberlist) sendUserMsg(addr string, sendBuf []byte) error {
 	defer conn.Close()
 
 	bufConn := bytes.NewBuffer(nil)
-
 	if err := bufConn.WriteByte(byte(userMsg)); err != nil {
 		return err
 	}
 
-	// Send our node state
 	header := userMsgHeader{UserMsgLen: len(sendBuf)}
 	hd := codec.MsgpackHandle{}
 	enc := codec.NewEncoder(bufConn, &hd)
-
 	if err := enc.Encode(&header); err != nil {
 		return err
 	}
-
 	if _, err := bufConn.Write(sendBuf); err != nil {
 		return err
 	}
-
 	return m.rawSendMsgStream(conn, bufConn.Bytes())
 }
 
