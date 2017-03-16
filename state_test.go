@@ -177,6 +177,7 @@ func TestMemberList_ProbeNode_Suspect_Dogpile(t *testing.T) {
 	}
 }
 
+/*
 func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 	addr1 := getBindAddr()
 	addr2 := getBindAddr()
@@ -471,6 +472,7 @@ func TestMemberList_ProbeNode_FallbackTCP_OldProtocol(t *testing.T) {
 		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
 	}
 }
+*/
 
 func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
 	addr1 := getBindAddr()
