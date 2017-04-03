@@ -130,7 +130,7 @@ OUTER:
 	// Probe up to 3*n times, with large n this is not necessary
 	// since k << n, but with small n we want search to be
 	// exhaustive
-	for i := 0; i < 3*n && len(kNodes) < k; i++ {
+	for i := 0; i < 3*n && len(kNodes) <= k; i++ {
 		// Get random node
 		idx := randomOffset(n)
 		node := nodes[idx]
