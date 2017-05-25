@@ -326,6 +326,12 @@ func TestMemberList_ResolveAddr(t *testing.T) {
 	if _, err := m.resolveAddr("[2001:db8:a0b:12f0::1]:80"); err != nil {
 		t.Fatalf("Could not understand hostname port combo: %s", err)
 	}
+	if _, err := m.resolveAddr("127.0.0.1"); err != nil {
+		t.Fatalf("Could not understand IPv4 only %s", err)
+	}
+	if _, err := m.resolveAddr("[2001:db8:a0b:12f0::1]"); err != nil {
+		t.Fatalf("Could not understand IPv6 only %s", err)
+	}
 }
 
 type dnsHandler struct {
