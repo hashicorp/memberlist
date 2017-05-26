@@ -1384,7 +1384,7 @@ func TestMemberlist_EncryptedGossipTransition(t *testing.T) {
 	}
 	defer m3.Shutdown()
 
-	// Join the second node to the third node. At this step, both nodes have encryption
+	// Join the third node to the second node. At this step, both nodes have encryption
 	// configured but only m3 is sending encrypted gossip.
 	num, err = m3.Join([]string{m2.config.BindAddr})
 	if num != 1 {
@@ -1424,7 +1424,7 @@ func TestMemberlist_EncryptedGossipTransition(t *testing.T) {
 	}
 	defer m4.Shutdown()
 
-	// Join the second node to the third node. At this step, both m3 and m4 are speaking
+	// Join the fourth node to the third node. At this step, both m3 and m4 are speaking
 	// encrypted gossip and m3 is still accepting insecure gossip.
 	num, err = m4.Join([]string{m3.config.BindAddr})
 	if num != 1 {
