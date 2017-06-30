@@ -43,8 +43,8 @@ type NetTransport struct {
 	streamCh     chan net.Conn
 	logger       *log.Logger
 	wg           sync.WaitGroup
-	tcpListeners []*net.TCPListener
-	udpListeners []*net.UDPConn
+	tcpListeners []net.Listener
+	udpListeners []net.PacketConn
 	shutdown     int32
 }
 
@@ -219,10 +219,10 @@ func (t *NetTransport) Shutdown() error {
 
 // tcpListen is a long running goroutine that accepts incoming TCP connections
 // and hands them off to the stream channel.
-func (t *NetTransport) tcpListen(tcpLn *net.TCPListener) {
+func (t *NetTransport) tcpListen(tcpLn net.Listener) {
 	defer t.wg.Done()
 	for {
-		conn, err := tcpLn.AcceptTCP()
+		conn, err := tcpLn.Accept()
 		if err != nil {
 			if s := atomic.LoadInt32(&t.shutdown); s == 1 {
 				break
@@ -238,7 +238,7 @@ func (t *NetTransport) tcpListen(tcpLn *net.TCPListener) {
 
 // udpListen is a long running goroutine that accepts incoming UDP packets and
 // hands them off to the packet channel.
-func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
+func (t *NetTransport) udpListen(udpLn net.PacketConn) {
 	defer t.wg.Done()
 	for {
 		// Do a blocking read into a fresh buffer. Grab a time stamp as
