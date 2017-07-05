@@ -121,6 +121,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		if conf.BindPort == 0 {
 			port := nt.GetAutoBindPort()
 			conf.BindPort = port
+			conf.AdvertisePort = port
 			logger.Printf("[DEBUG] Using dynamic bind port %d", port)
 		}
 		transport = nt
