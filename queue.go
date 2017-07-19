@@ -21,6 +21,8 @@ type TransmitLimitedQueue struct {
 
 	sync.Mutex
 	bcQueue limitedBroadcasts
+
+	needSort bool // The queue need to be sorted
 }
 
 type limitedBroadcast struct {
@@ -55,13 +57,18 @@ func (q *TransmitLimitedQueue) QueueBroadcast(b Broadcast) {
 	for i := 0; i < n; i++ {
 		if b.Invalidates(q.bcQueue[i].b) {
 			q.bcQueue[i].b.Finished()
-			copy(q.bcQueue[i:], q.bcQueue[i+1:])
-			q.bcQueue[n-1] = nil
-			q.bcQueue = q.bcQueue[:n-1]
-			n--
+			// The new element will have 0 as number of transmission,
+			// but if the original element does not we need to reorder the queue
+			if q.bcQueue[i].transmits > 0 {
+				q.needSort = true
+			}
+			// Replace the element into the queue taking the same position
+			// of the invalidated one, on GetBroadcasts there would be thre resort
+			// if needed
+			q.bcQueue[i] = &limitedBroadcast{0, b}
+			return
 		}
 	}
-
 	// Append to the queue
 	q.bcQueue = append(q.bcQueue, &limitedBroadcast{0, b})
 }
@@ -75,6 +82,12 @@ func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 	// Fast path the default case
 	if len(q.bcQueue) == 0 {
 		return nil
+	}
+
+	// If we are inserted new broadcast that needs a queue reorder then do it
+	if q.needSort {
+		q.bcQueue.Sort()
+		q.needSort = false
 	}
 
 	transmitLimit := retransmitLimit(q.RetransmitMult, q.NumNodes())
@@ -97,17 +110,13 @@ func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 		b.transmits++
 		if b.transmits >= transmitLimit {
 			b.b.Finished()
-			n := len(q.bcQueue)
-			q.bcQueue[i], q.bcQueue[n-1] = q.bcQueue[n-1], nil
-			q.bcQueue = q.bcQueue[:n-1]
+			// Remove the entry mantaining the ordering, no extra sorting needed on the queue
+			copy(q.bcQueue[i:], q.bcQueue[i+1:])
+			q.bcQueue[len(q.bcQueue)-1] = nil
+			q.bcQueue = q.bcQueue[:len(q.bcQueue)-1]
 		}
 	}
 
-	// If we are sending anything, we need to re-sort to deal
-	// with adjusted transmit counts
-	if len(toSend) > 0 {
-		q.bcQueue.Sort()
-	}
 	return toSend
 }
 
