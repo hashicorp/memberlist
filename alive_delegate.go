@@ -7,9 +7,8 @@ package memberlist
 // a node out and prevent it from being considered a peer
 // using application specific logic.
 type AliveDelegate interface {
-	// NotifyAlive is invoked when a when a message about a
-	// live node is received from the network.  Returning a
-	// non-nil error prevents the node from being considered
-	// a peer.
+	// NotifyAlive is invoked when a message about a live
+	// node is received from the network.  Returning a non-nil
+	// error prevents the node from being considered a peer.
 	NotifyAlive(peer *Node) error
 }
