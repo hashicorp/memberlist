@@ -30,10 +30,19 @@ Run `make deps` to fetch dependencies before building
 Memberlist is surprisingly simple to use. An example is shown below:
 
 ```go
-/* Create the initial memberlist from a safe configuration.
-   Please reference the godoc for other default config types.
-   http://godoc.org/github.com/hashicorp/memberlist#Config
-*/
+// Create a configuration based on safe defaults for use over a
+// loopback interface.
+//
+// Please reference the godoc for other default config types:
+// http://godoc.org/github.com/hashicorp/memberlist#Config
+config := memberlist.DefaultLocalConfig()
+
+// The map of Name -> (Address, Port) must be unique, so if running
+// multiple nodes on the same machine, a unique name must be set.
+// This defaults to the hostname of the machine.
+config.Name = "MemberX"
+
+// Create a memberlist from the configuration
 list, err := memberlist.Create(memberlist.DefaultLocalConfig())
 if err != nil {
 	panic("Failed to create memberlist: " + err.Error())
