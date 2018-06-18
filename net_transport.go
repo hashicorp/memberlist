@@ -2,13 +2,13 @@ package memberlist
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/armon/go-metrics"
+	hclog "github.com/hashicorp/go-hclog"
 	sockaddr "github.com/hashicorp/go-sockaddr"
 )
 
@@ -32,7 +32,7 @@ type NetTransportConfig struct {
 	BindPort int
 
 	// Logger is a logger for operator messages.
-	Logger *log.Logger
+	Logger hclog.Logger
 }
 
 // NetTransport is a Transport implementation that uses connectionless UDP for
@@ -41,7 +41,7 @@ type NetTransport struct {
 	config       *NetTransportConfig
 	packetCh     chan *Packet
 	streamCh     chan net.Conn
-	logger       *log.Logger
+	logger       logger
 	wg           sync.WaitGroup
 	tcpListeners []*net.TCPListener
 	udpListeners []*net.UDPConn
@@ -63,7 +63,7 @@ func NewNetTransport(config *NetTransportConfig) (*NetTransport, error) {
 		config:   config,
 		packetCh: make(chan *Packet),
 		streamCh: make(chan net.Conn),
-		logger:   config.Logger,
+		logger:   logger{Logger: config.Logger},
 	}
 
 	// Clean up listeners if there's an error.
@@ -228,7 +228,7 @@ func (t *NetTransport) tcpListen(tcpLn *net.TCPListener) {
 				break
 			}
 
-			t.logger.Printf("[ERR] memberlist: Error accepting TCP connection: %v", err)
+			t.logger.Error("Error accepting TCP connection", "err", err)
 			continue
 		}
 
@@ -251,15 +251,14 @@ func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
 				break
 			}
 
-			t.logger.Printf("[ERR] memberlist: Error reading UDP packet: %v", err)
+			t.logger.Error("Error reading UDP packet", "err", err)
 			continue
 		}
 
 		// Check the length - it needs to have at least one byte to be a
 		// proper message.
 		if n < 1 {
-			t.logger.Printf("[ERR] memberlist: UDP packet too short (%d bytes) %s",
-				len(buf), LogAddress(addr))
+			t.logger.fromAddress(addr).Error("UDP packet too short", "bytesLength", len(buf))
 			continue
 		}
 

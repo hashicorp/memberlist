@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	hclog "github.com/hashicorp/go-hclog"
 	"github.com/miekg/dns"
 )
 
@@ -238,8 +239,7 @@ func TestCreate_keyringAndSecretKey(t *testing.T) {
 func TestCreate_invalidLoggerSettings(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
-	c.Logger = log.New(ioutil.Discard, "", log.LstdFlags)
-	c.LogOutput = ioutil.Discard
+	c.Logger = hclog.NewNullLogger()
 
 	_, err := Create(c)
 	if err == nil {

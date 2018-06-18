@@ -1,10 +1,10 @@
 package memberlist
 
 import (
-	"io"
-	"log"
 	"os"
 	"time"
+
+	hclog "github.com/hashicorp/go-hclog"
 )
 
 type Config struct {
@@ -191,16 +191,8 @@ type Config struct {
 	// at /etc/resolv.conf. It can be overridden via config for easier testing.
 	DNSConfigPath string
 
-	// LogOutput is the writer where logs should be sent. If this is not
-	// set, logging will go to stderr by default. You cannot specify both LogOutput
-	// and Logger at the same time.
-	LogOutput io.Writer
-
-	// Logger is a custom logger which you provide. If Logger is set, it will use
-	// this for the internal logger. If Logger is not set, it will fall back to the
-	// behavior for using LogOutput. You cannot specify both LogOutput and Logger
-	// at the same time.
-	Logger *log.Logger
+	// Logger to use. If no value is passed, the default logger will be used.
+	Logger hclog.Logger
 
 	// Size of Memberlist's internal channel which handles UDP messages. The
 	// size of this determines the size of the queue which Memberlist will keep
