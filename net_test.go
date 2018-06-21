@@ -5,13 +5,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-msgpack/codec"
 )
 
@@ -777,8 +777,9 @@ func TestIngestPacket_CRC(t *testing.T) {
 	in[1] <<= 1
 
 	logs := &bytes.Buffer{}
-	logger := log.New(logs, "", 0)
-	m.logger = logger
+	m.logger = logger{Logger: hclog.New(&hclog.LoggerOptions{
+		Output: logs,
+	})}
 	m.ingestPacket(in, udp.LocalAddr(), time.Now())
 
 	if !strings.Contains(logs.String(), "invalid checksum") {

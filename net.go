@@ -205,7 +205,7 @@ func (m *Memberlist) streamListen() {
 
 // handleConn handles a single incoming stream connection from the transport.
 func (m *Memberlist) handleConn(conn net.Conn) {
-	m.logger.Printf("[DEBUG] memberlist: Stream connection %s", LogConn(conn))
+	m.logger.fromConn(conn).Debug("Stream connection")
 
 	defer conn.Close()
 	metrics.IncrCounter([]string{"memberlist", "tcp", "accept"}, 1)
@@ -214,18 +214,18 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 	msgType, bufConn, dec, err := m.readStream(conn)
 	if err != nil {
 		if err != io.EOF {
-			m.logger.Printf("[ERR] memberlist: failed to receive: %s %s", err, LogConn(conn))
+			m.logger.fromConn(conn).Error("Failed to receive", "err", err)
 
 			resp := errResp{err.Error()}
 			out, err := encode(errMsg, &resp)
 			if err != nil {
-				m.logger.Printf("[ERR] memberlist: Failed to encode error response: %s", err)
+				m.logger.Error("Failed to encode error response", "err", err)
 				return
 			}
 
 			err = m.rawSendMsgStream(conn, out.Bytes())
 			if err != nil {
-				m.logger.Printf("[ERR] memberlist: Failed to send error: %s %s", err, LogConn(conn))
+				m.logger.fromConn(conn).Error("Failed to send error", "err", err)
 				return
 			}
 		}
@@ -235,50 +235,50 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 	switch msgType {
 	case userMsg:
 		if err := m.readUserMsg(bufConn, dec); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to receive user message: %s %s", err, LogConn(conn))
+			m.logger.fromConn(conn).Error("Failed to receive user message", "err", err)
 		}
 	case pushPullMsg:
 		join, remoteNodes, userState, err := m.readRemoteState(bufConn, dec)
 		if err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to read remote state: %s %s", err, LogConn(conn))
+			m.logger.fromConn(conn).Error("Failed to read remote state", "err", err)
 			return
 		}
 
 		if err := m.sendLocalState(conn, join); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to push local state: %s %s", err, LogConn(conn))
+			m.logger.fromConn(conn).Error("Failed to push local state", "err", err)
 			return
 		}
 
 		if err := m.mergeRemoteState(join, remoteNodes, userState); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed push/pull merge: %s %s", err, LogConn(conn))
+			m.logger.fromConn(conn).Error("Failed push/pull merge", "err", err)
 			return
 		}
 	case pingMsg:
 		var p ping
 		if err := dec.Decode(&p); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to decode ping: %s %s", err, LogConn(conn))
+			m.logger.fromConn(conn).Error("Failed to decode ping", "err", err)
 			return
 		}
 
 		if p.Node != "" && p.Node != m.config.Name {
-			m.logger.Printf("[WARN] memberlist: Got ping for unexpected node %s %s", p.Node, LogConn(conn))
+			m.logger.fromConn(conn).Error("Got ping for unexpected node", "node", p.Node)
 			return
 		}
 
 		ack := ackResp{p.SeqNo, nil}
 		out, err := encode(ackRespMsg, &ack)
 		if err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to encode ack: %s", err)
+			m.logger.Warn("Failed to encode ack", "err", err)
 			return
 		}
 
 		err = m.rawSendMsgStream(conn, out.Bytes())
 		if err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to send ack: %s %s", err, LogConn(conn))
+			m.logger.fromConn(conn).Error("Failed to send ack", "err", err)
 			return
 		}
 	default:
-		m.logger.Printf("[ERR] memberlist: Received invalid msgType (%d) %s", msgType, LogConn(conn))
+		m.logger.fromConn(conn).Error("Received invalid msgType", "msgType", msgType)
 	}
 }
 
@@ -306,7 +306,7 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time
 				// Treat the message as plaintext
 				plain = buf
 			} else {
-				m.logger.Printf("[ERR] memberlist: Decrypt packet failed: %v %s", err, LogAddress(from))
+				m.logger.Error("Decrypt packet failed", "err", err, "from", from.String())
 				return
 			}
 		}
@@ -320,7 +320,7 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time
 		crc := crc32.ChecksumIEEE(buf[5:])
 		expected := binary.BigEndian.Uint32(buf[1:5])
 		if crc != expected {
-			m.logger.Printf("[WARN] memberlist: Got invalid checksum for UDP packet: %x, %x", crc, expected)
+			m.logger.Warn("Got invalid CRC checksum for UDP packet", "received", crc, "expected", expected)
 			return
 		}
 		m.handleCommand(buf[5:], from, timestamp)
@@ -360,11 +360,11 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Tim
 		select {
 		case m.handoff <- msgHandoff{msgType, buf, from}:
 		default:
-			m.logger.Printf("[WARN] memberlist: handler queue full, dropping message (%d) %s", msgType, LogAddress(from))
+			m.logger.fromAddress(from).Warn("handler queue full, dropping message", "msgType", msgType)
 		}
 
 	default:
-		m.logger.Printf("[ERR] memberlist: msg type (%d) not supported %s", msgType, LogAddress(from))
+		m.logger.fromAddress(from).Error("msgType not supported", "msgType", msgType)
 	}
 }
 
@@ -389,7 +389,7 @@ func (m *Memberlist) packetHandler() {
 			case userMsg:
 				m.handleUser(buf, from)
 			default:
-				m.logger.Printf("[ERR] memberlist: Message type (%d) not supported %s (packet handler)", msgType, LogAddress(from))
+				m.logger.fromAddress(from).Error("Message type not supported (packet handler)", "msgType", msgType)
 			}
 
 		case <-m.shutdownCh:
@@ -402,13 +402,13 @@ func (m *Memberlist) handleCompound(buf []byte, from net.Addr, timestamp time.Ti
 	// Decode the parts
 	trunc, parts, err := decodeCompoundMessage(buf)
 	if err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to decode compound request: %s %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to decode compound request", "err", err)
 		return
 	}
 
 	// Log any truncation
 	if trunc > 0 {
-		m.logger.Printf("[WARN] memberlist: Compound request had %d truncated messages %s", trunc, LogAddress(from))
+		m.logger.fromAddress(from).Warn("Compound request had truncated messages", "nb", trunc)
 	}
 
 	// Handle each message
@@ -420,12 +420,12 @@ func (m *Memberlist) handleCompound(buf []byte, from net.Addr, timestamp time.Ti
 func (m *Memberlist) handlePing(buf []byte, from net.Addr) {
 	var p ping
 	if err := decode(buf, &p); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to decode ping request: %s %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to decode ping request", "err", err)
 		return
 	}
 	// If node is provided, verify that it is for us
 	if p.Node != "" && p.Node != m.config.Name {
-		m.logger.Printf("[WARN] memberlist: Got ping for unexpected node '%s' %s", p.Node, LogAddress(from))
+		m.logger.fromAddress(from).Warn("Got ping for unexpected node", "node", p.Node)
 		return
 	}
 	var ack ackResp
@@ -434,14 +434,14 @@ func (m *Memberlist) handlePing(buf []byte, from net.Addr) {
 		ack.Payload = m.config.Ping.AckPayload()
 	}
 	if err := m.encodeAndSendMsg(from.String(), ackRespMsg, &ack); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to send ack: %s %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to send ack", "err", err)
 	}
 }
 
 func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 	var ind indirectPingReq
 	if err := decode(buf, &ind); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to decode indirect ping request: %s %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to decode indirect ping request", "err", err)
 		return
 	}
 
@@ -464,7 +464,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 		// Forward the ack back to the requestor.
 		ack := ackResp{ind.SeqNo, nil}
 		if err := m.encodeAndSendMsg(from.String(), ackRespMsg, &ack); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to forward ack: %s %s", err, LogAddress(from))
+			m.logger.fromAddress(from).Error("Failed to forward ack", "err", err)
 		}
 	}
 	m.setAckHandler(localSeqNo, respHandler, m.config.ProbeTimeout)
@@ -472,7 +472,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 	// Send the ping.
 	addr := joinHostPort(net.IP(ind.Target).String(), ind.Port)
 	if err := m.encodeAndSendMsg(addr, pingMsg, &ping); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to send ping", "err", err)
 	}
 
 	// Setup a timer to fire off a nack if no ack is seen in time.
@@ -484,7 +484,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 			case <-time.After(m.config.ProbeTimeout):
 				nack := nackResp{ind.SeqNo}
 				if err := m.encodeAndSendMsg(from.String(), nackRespMsg, &nack); err != nil {
-					m.logger.Printf("[ERR] memberlist: Failed to send nack: %s %s", err, LogAddress(from))
+					m.logger.fromAddress(from).Error("Failed to send nack", "err", err)
 				}
 			}
 		}()
@@ -494,7 +494,7 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 func (m *Memberlist) handleAck(buf []byte, from net.Addr, timestamp time.Time) {
 	var ack ackResp
 	if err := decode(buf, &ack); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to decode ack response: %s %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to decode ack response", "err", err)
 		return
 	}
 	m.invokeAckHandler(ack, timestamp)
@@ -503,7 +503,7 @@ func (m *Memberlist) handleAck(buf []byte, from net.Addr, timestamp time.Time) {
 func (m *Memberlist) handleNack(buf []byte, from net.Addr) {
 	var nack nackResp
 	if err := decode(buf, &nack); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to decode nack response: %s %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to decode nack response", "err", err)
 		return
 	}
 	m.invokeNackHandler(nack)
@@ -512,7 +512,7 @@ func (m *Memberlist) handleNack(buf []byte, from net.Addr) {
 func (m *Memberlist) handleSuspect(buf []byte, from net.Addr) {
 	var sus suspect
 	if err := decode(buf, &sus); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to decode suspect message: %s %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to decode suspect message", "err", err)
 		return
 	}
 	m.suspectNode(&sus)
@@ -521,7 +521,7 @@ func (m *Memberlist) handleSuspect(buf []byte, from net.Addr) {
 func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 	var live alive
 	if err := decode(buf, &live); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to decode alive message: %s %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to decode alive message", "err", err)
 		return
 	}
 
@@ -537,7 +537,7 @@ func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 func (m *Memberlist) handleDead(buf []byte, from net.Addr) {
 	var d dead
 	if err := decode(buf, &d); err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to decode dead message: %s %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to decode dead message", "err", err)
 		return
 	}
 	m.deadNode(&d)
@@ -556,7 +556,7 @@ func (m *Memberlist) handleCompressed(buf []byte, from net.Addr, timestamp time.
 	// Try to decode the payload
 	payload, err := decompressPayload(buf)
 	if err != nil {
-		m.logger.Printf("[ERR] memberlist: Failed to decompress payload: %v %s", err, LogAddress(from))
+		m.logger.fromAddress(from).Error("Failed to decompress payload", "err", err)
 		return
 	}
 
@@ -610,7 +610,7 @@ func (m *Memberlist) rawSendMsgPacket(addr string, node *Node, msg []byte) error
 	if m.config.EnableCompression {
 		buf, err := compressPayload(msg)
 		if err != nil {
-			m.logger.Printf("[WARN] memberlist: Failed to compress payload: %v", err)
+			m.logger.Warn("Failed to compress payload", "err", err)
 		} else {
 			// Only use compression if it reduced the size
 			if buf.Len() < len(msg) {
@@ -623,7 +623,7 @@ func (m *Memberlist) rawSendMsgPacket(addr string, node *Node, msg []byte) error
 	if node == nil {
 		toAddr, _, err := net.SplitHostPort(addr)
 		if err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to parse address %q: %v", addr, err)
+			m.logger.Error("Failed to parse address", "addr", addr, "err", err)
 			return err
 		}
 		m.nodeLock.RLock()
@@ -651,7 +651,7 @@ func (m *Memberlist) rawSendMsgPacket(addr string, node *Node, msg []byte) error
 		primaryKey := m.config.Keyring.GetPrimaryKey()
 		err := encryptPayload(m.encryptionVersion(), primaryKey, msg, nil, &buf)
 		if err != nil {
-			m.logger.Printf("[ERR] memberlist: Encryption of message failed: %v", err)
+			m.logger.Error("Encryption of message failed", "err", err)
 			return err
 		}
 		msg = buf.Bytes()
@@ -669,7 +669,7 @@ func (m *Memberlist) rawSendMsgStream(conn net.Conn, sendBuf []byte) error {
 	if m.config.EnableCompression {
 		compBuf, err := compressPayload(sendBuf)
 		if err != nil {
-			m.logger.Printf("[ERROR] memberlist: Failed to compress payload: %v", err)
+			m.logger.Error("Failed to compress payload", "err", err)
 		} else {
 			sendBuf = compBuf.Bytes()
 		}
@@ -679,7 +679,7 @@ func (m *Memberlist) rawSendMsgStream(conn net.Conn, sendBuf []byte) error {
 	if m.config.EncryptionEnabled() && m.config.GossipVerifyOutgoing {
 		crypt, err := m.encryptLocalState(sendBuf)
 		if err != nil {
-			m.logger.Printf("[ERROR] memberlist: Failed to encrypt local state: %v", err)
+			m.logger.Error("Failed to encrypt local state", "err", err)
 			return err
 		}
 		sendBuf = crypt
@@ -731,7 +731,7 @@ func (m *Memberlist) sendAndReceiveState(addr string, join bool) ([]pushNodeStat
 		return nil, nil, err
 	}
 	defer conn.Close()
-	m.logger.Printf("[DEBUG] memberlist: Initiating push/pull sync with: %s", conn.RemoteAddr())
+	m.logger.Debug("Initiating pull/push sync", "peer", conn.RemoteAddr().String())
 	metrics.IncrCounter([]string{"memberlist", "tcp", "connect"}, 1)
 
 	// Send our state
@@ -755,7 +755,7 @@ func (m *Memberlist) sendAndReceiveState(addr string, join bool) ([]pushNodeStat
 
 	// Quit if not push/pull
 	if msgType != pushPullMsg {
-		err := fmt.Errorf("received invalid msgType (%d), expected pushPullMsg (%d) %s", msgType, pushPullMsg, LogConn(conn))
+		err := fmt.Errorf("received invalid msgType (%d), expected pushPullMsg (%d) from %s", msgType, pushPullMsg, conn.RemoteAddr().String())
 		return nil, nil, err
 	}
 
@@ -1085,7 +1085,7 @@ func (m *Memberlist) sendPingAndWaitForAck(addr string, ping ping, deadline time
 	}
 
 	if msgType != ackRespMsg {
-		return false, fmt.Errorf("Unexpected msgType (%d) from ping %s", msgType, LogConn(conn))
+		return false, fmt.Errorf("Unexpected msgType (%d) from ping %s", msgType, conn.RemoteAddr().String())
 	}
 
 	var ack ackResp
@@ -1094,7 +1094,7 @@ func (m *Memberlist) sendPingAndWaitForAck(addr string, ping ping, deadline time
 	}
 
 	if ack.SeqNo != ping.SeqNo {
-		return false, fmt.Errorf("Sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo, LogConn(conn))
+		return false, fmt.Errorf("From %s: Sequence number from ack (%d) doesn't match ping (%d)", conn.RemoteAddr().String(), ack.SeqNo, ping.SeqNo)
 	}
 
 	return true, nil

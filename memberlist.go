@@ -16,15 +16,14 @@ package memberlist
 
 import (
 	"fmt"
-	"log"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
 	multierror "github.com/hashicorp/go-multierror"
 	sockaddr "github.com/hashicorp/go-sockaddr"
 	"github.com/miekg/dns"
@@ -63,7 +62,7 @@ type Memberlist struct {
 
 	broadcasts *TransmitLimitedQueue
 
-	logger *log.Logger
+	logger logger
 }
 
 // newMemberlist creates the network listeners.
@@ -94,19 +93,11 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		}
 	}
 
-	if conf.LogOutput != nil && conf.Logger != nil {
-		return nil, fmt.Errorf("Cannot specify both LogOutput and Logger. Please choose a single log configuration setting.")
+	var confLogger = conf.Logger
+	if confLogger == nil {
+		confLogger = hclog.Default().Named("memberlist")
 	}
-
-	logDest := conf.LogOutput
-	if logDest == nil {
-		logDest = os.Stderr
-	}
-
-	logger := conf.Logger
-	if logger == nil {
-		logger = log.New(logDest, "", log.LstdFlags)
-	}
+	logger := logger{Logger: confLogger}
 
 	// Set up a network transport by default if a custom one wasn't given
 	// by the config.
@@ -127,7 +118,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 					return nt, nil
 				}
 				if strings.Contains(err.Error(), "address already in use") {
-					logger.Printf("[DEBUG] memberlist: Got bind error: %v", err)
+					logger.Error("Got bind error", "error", err)
 					continue
 				}
 			}
@@ -154,7 +145,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 			port := nt.GetAutoBindPort()
 			conf.BindPort = port
 			conf.AdvertisePort = port
-			logger.Printf("[DEBUG] memberlist: Using dynamic bind port %d", port)
+			logger.Debug("Using dynamic bind", "port", port)
 		}
 		transport = nt
 	}
@@ -214,18 +205,18 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 	for _, exist := range existing {
 		addrs, err := m.resolveAddr(exist)
 		if err != nil {
+			m.logger.Warn("Failed to resolve", "address", exist, "error", err)
 			err = fmt.Errorf("Failed to resolve %s: %v", exist, err)
 			errs = multierror.Append(errs, err)
-			m.logger.Printf("[WARN] memberlist: %v", err)
 			continue
 		}
 
 		for _, addr := range addrs {
 			hp := joinHostPort(addr.ip.String(), addr.port)
 			if err := m.pushPullNode(hp, true); err != nil {
+				m.logger.Debug("Failed to join", "address", addr.ip, "error", err)
 				err = fmt.Errorf("Failed to join %s: %v", addr.ip, err)
 				errs = multierror.Append(errs, err)
-				m.logger.Printf("[DEBUG] memberlist: %v", err)
 				continue
 			}
 			numSuccess++
@@ -296,7 +287,7 @@ func (m *Memberlist) tcpLookupIP(host string, defaultPort uint16) ([]ipPort, err
 			case (*dns.AAAA):
 				ips = append(ips, ipPort{rr.AAAA, defaultPort})
 			case (*dns.CNAME):
-				m.logger.Printf("[DEBUG] memberlist: Ignoring CNAME RR in TCP-first answer for '%s'", host)
+				m.logger.Debug("Ignoring CNAME RR in TCP-first answer for host", "host", host)
 			}
 		}
 		return ips, nil
@@ -332,7 +323,7 @@ func (m *Memberlist) resolveAddr(hostStr string) ([]ipPort, error) {
 	// way to query DNS, and we have a fallback below.
 	ips, err := m.tcpLookupIP(host, port)
 	if err != nil {
-		m.logger.Printf("[DEBUG] memberlist: TCP-first lookup failed for '%s', falling back to UDP: %s", hostStr, err)
+		m.logger.Debug("TCP-first lookup failed for host - falling back to UDP", "host", hostStr, "error", err)
 	}
 	if len(ips) > 0 {
 		return ips, nil
@@ -376,7 +367,7 @@ func (m *Memberlist) setAlive() error {
 	}
 	_, publicIfs, err := sockaddr.IfByRFC("6890", ifAddrs)
 	if len(publicIfs) > 0 && !m.config.EncryptionEnabled() {
-		m.logger.Printf("[WARN] memberlist: Binding to public address without encryption!")
+		m.logger.Warn("Binding to public address without encryption")
 	}
 
 	// Set any metadata from the delegate.
@@ -566,7 +557,7 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 		state, ok := m.nodeMap[m.config.Name]
 		m.nodeLock.Unlock()
 		if !ok {
-			m.logger.Printf("[WARN] memberlist: Leave but we're not in the node map.")
+			m.logger.Warn("Leave but we're not in the node map")
 			return nil
 		}
 
@@ -640,7 +631,7 @@ func (m *Memberlist) Shutdown() error {
 	// completely torn down. If we kill the memberlist-side handlers
 	// those I/O handlers might get stuck.
 	if err := m.transport.Shutdown(); err != nil {
-		m.logger.Printf("[ERR] Failed to shutdown transport: %v", err)
+		m.logger.Error("Failed to shutdown transport", "error", err)
 	}
 
 	// Now tear down everything else.

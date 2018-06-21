@@ -1,22 +1,27 @@
 package memberlist
 
 import (
-	"fmt"
 	"net"
+
+	hclog "github.com/hashicorp/go-hclog"
 )
 
-func LogAddress(addr net.Addr) string {
-	if addr == nil {
-		return "from=<unknown address>"
-	}
+const unknownAddr = "<unknown address>"
 
-	return fmt.Sprintf("from=%s", addr.String())
+type logger struct {
+	hclog.Logger
 }
 
-func LogConn(conn net.Conn) string {
-	if conn == nil {
-		return LogAddress(nil)
+func (l logger) fromAddress(addr net.Addr) logger {
+	if addr == nil {
+		return logger{Logger: l.With("from", unknownAddr)}
 	}
+	return logger{Logger: l.With("from", addr.String())}
+}
 
-	return LogAddress(conn.RemoteAddr())
+func (l logger) fromConn(conn net.Conn) logger {
+	if conn == nil {
+		return l.fromAddress(nil)
+	}
+	return l.fromAddress(conn.RemoteAddr())
 }
