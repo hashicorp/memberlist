@@ -8,9 +8,10 @@ import (
 	"hash/crc32"
 	"io"
 	"net"
+	"sync/atomic"
 	"time"
 
-	"github.com/armon/go-metrics"
+	metrics "github.com/armon/go-metrics"
 	"github.com/hashicorp/go-msgpack/codec"
 )
 
@@ -71,7 +72,8 @@ const (
 	compoundOverhead       = 2   // Assumed overhead per entry in compoundHeader
 	userMsgOverhead        = 1
 	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
-	maxPushStateBytes      = 10 * 1024 * 1024
+	maxPushStateBytes      = 20 * 1024 * 1024
+	maxPushPullRequests    = 128 // Maximum number of concurrent push/pull requests
 )
 
 // ping request sent directly to node
@@ -238,6 +240,16 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 			m.logger.Printf("[ERR] memberlist: Failed to receive user message: %s %s", err, LogConn(conn))
 		}
 	case pushPullMsg:
+		// Increment counter of pending push/pulls
+		numConcurrent := atomic.AddUint32(&m.pushPullReq, 1)
+		defer atomic.AddUint32(&m.pushPullReq, ^uint32(0))
+
+		// Check if we have too many open push/pull requests
+		if numConcurrent >= maxPushPullRequests {
+			m.logger.Printf("[ERR] memberlist: Too many pending push/pull requests")
+			return
+		}
+
 		join, remoteNodes, userState, err := m.readRemoteState(bufConn, dec)
 		if err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to read remote state: %s %s", err, LogConn(conn))

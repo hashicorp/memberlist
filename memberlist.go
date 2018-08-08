@@ -34,6 +34,7 @@ type Memberlist struct {
 	sequenceNum uint32 // Local sequence number
 	incarnation uint32 // Local incarnation number
 	numNodes    uint32 // Number of known nodes (estimate)
+	pushPullReq uint32 // Number of push/pull requests
 
 	config         *Config
 	shutdown       int32 // Used as an atomic boolean value
