@@ -73,7 +73,7 @@ const (
 	userMsgOverhead        = 1
 	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
 	maxPushStateBytes      = 20 * 1024 * 1024
-	maxPushPullRequests    = 64 // Maximum number of concurrent push/pull requests
+	maxPushPullRequests    = 128 // Maximum number of concurrent push/pull requests
 )
 
 // ping request sent directly to node
