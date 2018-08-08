@@ -395,16 +395,16 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Tim
 	}
 }
 
-// getNextMessage returns the next message to process in priority order
+// getNextMessage returns the next message to process in priority order, using LIFO
 func (m *Memberlist) getNextMessage() (msgHandoff, bool) {
 	m.msgQueueLock.Lock()
 	defer m.msgQueueLock.Unlock()
 
-	if el := m.highPriorityMsgQueue.Front(); el != nil {
+	if el := m.highPriorityMsgQueue.Back(); el != nil {
 		m.highPriorityMsgQueue.Remove(el)
 		msg := el.Value.(msgHandoff)
 		return msg, true
-	} else if el := m.lowPriorityMsgQueue.Front(); el != nil {
+	} else if el := m.lowPriorityMsgQueue.Back(); el != nil {
 		m.lowPriorityMsgQueue.Remove(el)
 		msg := el.Value.(msgHandoff)
 		return msg, true
