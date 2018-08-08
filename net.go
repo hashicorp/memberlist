@@ -240,15 +240,15 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 			m.logger.Printf("[ERR] memberlist: Failed to receive user message: %s %s", err, LogConn(conn))
 		}
 	case pushPullMsg:
+		// Increment counter of pending push/pulls
+		numConcurrent := atomic.AddUint32(&m.pushPullReq, 1)
+		defer atomic.AddUint32(&m.pushPullReq, ^uint32(0))
+
 		// Check if we have too many open push/pull requests
-		if n := atomic.LoadUint32(&m.pushPullReq); n >= maxPushPullRequests {
+		if numConcurrent >= maxPushPullRequests {
 			m.logger.Printf("[ERR] memberlist: Too many pending push/pull requests")
 			return
 		}
-
-		// Increment counter of pending push/pulls
-		atomic.AddUint32(&m.pushPullReq, 1)
-		defer atomic.AddUint32(&m.pushPullReq, ^uint32(0))
 
 		join, remoteNodes, userState, err := m.readRemoteState(bufConn, dec)
 		if err != nil {
