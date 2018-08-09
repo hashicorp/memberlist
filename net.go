@@ -369,15 +369,47 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Tim
 	case deadMsg:
 		fallthrough
 	case userMsg:
-		select {
-		case m.handoff <- msgHandoff{msgType, buf, from}:
-		default:
+		// Determine the message queue, prioritize alive
+		queue := m.lowPriorityMsgQueue
+		if msgType == aliveMsg {
+			queue = m.highPriorityMsgQueue
+		}
+
+		// Check for overflow and append if not full
+		m.msgQueueLock.Lock()
+		if queue.Len() >= m.config.HandoffQueueDepth {
 			m.logger.Printf("[WARN] memberlist: handler queue full, dropping message (%d) %s", msgType, LogAddress(from))
+		} else {
+			queue.PushBack(msgHandoff{msgType, buf, from})
+		}
+		m.msgQueueLock.Unlock()
+
+		// Notify of pending message
+		select {
+		case m.handoffCh <- struct{}{}:
+		default:
 		}
 
 	default:
 		m.logger.Printf("[ERR] memberlist: msg type (%d) not supported %s", msgType, LogAddress(from))
 	}
+}
+
+// getNextMessage returns the next message to process in priority order, using LIFO
+func (m *Memberlist) getNextMessage() (msgHandoff, bool) {
+	m.msgQueueLock.Lock()
+	defer m.msgQueueLock.Unlock()
+
+	if el := m.highPriorityMsgQueue.Back(); el != nil {
+		m.highPriorityMsgQueue.Remove(el)
+		msg := el.Value.(msgHandoff)
+		return msg, true
+	} else if el := m.lowPriorityMsgQueue.Back(); el != nil {
+		m.lowPriorityMsgQueue.Remove(el)
+		msg := el.Value.(msgHandoff)
+		return msg, true
+	}
+	return msgHandoff{}, false
 }
 
 // packetHandler is a long running goroutine that processes messages received
@@ -386,22 +418,28 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Tim
 func (m *Memberlist) packetHandler() {
 	for {
 		select {
-		case msg := <-m.handoff:
-			msgType := msg.msgType
-			buf := msg.buf
-			from := msg.from
+		case <-m.handoffCh:
+			for {
+				msg, ok := m.getNextMessage()
+				if !ok {
+					break
+				}
+				msgType := msg.msgType
+				buf := msg.buf
+				from := msg.from
 
-			switch msgType {
-			case suspectMsg:
-				m.handleSuspect(buf, from)
-			case aliveMsg:
-				m.handleAlive(buf, from)
-			case deadMsg:
-				m.handleDead(buf, from)
-			case userMsg:
-				m.handleUser(buf, from)
-			default:
-				m.logger.Printf("[ERR] memberlist: Message type (%d) not supported %s (packet handler)", msgType, LogAddress(from))
+				switch msgType {
+				case suspectMsg:
+					m.handleSuspect(buf, from)
+				case aliveMsg:
+					m.handleAlive(buf, from)
+				case deadMsg:
+					m.handleDead(buf, from)
+				case userMsg:
+					m.handleUser(buf, from)
+				default:
+					m.logger.Printf("[ERR] memberlist: Message type (%d) not supported %s (packet handler)", msgType, LogAddress(from))
+				}
 			}
 
 		case <-m.shutdownCh:
@@ -1106,7 +1144,7 @@ func (m *Memberlist) sendPingAndWaitForAck(addr string, ping ping, deadline time
 	}
 
 	if ack.SeqNo != ping.SeqNo {
-		return false, fmt.Errorf("Sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo, LogConn(conn))
+		return false, fmt.Errorf("Sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo)
 	}
 
 	return true, nil

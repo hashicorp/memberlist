@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+	"github.com/stretchr/testify/require"
 )
 
 var bindLock sync.Mutex
@@ -424,12 +425,15 @@ func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
 		}
 		port := uint16(m.config.BindPort)
 		expected := []ipPort{
-			ipPort{net.ParseIP("127.0.0.1"), port},
+			// Go now parses IPs like this and returns IP4-mapped IPv6 address.
+			// Confusingly if you print it you see the same as the input since
+			// IP.String converts IP4-mapped addresses back to dotted decimal notation
+			// but the underlying IP bytes don't compare as equal to the actual IPv4
+			// bytes the resolver will get from DNS.
+			ipPort{net.ParseIP("127.0.0.1").To4(), port},
 			ipPort{net.ParseIP("2001:db8:a0b:12f0::1"), port},
 		}
-		if !reflect.DeepEqual(ips, expected) {
-			t.Fatalf("bad: %#v expected: %#v", ips, expected)
-		}
+		require.Equal(t, expected, ips)
 	}
 }
 
@@ -894,12 +898,14 @@ func TestMemberlist_UserData(t *testing.T) {
 	m1.schedule()
 	defer m1.Shutdown()
 
-	// Create a second delegate with things to send
-	d2 := &MockDelegate{}
-	d2.broadcasts = [][]byte{
+	bcasts := [][]byte{
 		[]byte("test"),
 		[]byte("foobar"),
 	}
+
+	// Create a second delegate with things to send
+	d2 := &MockDelegate{}
+	d2.broadcasts = bcasts
 	d2.state = []byte("my state")
 
 	// Create a second node
@@ -933,16 +939,9 @@ func TestMemberlist_UserData(t *testing.T) {
 	// Wait for a little while
 	time.Sleep(3 * time.Millisecond)
 
-	// Ensure we got the messages
-	if len(d1.msgs) != 2 {
-		t.Fatalf("should have 2 messages!")
-	}
-	if !reflect.DeepEqual(d1.msgs[0], []byte("test")) {
-		t.Fatalf("bad msg %v", d1.msgs[0])
-	}
-	if !reflect.DeepEqual(d1.msgs[1], []byte("foobar")) {
-		t.Fatalf("bad msg %v", d1.msgs[1])
-	}
+	// Ensure we got the messages. Ordering of messages is not guaranteed so just
+	// check we got them both in either order.
+	require.ElementsMatch(t, bcasts, d1.msgs)
 
 	// Check the push/pull state
 	if !reflect.DeepEqual(d1.remoteState, []byte("my state")) {
