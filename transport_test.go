@@ -1,9 +1,10 @@
 package memberlist
 
 import (
-	"bytes"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestTransport_Join(t *testing.T) {
@@ -116,9 +117,13 @@ func TestTransport_Send(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond)
 
-	received := bytes.Join(d1.msgs, []byte("|"))
-	expected := []byte("SendTo|SendToUDP|SendToTCP|SendBestEffort|SendReliable")
-	if !bytes.Equal(received, expected) {
-		t.Fatalf("bad: %s", received)
+	expected := []string{"SendTo", "SendToUDP", "SendToTCP", "SendBestEffort", "SendReliable"}
+
+	received := make([]string, len(d1.msgs))
+	for i, bs := range d1.msgs {
+		received[i] = string(bs)
 	}
+	// Some of these are UDP so often get re-ordered making the test flaky if we
+	// assert send ordering. Sort both slices to be tolerant of re-ordering.
+	require.ElementsMatch(t, expected, received)
 }
