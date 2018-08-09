@@ -1767,7 +1767,7 @@ func TestMemberlist_GossipToDead(t *testing.T) {
 		time.Sleep(3 * time.Millisecond)
 
 		if len(ch) < 2 {
-			failf("expected 3 messages from gossip")
+			failf("expected 2 messages from gossip")
 		}
 	})
 }
