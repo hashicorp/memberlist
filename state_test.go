@@ -667,11 +667,17 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 		t.Fatalf("took to long to probe, %9.6f", probeTime.Seconds())
 	}
 
-	// We should have gotten dinged for the missed nack.
+	// We should have gotten dinged for the missed nack. Note that the code under
+	// test is waiting for probeTimeMax and then doing some other work before it
+	// updates the awareness, so we need to wait some extra time. Rather than just
+	// add longer and longer sleeps, we'll retry a few times.
 	time.Sleep(probeTimeMax)
-	if score := m1.GetHealthScore(); score != 1 {
-		t.Fatalf("bad: %d", score)
-	}
+	retry(t, 5, 10*time.Millisecond, func(failf func(string, ...interface{})) {
+		if score := m1.GetHealthScore(); score != 1 {
+			failf("expected health score to decrement on missed nack. want %d, "+
+				"got: %d", 1, score)
+		}
+	})
 }
 
 func TestMemberList_ProbeNode_Awareness_OldProtocol(t *testing.T) {
@@ -1680,15 +1686,40 @@ func TestMemberlist_Gossip(t *testing.T) {
 	a3 := alive{Node: "172.0.0.1", Addr: []byte{172, 0, 0, 1}, Incarnation: 1}
 	m1.aliveNode(&a3, nil, false)
 
-	// Gossip should send all this to m2
-	m1.gossip()
+	// Gossip should send all this to m2. Retry a few times because it's UDP and
+	// timing and stuff makes this flaky without.
+	retry(t, 5, 10*time.Millisecond, func(failf func(string, ...interface{})) {
+		m1.gossip()
 
-	for i := 0; i < 3; i++ {
-		select {
-		case <-ch:
-		case <-time.After(50 * time.Millisecond):
-			t.Fatalf("timeout")
+		time.Sleep(3 * time.Millisecond)
+
+		if len(ch) < 3 {
+			failf("expected 3 messages from gossip")
 		}
+	})
+}
+
+func retry(t *testing.T, n int, w time.Duration, fn func(func(string, ...interface{}))) {
+	t.Helper()
+	for try := 1; try <= n; try++ {
+		failed := false
+		failFormat := ""
+		failArgs := []interface{}{}
+		failf := func(format string, args ...interface{}) {
+			failed = true
+			failFormat = format
+			failArgs = args
+		}
+
+		fn(failf)
+
+		if !failed {
+			return
+		}
+		if try == n {
+			t.Fatalf(failFormat, failArgs...)
+		}
+		time.Sleep(w)
 	}
 }
 
@@ -1729,15 +1760,16 @@ func TestMemberlist_GossipToDead(t *testing.T) {
 
 	// Should gossip to m2 because its state has changed within GossipToTheDeadTime
 	m1.nodeMap[addr2.String()].StateChange = time.Now().Add(-20 * time.Millisecond)
-	m1.gossip()
 
-	for i := 0; i < 2; i++ {
-		select {
-		case <-ch:
-		case <-time.After(50 * time.Millisecond):
-			t.Fatalf("timeout")
+	retry(t, 5, 10*time.Millisecond, func(failf func(string, ...interface{})) {
+		m1.gossip()
+
+		time.Sleep(3 * time.Millisecond)
+
+		if len(ch) < 2 {
+			failf("expected 2 messages from gossip")
 		}
-	}
+	})
 }
 
 func TestMemberlist_PushPull(t *testing.T) {
@@ -1765,16 +1797,16 @@ func TestMemberlist_PushPull(t *testing.T) {
 	a2 := alive{Node: addr2.String(), Addr: ip2, Port: 7946, Incarnation: 1}
 	m1.aliveNode(&a2, nil, false)
 
-	// Gossip should send all this to m2
-	m1.pushPull()
+	// Gossip should send all this to m2. It's UDP though so retry a few times
+	retry(t, 5, 10*time.Millisecond, func(failf func(string, ...interface{})) {
+		m1.pushPull()
 
-	for i := 0; i < 2; i++ {
-		select {
-		case <-ch:
-		case <-time.After(10 * time.Millisecond):
-			t.Fatalf("timeout")
+		time.Sleep(3 * time.Millisecond)
+
+		if len(ch) < 2 {
+			failf("expected 2 messages from pushPull")
 		}
-	}
+	})
 }
 
 func TestVerifyProtocol(t *testing.T) {
