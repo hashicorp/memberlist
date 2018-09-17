@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-msgpack/codec"
+	"github.com/ugorji/go/codec"
 )
 
 // As a regression we left this test very low-level and network-ey, even after

@@ -13,8 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-msgpack/codec"
 	"github.com/sean-/seed"
+
+	"github.com/ugorji/go/codec"
 )
 
 // pushPullScale is the minimum number of nodes
