@@ -15,7 +15,7 @@ multiple routes.
 
 ## Building
 
-If you wish to build memberlist you'll need Go version 1.2+ installed.
+If you wish to build memberlist you'll need Go version 1.11+ installed.
 
 Please check your installation with:
 
