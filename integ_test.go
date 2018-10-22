@@ -2,7 +2,6 @@ package memberlist
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -42,6 +41,7 @@ func TestMemberlist_Integ(t *testing.T) {
 		c.GossipInterval = 20 * time.Millisecond
 		c.PushPullInterval = 200 * time.Millisecond
 		c.SecretKey = secret
+		c.Logger = testLoggerWithName(t, c.Name)
 
 		if i == 0 {
 			c.Events = &ChannelEventDelegate{eventCh}
@@ -51,8 +51,9 @@ func TestMemberlist_Integ(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected err: %s", err)
 		}
-		members = append(members, m)
 		defer m.Shutdown()
+
+		members = append(members, m)
 
 		if i > 0 {
 			last := members[i-1]
@@ -70,9 +71,9 @@ WAIT:
 		select {
 		case e := <-eventCh:
 			if e.Event == NodeJoin {
-				log.Printf("[DEBUG] Node join: %v (%d)", *e.Node, members[0].NumMembers())
+				t.Logf("[DEBUG] Node join: %v (%d)", *e.Node, members[0].NumMembers())
 			} else {
-				log.Printf("[DEBUG] Node leave: %v (%d)", *e.Node, members[0].NumMembers())
+				t.Logf("[DEBUG] Node leave: %v (%d)", *e.Node, members[0].NumMembers())
 			}
 		case <-breakTimer:
 			break WAIT

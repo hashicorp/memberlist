@@ -34,11 +34,14 @@ func getBindAddr() net.IP {
 }
 
 func testConfig(tb testing.TB) *Config {
+	tb.Helper()
+
 	config := DefaultLANConfig()
 	config.BindAddr = getBindAddr().String()
 	config.Name = config.BindAddr
+	config.BindPort = 0 // choose free port
 	if tb != nil {
-		config.Logger = testLogger(tb)
+		config.Logger = testLoggerWithName(tb, config.Name)
 	}
 	return config
 }
@@ -48,6 +51,7 @@ func yield() {
 }
 
 type MockDelegate struct {
+	mu          sync.Mutex
 	meta        []byte
 	msgs        [][]byte
 	broadcasts  [][]byte
@@ -55,61 +59,93 @@ type MockDelegate struct {
 	remoteState []byte
 }
 
+func (m *MockDelegate) setMeta(meta []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.meta = meta
+}
+
+func (m *MockDelegate) setState(state []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.state = state
+}
+
+func (m *MockDelegate) setBroadcasts(broadcasts [][]byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.broadcasts = broadcasts
+}
+
+func (m *MockDelegate) getRemoteState() []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	out := make([]byte, len(m.remoteState))
+	copy(out, m.remoteState)
+	return out
+}
+
+func (m *MockDelegate) getMessages() [][]byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	out := make([][]byte, len(m.msgs))
+	for i, msg := range m.msgs {
+		out[i] = make([]byte, len(msg))
+		copy(out[i], msg)
+	}
+	return out
+}
+
 func (m *MockDelegate) NodeMeta(limit int) []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	return m.meta
 }
 
 func (m *MockDelegate) NotifyMsg(msg []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	cp := make([]byte, len(msg))
 	copy(cp, msg)
 	m.msgs = append(m.msgs, cp)
 }
 
 func (m *MockDelegate) GetBroadcasts(overhead, limit int) [][]byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	b := m.broadcasts
 	m.broadcasts = nil
 	return b
 }
 
 func (m *MockDelegate) LocalState(join bool) []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	return m.state
 }
 
 func (m *MockDelegate) MergeRemoteState(s []byte, join bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.remoteState = s
 }
 
-// Returns a new Memberlist on an open port by trying a range of port numbers
-// until something sticks.
-func NewMemberlistOnOpenPort(c *Config) (*Memberlist, error) {
-	c.BindPort = 0
-	return newMemberlist(c)
-}
-
-func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
-	d := &MockDelegate{}
-
-	c := testConfig(t)
-	c.Delegate = d
-
-	m, err := NewMemberlistOnOpenPort(c)
-	if err != nil {
-		t.Fatalf("failed to start: %v", err)
-		return nil, nil
-	}
-
-	return m, d
-}
-
-func GetMemberlist(tb testing.TB) *Memberlist {
+func GetMemberlist(tb testing.TB, f func(c *Config)) *Memberlist {
 	c := testConfig(tb)
-
-	m, err := NewMemberlistOnOpenPort(c)
-	if err != nil {
-		tb.Fatalf("failed to start: %v", err)
-		return nil
+	c.BindPort = 0 // assign a free port
+	if f != nil {
+		f(c)
 	}
 
+	m, err := newMemberlist(c)
+	require.NoError(tb, err)
 	return m
 }
 
@@ -122,61 +158,69 @@ func TestDefaultLANConfig_protocolVersion(t *testing.T) {
 
 func TestCreate_protocolVersion(t *testing.T) {
 	cases := []struct {
+		name    string
 		version uint8
 		err     bool
 	}{
-		{ProtocolVersionMin, false},
-		{ProtocolVersionMax, false},
+		{"min", ProtocolVersionMin, false},
+		{"max", ProtocolVersionMax, false},
 		// TODO(mitchellh): uncommon when we're over 0
-		//{ProtocolVersionMin - 1, true},
-		{ProtocolVersionMax + 1, true},
-		{ProtocolVersionMax - 1, false},
+		//{"uncommon", ProtocolVersionMin - 1, true},
+		{"max+1", ProtocolVersionMax + 1, true},
+		{"min-1", ProtocolVersionMax - 1, false},
 	}
 
 	for _, tc := range cases {
-		c := DefaultLANConfig()
-		c.BindAddr = getBindAddr().String()
-		c.ProtocolVersion = tc.version
-		c.Logger = testLogger(t)
-		m, err := Create(c)
-		if tc.err && err == nil {
-			t.Errorf("Should've failed with version: %d", tc.version)
-		} else if !tc.err && err != nil {
-			t.Errorf("Version '%d' error: %s", tc.version, err)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			c := DefaultLANConfig()
+			c.BindAddr = getBindAddr().String()
+			c.ProtocolVersion = tc.version
+			c.Logger = testLogger(t)
 
-		if err == nil {
-			m.Shutdown()
-		}
+			m, err := Create(c)
+			if err == nil {
+				require.NoError(t, m.Shutdown())
+			}
+
+			if tc.err && err == nil {
+				t.Fatalf("Should've failed with version: %d", tc.version)
+			} else if !tc.err && err != nil {
+				t.Fatalf("Version '%d' error: %s", tc.version, err)
+			}
+		})
 	}
 }
 
 func TestCreate_secretKey(t *testing.T) {
 	cases := []struct {
-		key []byte
-		err bool
+		name string
+		key  []byte
+		err  bool
 	}{
-		{make([]byte, 0), false},
-		{[]byte("abc"), true},
-		{make([]byte, 16), false},
-		{make([]byte, 38), true},
+		{"size-0", make([]byte, 0), false},
+		{"abc", []byte("abc"), true},
+		{"size-16", make([]byte, 16), false},
+		{"size-38", make([]byte, 38), true},
 	}
 
 	for _, tc := range cases {
-		c := DefaultLANConfig()
-		c.BindAddr = getBindAddr().String()
-		c.SecretKey = tc.key
-		c.Logger = testLogger(t)
-		m, err := Create(c)
-		if tc.err && err == nil {
-			t.Errorf("Should've failed with key: %#v", tc.key)
-		} else if !tc.err && err != nil {
-			t.Errorf("Key '%#v' error: %s", tc.key, err)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			c := DefaultLANConfig()
+			c.BindAddr = getBindAddr().String()
+			c.SecretKey = tc.key
+			c.Logger = testLogger(t)
 
-		if err == nil {
-			m.Shutdown()
-		}
+			m, err := Create(c)
+			if err == nil {
+				require.NoError(t, m.Shutdown())
+			}
+
+			if tc.err && err == nil {
+				t.Fatalf("Should've failed with key: %#v", tc.key)
+			} else if !tc.err && err != nil {
+				t.Fatalf("Key '%#v' error: %s", tc.key, err)
+			}
+		})
 	}
 }
 
@@ -185,10 +229,9 @@ func TestCreate_secretKeyEmpty(t *testing.T) {
 	c.BindAddr = getBindAddr().String()
 	c.SecretKey = make([]byte, 0)
 	c.Logger = testLogger(t)
+
 	m, err := Create(c)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m.Shutdown()
 
 	if m.config.EncryptionEnabled() {
@@ -200,16 +243,13 @@ func TestCreate_keyringOnly(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
 	c.Logger = testLogger(t)
+
 	keyring, err := NewKeyring(nil, make([]byte, 16))
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	c.Keyring = keyring
 
 	m, err := Create(c)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m.Shutdown()
 
 	if !m.config.EncryptionEnabled() {
@@ -221,17 +261,14 @@ func TestCreate_keyringAndSecretKey(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
 	c.Logger = testLogger(t)
+
 	keyring, err := NewKeyring(nil, make([]byte, 16))
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	c.Keyring = keyring
 	c.SecretKey = []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
 
 	m, err := Create(c)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m.Shutdown()
 
 	if !m.config.EncryptionEnabled() {
@@ -250,8 +287,9 @@ func TestCreate_invalidLoggerSettings(t *testing.T) {
 	c.Logger = log.New(ioutil.Discard, "", log.LstdFlags)
 	c.LogOutput = ioutil.Discard
 
-	_, err := Create(c)
+	m, err := Create(c)
 	if err == nil {
+		require.NoError(t, m.Shutdown())
 		t.Fatal("Memberlist should not allow both LogOutput and Logger to be set, but it did not raise an error")
 	}
 }
@@ -264,9 +302,7 @@ func TestCreate(t *testing.T) {
 	c.DelegateProtocolMax = 24
 
 	m, err := Create(c)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m.Shutdown()
 
 	yield()
@@ -302,15 +338,15 @@ func TestCreate(t *testing.T) {
 }
 
 func TestMemberList_CreateShutdown(t *testing.T) {
-	m := GetMemberlist(t)
+	m := GetMemberlist(t, nil)
 	m.schedule()
-	if err := m.Shutdown(); err != nil {
-		t.Fatalf("failed to shutdown %v", err)
-	}
+	require.NoError(t, m.Shutdown())
 }
 
 func TestMemberList_ResolveAddr(t *testing.T) {
-	m := GetMemberlist(t)
+	m := GetMemberlist(t, nil)
+	defer m.Shutdown()
+
 	if _, err := m.resolveAddr("localhost"); err != nil {
 		t.Fatalf("Could not resolve localhost: %s", err)
 	}
@@ -415,8 +451,9 @@ func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 
-	m := GetMemberlist(t)
-	m.config.DNSConfigPath = tmpFile.Name()
+	m := GetMemberlist(t, func(c *Config) {
+		c.DNSConfigPath = tmpFile.Name()
+	})
 	m.setAlive()
 	m.schedule()
 	defer m.Shutdown()
@@ -465,23 +502,19 @@ func TestMemberList_Members(t *testing.T) {
 }
 
 func TestMemberlist_Join(t *testing.T) {
-	m1 := GetMemberlist(t)
-	m1.setAlive()
-	m1.schedule()
+	c1 := testConfig(t)
+	m1, err := Create(c1)
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
-	// Create a second node
-	c := DefaultLANConfig()
-	addr1 := getBindAddr()
-	c.Name = addr1.String()
-	c.BindAddr = addr1.String()
-	c.BindPort = m1.config.BindPort
-	c.Logger = testLogger(t)
+	bindPort := m1.config.BindPort
 
-	m2, err := Create(c)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	// Create a second node
+	c2 := testConfig(t)
+	c2.BindPort = bindPort
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
 	num, err := m2.Join([]string{m1.config.BindAddr})
@@ -513,27 +546,24 @@ func (c *CustomMergeDelegate) NotifyMerge(nodes []*Node) error {
 }
 
 func TestMemberlist_Join_Cancel(t *testing.T) {
-	m1 := GetMemberlist(t)
+	c1 := testConfig(t)
 	merge1 := &CustomMergeDelegate{t: t}
-	m1.config.Merge = merge1
-	m1.setAlive()
-	m1.schedule()
+	c1.Merge = merge1
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
-	// Create a second node
-	c := DefaultLANConfig()
-	addr1 := getBindAddr()
-	c.Name = addr1.String()
-	c.BindAddr = addr1.String()
-	c.BindPort = m1.config.BindPort
-	c.Logger = testLogger(t)
+	bindPort := m1.config.BindPort
 
-	m2, err := Create(c)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	// Create a second node
+	c2 := testConfig(t)
+	c2.BindPort = bindPort
 	merge2 := &CustomMergeDelegate{t: t}
-	m2.config.Merge = merge2
+	c2.Merge = merge2
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
 	num, err := m2.Join([]string{m1.config.BindAddr})
@@ -578,33 +608,30 @@ func (c *CustomAliveDelegate) NotifyAlive(peer *Node) error {
 }
 
 func TestMemberlist_Join_Cancel_Passive(t *testing.T) {
-	m1 := GetMemberlist(t)
+	c1 := testConfig(t)
 	alive1 := &CustomAliveDelegate{
-		Ignore: m1.config.Name,
+		Ignore: c1.Name,
 		t:      t,
 	}
-	m1.config.Alive = alive1
-	m1.setAlive()
-	m1.schedule()
+	c1.Alive = alive1
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
-	// Create a second node
-	c := DefaultLANConfig()
-	addr1 := getBindAddr()
-	c.Name = addr1.String()
-	c.BindAddr = addr1.String()
-	c.BindPort = m1.config.BindPort
-	c.Logger = testLogger(t)
+	bindPort := m1.config.BindPort
 
-	m2, err := Create(c)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	// Create a second node
+	c2 := testConfig(t)
+	c2.BindPort = bindPort
 	alive2 := &CustomAliveDelegate{
-		Ignore: c.Name,
+		Ignore: c2.Name,
 		t:      t,
 	}
-	m2.config.Alive = alive2
+	c2.Alive = alive2
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
 	num, err := m2.Join([]string{m1.config.BindAddr})
@@ -634,60 +661,58 @@ func TestMemberlist_Join_Cancel_Passive(t *testing.T) {
 
 func TestMemberlist_Join_protocolVersions(t *testing.T) {
 	c1 := testConfig(t)
-	c2 := testConfig(t)
-	c3 := testConfig(t)
-	c3.ProtocolVersion = ProtocolVersionMax
 
 	m1, err := Create(c1)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
+	bindPort := m1.config.BindPort
+
+	c2 := testConfig(t)
+	c2.BindPort = bindPort
+
 	m2, err := Create(c2)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
+	c3 := testConfig(t)
+	c3.BindPort = bindPort
+	c3.ProtocolVersion = ProtocolVersionMax
+
 	m3, err := Create(c3)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m3.Shutdown()
 
 	_, err = m1.Join([]string{c2.BindAddr})
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 
 	yield()
 
 	_, err = m1.Join([]string{c3.BindAddr})
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestMemberlist_Leave(t *testing.T) {
-	m1 := GetMemberlist(t)
-	m1.setAlive()
-	m1.schedule()
+	newConfig := func() *Config {
+		c := testConfig(t)
+		c.GossipInterval = time.Millisecond
+		return c
+	}
+
+	c1 := newConfig()
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
-	// Create a second node
-	c := DefaultLANConfig()
-	addr1 := getBindAddr()
-	c.Name = addr1.String()
-	c.BindAddr = addr1.String()
-	c.BindPort = m1.config.BindPort
-	c.GossipInterval = time.Millisecond
-	c.Logger = testLogger(t)
+	bindPort := m1.config.BindPort
 
-	m2, err := Create(c)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	// Create a second node
+	c2 := newConfig()
+	c2.BindPort = bindPort
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
 	num, err := m2.Join([]string{m1.config.BindAddr})
@@ -707,7 +732,8 @@ func TestMemberlist_Leave(t *testing.T) {
 	}
 
 	// Leave
-	m1.Leave(time.Second)
+	err = m1.Leave(time.Second)
+	require.NoError(t, err)
 
 	// Wait for leave
 	time.Sleep(10 * time.Millisecond)
@@ -723,25 +749,28 @@ func TestMemberlist_Leave(t *testing.T) {
 }
 
 func TestMemberlist_JoinShutdown(t *testing.T) {
-	m1 := GetMemberlist(t)
-	m1.setAlive()
-	m1.schedule()
+	newConfig := func() *Config {
+		c := testConfig(t)
+		c.ProbeInterval = time.Millisecond
+		c.ProbeTimeout = 100 * time.Microsecond
+		c.SuspicionMaxTimeoutMult = 1
+		return c
+	}
+
+	c1 := newConfig()
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
+	defer m1.Shutdown()
+
+	bindPort := m1.config.BindPort
 
 	// Create a second node
-	c := DefaultLANConfig()
-	addr1 := getBindAddr()
-	c.Name = addr1.String()
-	c.BindAddr = addr1.String()
-	c.BindPort = m1.config.BindPort
-	c.ProbeInterval = time.Millisecond
-	c.ProbeTimeout = 100 * time.Microsecond
-	c.SuspicionMaxTimeoutMult = 1
-	c.Logger = testLogger(t)
+	c2 := newConfig()
+	c2.BindPort = bindPort
 
-	m2, err := Create(c)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	m2, err := Create(c2)
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
 	num, err := m2.Join([]string{m1.config.BindAddr})
@@ -757,7 +786,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
 	}
 
-	m1.Shutdown()
+	require.NoError(t, m1.Shutdown())
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -768,26 +797,24 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 
 func TestMemberlist_delegateMeta(t *testing.T) {
 	c1 := testConfig(t)
-	c2 := testConfig(t)
 	c1.Delegate = &MockDelegate{meta: []byte("web")}
-	c2.Delegate = &MockDelegate{meta: []byte("lb")}
 
 	m1, err := Create(c1)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
+	bindPort := m1.config.BindPort
+
+	c2 := testConfig(t)
+	c2.BindPort = bindPort
+	c2.Delegate = &MockDelegate{meta: []byte("lb")}
+
 	m2, err := Create(c2)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
 	_, err = m1.Join([]string{c2.BindAddr})
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 
 	yield()
 
@@ -834,37 +861,38 @@ func TestMemberlist_delegateMeta(t *testing.T) {
 
 func TestMemberlist_delegateMeta_Update(t *testing.T) {
 	c1 := testConfig(t)
-	c2 := testConfig(t)
 	mock1 := &MockDelegate{meta: []byte("web")}
-	mock2 := &MockDelegate{meta: []byte("lb")}
 	c1.Delegate = mock1
-	c2.Delegate = mock2
 
 	m1, err := Create(c1)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
+	bindPort := m1.config.BindPort
+
+	c2 := testConfig(t)
+	c2.BindPort = bindPort
+	mock2 := &MockDelegate{meta: []byte("lb")}
+	c2.Delegate = mock2
+
 	m2, err := Create(c2)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
 	_, err = m1.Join([]string{c2.BindAddr})
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 
 	yield()
 
 	// Update the meta data roles
-	mock1.meta = []byte("api")
-	mock2.meta = []byte("db")
+	mock1.setMeta([]byte("api"))
+	mock2.setMeta([]byte("db"))
 
-	m1.UpdateNode(0)
-	m2.UpdateNode(0)
+	err = m1.UpdateNode(0)
+	require.NoError(t, err)
+	err = m2.UpdateNode(0)
+	require.NoError(t, err)
+
 	yield()
 
 	// Check the updates have propagated
@@ -910,45 +938,48 @@ func TestMemberlist_delegateMeta_Update(t *testing.T) {
 }
 
 func TestMemberlist_UserData(t *testing.T) {
-	m1, d1 := GetMemberlistDelegate(t)
-	d1.state = []byte("something")
-	m1.setAlive()
-	m1.schedule()
+	newConfig := func() (*Config, *MockDelegate) {
+		d := &MockDelegate{}
+		c := testConfig(t)
+		// Set the gossip/pushpull intervals fast enough to get a reasonable test,
+		// but slow enough to avoid "sendto: operation not permitted"
+		c.GossipInterval = 100 * time.Millisecond
+		c.PushPullInterval = 100 * time.Millisecond
+		c.Delegate = d
+		return c, d
+	}
+
+	c1, d1 := newConfig()
+	d1.setState([]byte("something"))
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
 	defer m1.Shutdown()
+
+	bindPort := m1.config.BindPort
 
 	bcasts := [][]byte{
 		[]byte("test"),
 		[]byte("foobar"),
 	}
 
-	// Create a second delegate with things to send
-	d2 := &MockDelegate{}
-	d2.broadcasts = bcasts
-	d2.state = []byte("my state")
-
 	// Create a second node
-	c := DefaultLANConfig()
-	addr1 := getBindAddr()
-	c.Name = addr1.String()
-	c.BindAddr = addr1.String()
-	c.BindPort = m1.config.BindPort
-	c.GossipInterval = time.Millisecond
-	c.PushPullInterval = time.Millisecond
-	c.Delegate = d2
-	c.Logger = testLogger(t)
+	c2, d2 := newConfig()
+	c2.BindPort = bindPort
 
-	m2, err := Create(c)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	// Second delegate has things to send
+	d2.setBroadcasts(bcasts)
+	d2.setState([]byte("my state"))
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
+	defer m2.Shutdown()
+
 	num, err := m2.Join([]string{m1.config.BindAddr})
 	if num != 1 {
 		t.Fatalf("unexpected 1: %d", num)
 	}
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
-	defer m2.Shutdown()
+	require.NoError(t, err)
 
 	// Check the hosts
 	if m2.NumMembers() != 2 {
@@ -956,69 +987,71 @@ func TestMemberlist_UserData(t *testing.T) {
 	}
 
 	// Wait for a little while
-	time.Sleep(3 * time.Millisecond)
+	time.Sleep(2 * (c1.PushPullInterval + c1.GossipInterval))
+
+	msgs1 := d1.getMessages()
 
 	// Ensure we got the messages. Ordering of messages is not guaranteed so just
 	// check we got them both in either order.
-	require.ElementsMatch(t, bcasts, d1.msgs)
+	require.ElementsMatch(t, bcasts, msgs1)
+
+	rs1 := d1.getRemoteState()
+	rs2 := d2.getRemoteState()
 
 	// Check the push/pull state
-	if !reflect.DeepEqual(d1.remoteState, []byte("my state")) {
-		t.Fatalf("bad state %s", d1.remoteState)
+	if !reflect.DeepEqual(rs1, []byte("my state")) {
+		t.Fatalf("bad state %s", rs1)
 	}
-	if !reflect.DeepEqual(d2.remoteState, []byte("something")) {
-		t.Fatalf("bad state %s", d2.remoteState)
+	if !reflect.DeepEqual(rs2, []byte("something")) {
+		t.Fatalf("bad state %s", rs2)
 	}
 }
 
 func TestMemberlist_SendTo(t *testing.T) {
-	m1, d1 := GetMemberlistDelegate(t)
-	m1.setAlive()
-	m1.schedule()
+	newConfig := func() (*Config, *MockDelegate, net.IP) {
+		d := &MockDelegate{}
+		c := testConfig(t)
+		c.GossipInterval = time.Millisecond
+		c.PushPullInterval = time.Millisecond
+		c.Delegate = d
+		return c, d, net.ParseIP(c.BindAddr)
+	}
+
+	c1, d1, _ := newConfig()
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
-	// Create a second delegate with things to send
-	d2 := &MockDelegate{}
+	bindPort := m1.config.BindPort
 
-	// Create a second node
-	c := DefaultLANConfig()
-	addr1 := getBindAddr()
-	c.Name = addr1.String()
-	c.BindAddr = addr1.String()
-	c.BindPort = m1.config.BindPort
-	c.GossipInterval = time.Millisecond
-	c.PushPullInterval = time.Millisecond
-	c.Delegate = d2
-	c.Logger = testLogger(t)
+	c2, d2, addr2 := newConfig()
+	c2.BindPort = bindPort
 
-	m2, err := Create(c)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	m2, err := Create(c2)
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
 	num, err := m2.Join([]string{m1.config.BindAddr})
-	if num != 1 {
-		t.Fatalf("unexpected 1: %d", num)
-	}
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, 1, num)
 
 	// Check the hosts
-	if m2.NumMembers() != 2 {
-		t.Fatalf("should have 2 nodes! %v", m2.Members())
-	}
+	require.Equal(t, 2, m2.NumMembers(), "should have 2 nodes! %v", m2.Members())
 
 	// Try to do a direct send
-	m2Addr := &net.UDPAddr{IP: addr1,
-		Port: c.BindPort}
+	m2Addr := &net.UDPAddr{
+		IP:   addr2,
+		Port: bindPort,
+	}
 	if err := m1.SendTo(m2Addr, []byte("ping")); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
-	m1Addr := &net.UDPAddr{IP: net.ParseIP(m1.config.BindAddr),
-		Port: m1.config.BindPort}
+	m1Addr := &net.UDPAddr{
+		IP:   net.ParseIP(m1.config.BindAddr),
+		Port: bindPort,
+	}
 	if err := m2.SendTo(m1Addr, []byte("pong")); err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -1026,31 +1059,31 @@ func TestMemberlist_SendTo(t *testing.T) {
 	// Wait for a little while
 	time.Sleep(3 * time.Millisecond)
 
+	msgs1 := d1.getMessages()
+	msgs2 := d2.getMessages()
+
 	// Ensure we got the messages
-	if len(d1.msgs) != 1 {
+	if len(msgs1) != 1 {
 		t.Fatalf("should have 1 messages!")
 	}
-	if !reflect.DeepEqual(d1.msgs[0], []byte("pong")) {
-		t.Fatalf("bad msg %v", d1.msgs[0])
+	if !reflect.DeepEqual(msgs1[0], []byte("pong")) {
+		t.Fatalf("bad msg %v", msgs1[0])
 	}
 
-	if len(d2.msgs) != 1 {
+	if len(msgs2) != 1 {
 		t.Fatalf("should have 1 messages!")
 	}
-	if !reflect.DeepEqual(d2.msgs[0], []byte("ping")) {
-		t.Fatalf("bad msg %v", d2.msgs[0])
+	if !reflect.DeepEqual(msgs2[0], []byte("ping")) {
+		t.Fatalf("bad msg %v", msgs2[0])
 	}
 }
 
 func TestMemberlistProtocolVersion(t *testing.T) {
-	c := DefaultLANConfig()
-	c.BindAddr = getBindAddr().String()
+	c := testConfig(t)
 	c.ProtocolVersion = ProtocolVersionMax
-	c.Logger = testLogger(t)
+
 	m, err := Create(c)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m.Shutdown()
 
 	result := m.ProtocolVersion()
@@ -1060,16 +1093,19 @@ func TestMemberlistProtocolVersion(t *testing.T) {
 }
 
 func TestMemberlist_Join_DeadNode(t *testing.T) {
-	m1 := GetMemberlist(t)
-	m1.config.TCPTimeout = 50 * time.Millisecond
-	m1.setAlive()
-	m1.schedule()
+	c1 := testConfig(t)
+	c1.TCPTimeout = 50 * time.Millisecond
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
 	defer m1.Shutdown()
+
+	bindPort := m1.config.BindPort
 
 	// Create a second "node", which is just a TCP listener that
 	// does not ever respond. This is to test our deadliens
-	addr1 := getBindAddr()
-	list, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr1.String(), m1.config.BindPort))
+	addr2 := getBindAddr()
+	list, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr2.String(), bindPort))
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -1081,7 +1117,7 @@ func TestMemberlist_Join_DeadNode(t *testing.T) {
 	})
 	defer timer.Stop()
 
-	num, err := m1.Join([]string{addr1.String()})
+	num, err := m1.Join([]string{addr2.String()})
 	if num != 0 {
 		t.Fatalf("unexpected 0: %d", num)
 	}
@@ -1092,40 +1128,30 @@ func TestMemberlist_Join_DeadNode(t *testing.T) {
 
 // Tests that nodes running different versions of the protocol can successfully
 // discover each other and add themselves to their respective member lists.
-func TestMemberlist_Join_Prototocol_Compatibility(t *testing.T) {
+func TestMemberlist_Join_Protocol_Compatibility(t *testing.T) {
 	testProtocolVersionPair := func(t *testing.T, pv1 uint8, pv2 uint8) {
+		t.Helper()
+
 		c1 := testConfig(t)
 		c1.ProtocolVersion = pv1
-		c1.Logger = testLogger(t)
-		m1, err := NewMemberlistOnOpenPort(c1)
-		if err != nil {
-			t.Fatalf("failed to start: %v", err)
-		}
-		m1.setAlive()
-		m1.schedule()
+
+		m1, err := Create(c1)
+		require.NoError(t, err)
 		defer m1.Shutdown()
 
-		c2 := DefaultLANConfig()
-		addr1 := getBindAddr()
-		c2.Name = addr1.String()
-		c2.BindAddr = addr1.String()
-		c2.BindPort = m1.config.BindPort
+		bindPort := m1.config.BindPort
+
+		c2 := testConfig(t)
+		c2.BindPort = bindPort
 		c2.ProtocolVersion = pv2
-		c2.Logger = testLogger(t)
 
 		m2, err := Create(c2)
-		if err != nil {
-			t.Fatalf("unexpected err: %s", err)
-		}
+		require.NoError(t, err)
 		defer m2.Shutdown()
 
 		num, err := m2.Join([]string{m1.config.BindAddr})
-		if num != 1 {
-			t.Fatalf("unexpected 1: %d", num)
-		}
-		if err != nil {
-			t.Fatalf("unexpected err: %s", err)
-		}
+		require.NoError(t, err)
+		require.Equal(t, 1, num)
 
 		// Check the hosts
 		if len(m2.Members()) != 2 {
@@ -1138,10 +1164,18 @@ func TestMemberlist_Join_Prototocol_Compatibility(t *testing.T) {
 		}
 	}
 
-	testProtocolVersionPair(t, 2, 1)
-	testProtocolVersionPair(t, 2, 3)
-	testProtocolVersionPair(t, 3, 2)
-	testProtocolVersionPair(t, 3, 1)
+	t.Run("2,1", func(t *testing.T) {
+		testProtocolVersionPair(t, 2, 1)
+	})
+	t.Run("2,3", func(t *testing.T) {
+		testProtocolVersionPair(t, 2, 3)
+	})
+	t.Run("3,2", func(t *testing.T) {
+		testProtocolVersionPair(t, 3, 2)
+	})
+	t.Run("3,1", func(t *testing.T) {
+		testProtocolVersionPair(t, 3, 1)
+	})
 }
 
 var (
@@ -1190,46 +1224,27 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	c1 := DefaultLANConfig()
 	c1.Name = "A"
 	c1.BindAddr = "[::1]"
-	c1.Logger = testLogger(t)
-	var m1 *Memberlist
-	var err error
-	for i := 0; i < 100; i++ {
-		c1.BindPort = 23456 + i
-		m1, err = Create(c1)
-		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	c1.BindPort = 0 // choose free
+	c1.Logger = testLoggerWithName(t, c1.Name)
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
 	// Create a second node
 	c2 := DefaultLANConfig()
 	c2.Name = "B"
 	c2.BindAddr = "[::1]"
-	c2.Logger = testLogger(t)
-	var m2 *Memberlist
-	for i := 0; i < 100; i++ {
-		c2.BindPort = c1.BindPort + 1 + i
-		m2, err = Create(c2)
-		if err == nil {
-			break
-		}
-	}
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	c2.BindPort = 0 // choose free
+	c2.Logger = testLoggerWithName(t, c2.Name)
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{fmt.Sprintf("%s:%d", m1.config.BindAddr, 23456)})
-	if num != 1 {
-		t.Fatalf("unexpected 1: %d", num)
-	}
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	num, err := m2.Join([]string{fmt.Sprintf("%s:%d", m1.config.BindAddr, m1.config.BindPort)})
+	require.NoError(t, err)
+	require.Equal(t, 1, num)
 
 	// Check the hosts
 	if len(m2.Members()) != 2 {
@@ -1241,31 +1256,66 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	}
 }
 
+func reservePort(t *testing.T, ip net.IP, purpose string) int {
+	for i := 0; i < 10; i++ {
+		tcpAddr := &net.TCPAddr{IP: ip, Port: 0}
+		tcpLn, err := net.ListenTCP("tcp", tcpAddr)
+		if err != nil {
+			if strings.Contains(err.Error(), "address already in use") {
+				continue
+			}
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		port := tcpLn.Addr().(*net.TCPAddr).Port
+
+		udpAddr := &net.UDPAddr{IP: ip, Port: port}
+		udpLn, err := net.ListenUDP("udp", udpAddr)
+		if err != nil {
+			_ = tcpLn.Close()
+			if strings.Contains(err.Error(), "address already in use") {
+				continue
+			}
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		t.Logf("Using dynamic bind port %d for %s", port, purpose)
+		_ = tcpLn.Close()
+		_ = udpLn.Close()
+		return port
+	}
+
+	t.Fatalf("could not find a free TCP+UDP port to listen on for %s", purpose)
+	panic("IMPOSSIBLE")
+}
+
 func TestAdvertiseAddr(t *testing.T) {
-	c := testConfig(t)
-	c.AdvertiseAddr = "127.0.1.100"
-	c.AdvertisePort = 23456
+	bindAddr := getBindAddr()
+	advertiseAddr := getBindAddr()
+
+	bindPort := reservePort(t, bindAddr, "BIND")
+	advertisePort := reservePort(t, advertiseAddr, "ADVERTISE")
+
+	c := DefaultLANConfig()
+	c.BindAddr = bindAddr.String()
+	c.BindPort = bindPort
+	c.Name = c.BindAddr
+	c.Logger = testLoggerWithName(t, c.Name)
+
+	c.AdvertiseAddr = advertiseAddr.String()
+	c.AdvertisePort = advertisePort
 
 	m, err := Create(c)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m.Shutdown()
 
 	yield()
 
 	members := m.Members()
-	if len(members) != 1 {
-		t.Fatalf("bad number of members")
-	}
+	require.Equal(t, 1, len(members))
 
-	if bytes.Compare(members[0].Addr, []byte{127, 0, 1, 100}) != 0 {
-		t.Fatalf("bad: %#v", members[0])
-	}
-
-	if members[0].Port != 23456 {
-		t.Fatalf("bad: %#v", members[0])
-	}
+	require.Equal(t, advertiseAddr.String(), members[0].Addr.String())
+	require.Equal(t, advertisePort, int(members[0].Port))
 }
 
 type MockConflict struct {
@@ -1280,29 +1330,27 @@ func (m *MockConflict) NotifyConflict(existing, other *Node) {
 
 func TestMemberlist_conflictDelegate(t *testing.T) {
 	c1 := testConfig(t)
-	c2 := testConfig(t)
 	mock := &MockConflict{}
 	c1.Conflict = mock
 
-	// Ensure name conflict
-	c2.Name = c1.Name
-
 	m1, err := Create(c1)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
+	bindPort := m1.config.BindPort
+
+	// Ensure name conflict
+	c2 := testConfig(t)
+	c2.Name = c1.Name
+	c2.BindPort = bindPort
+
 	m2, err := Create(c2)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	_, err = m1.Join([]string{c2.BindAddr})
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	num, err := m1.Join([]string{c2.BindAddr})
+	require.NoError(t, err)
+	require.Equal(t, 1, num)
 
 	yield()
 
@@ -1316,15 +1364,25 @@ func TestMemberlist_conflictDelegate(t *testing.T) {
 }
 
 type MockPing struct {
+	mu      sync.Mutex
 	other   *Node
 	rtt     time.Duration
 	payload []byte
 }
 
 func (m *MockPing) NotifyPingComplete(other *Node, rtt time.Duration, payload []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.other = other
 	m.rtt = rtt
 	m.payload = payload
+}
+
+func (m *MockPing) getContents() (*Node, time.Duration, []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.other, m.rtt, m.payload
 }
 
 const DEFAULT_PAYLOAD = "whatever"
@@ -1334,179 +1392,322 @@ func (m *MockPing) AckPayload() []byte {
 }
 
 func TestMemberlist_PingDelegate(t *testing.T) {
-	m1 := GetMemberlist(t)
-	m1.config.Ping = &MockPing{}
-	m1.setAlive()
-	m1.schedule()
+	newConfig := func() *Config {
+		c := testConfig(t)
+		c.ProbeInterval = 100 * time.Millisecond
+		c.Ping = &MockPing{}
+		return c
+	}
+
+	c1 := newConfig()
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
 	defer m1.Shutdown()
 
-	// Create a second node
-	c := DefaultLANConfig()
-	addr1 := getBindAddr()
-	c.Name = addr1.String()
-	c.BindAddr = addr1.String()
-	c.BindPort = m1.config.BindPort
-	c.ProbeInterval = time.Millisecond
-	mock := &MockPing{}
-	c.Ping = mock
-	c.Logger = testLogger(t)
+	bindPort := m1.config.BindPort
 
-	m2, err := Create(c)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	// Create a second node
+	c2 := newConfig()
+	c2.BindPort = bindPort
+	mock := c2.Ping.(*MockPing)
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	_, err = m2.Join([]string{m1.config.BindAddr})
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
+	num, err := m2.Join([]string{m1.config.BindAddr})
+	require.NoError(t, err)
+	require.Equal(t, 1, num)
 
-	yield()
+	waitUntilSize(t, m1, 2)
+	waitUntilSize(t, m2, 2)
+
+	time.Sleep(2 * c1.ProbeInterval)
+
+	require.NoError(t, m1.Shutdown())
+	require.NoError(t, m2.Shutdown())
+
+	mOther, mRTT, mPayload := mock.getContents()
 
 	// Ensure we were notified
-	if mock.other == nil {
+	if mOther == nil {
 		t.Fatalf("should get notified")
 	}
 
-	if !reflect.DeepEqual(mock.other, m1.LocalNode()) {
+	if !reflect.DeepEqual(mOther, m1.LocalNode()) {
 		t.Fatalf("not notified about the correct node; expected: %+v; actual: %+v",
-			m2.LocalNode(), mock.other)
+			m2.LocalNode(), mOther)
 	}
 
-	if mock.rtt <= 0 {
+	if mRTT <= 0 {
 		t.Fatalf("rtt should be greater than 0")
 	}
 
-	if bytes.Compare(mock.payload, []byte(DEFAULT_PAYLOAD)) != 0 {
-		t.Fatalf("incorrect payload. expected: %v; actual: %v", []byte(DEFAULT_PAYLOAD), mock.payload)
+	if bytes.Compare(mPayload, []byte(DEFAULT_PAYLOAD)) != 0 {
+		t.Fatalf("incorrect payload. expected: %v; actual: %v",
+			[]byte(DEFAULT_PAYLOAD), mPayload)
 	}
 }
 
+func waitUntilSize(t *testing.T, m *Memberlist, expected int) {
+	t.Helper()
+	retry(t, 15, 250*time.Millisecond, func(failf func(string, ...interface{})) {
+		t.Helper()
+
+		if m.NumMembers() != expected {
+			failf("%s expected to have %d members but had: %v", m.config.Name, expected, m.Members())
+		}
+	})
+}
+
+func isPortFree(t *testing.T, addr string, port int) error {
+	t.Helper()
+
+	ip := net.ParseIP(addr)
+	tcpAddr := &net.TCPAddr{IP: ip, Port: port}
+	tcpLn, err := net.ListenTCP("tcp", tcpAddr)
+	if err != nil {
+		return err
+	}
+	if err := tcpLn.Close(); err != nil {
+		return err
+	}
+
+	udpAddr := &net.UDPAddr{IP: ip, Port: port}
+	udpLn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		return err
+	}
+
+	return udpLn.Close()
+}
+
+func waitUntilPortIsFree(t *testing.T, m *Memberlist) {
+	t.Helper()
+
+	// wait until we know for certain that m1 is dead dead
+	addr := m.config.BindAddr
+	port := m.config.BindPort
+
+	retry(t, 15, 250*time.Millisecond, func(failf func(string, ...interface{})) {
+		t.Helper()
+
+		if err := isPortFree(t, addr, port); err != nil {
+			failf("%s port is not yet free", m.config.Name)
+		}
+	})
+}
+
+// This test should follow the recommended upgrade guide:
+// https://www.consul.io/docs/agent/encryption.html#configuring-gossip-encryption-on-an-existing-cluster
+//
+// We will use two nodes for this: m0 and m1
+//
+// 0. Start with nodes without encryption.
+// 1. Set an encryption key and set GossipVerifyIncoming=false and GossipVerifyOutgoing=false to all nodes.
+// 2. Change GossipVerifyOutgoing=true to all nodes.
+// 3. Change GossipVerifyIncoming=true to all nodes.
 func TestMemberlist_EncryptedGossipTransition(t *testing.T) {
-	m1 := GetMemberlist(t)
-	m1.setAlive()
-	m1.schedule()
+	// ensure these all get the same general set of customizations
+	pretty := make(map[string]string) // addr->shortName
+	newConfig := func(shortName string, addr string) *Config {
+		t.Helper()
+
+		conf := DefaultLANConfig()
+		if addr == "" {
+			addr = getBindAddr().String()
+		}
+		conf.Name = addr
+		// conf.Name = shortName
+		conf.BindAddr = addr
+		conf.BindPort = 0
+		// Set the gossip interval fast enough to get a reasonable test,
+		// but slow enough to avoid "sendto: operation not permitted"
+		conf.GossipInterval = 100 * time.Millisecond
+		conf.Logger = testLoggerWithName(t, shortName)
+
+		pretty[conf.Name] = shortName
+		return conf
+	}
+
+	var bindPort int
+	createOK := func(conf *Config) *Memberlist {
+		t.Helper()
+
+		if bindPort > 0 {
+			conf.BindPort = bindPort
+		} else {
+			// try a range of port numbers until something sticks
+		}
+		m, err := Create(conf)
+		require.NoError(t, err)
+
+		if bindPort == 0 {
+			bindPort = m.config.BindPort
+		}
+		return m
+	}
+
+	joinOK := func(src, dst *Memberlist, numNodes int) {
+		t.Helper()
+
+		srcName, dstName := pretty[src.config.Name], pretty[dst.config.Name]
+		t.Logf("Node %s[%s] joining node %s[%s]", srcName, src.config.Name, dstName, dst.config.Name)
+
+		num, err := src.Join([]string{dst.config.BindAddr})
+		require.NoError(t, err)
+		require.Equal(t, 1, num)
+
+		waitUntilSize(t, src, numNodes)
+		waitUntilSize(t, dst, numNodes)
+
+		// Check the hosts
+		require.Equal(t, numNodes, len(src.Members()), "nodes: %v", src.Members())
+		require.Equal(t, numNodes, src.estNumNodes(), "nodes: %v", src.Members())
+		require.Equal(t, numNodes, len(dst.Members()), "nodes: %v", dst.Members())
+		require.Equal(t, numNodes, dst.estNumNodes(), "nodes: %v", dst.Members())
+	}
+
+	leaveOK := func(m *Memberlist, why string) {
+		t.Helper()
+
+		name := pretty[m.config.Name]
+		t.Logf("Node %s[%s] is leaving %s", name, m.config.Name, why)
+		err := m.Leave(time.Second)
+		require.NoError(t, err)
+	}
+
+	shutdownOK := func(m *Memberlist, why string) {
+		t.Helper()
+
+		name := pretty[m.config.Name]
+		t.Logf("Node %s[%s] is shutting down %s", name, m.config.Name, why)
+		err := m.Shutdown()
+		require.NoError(t, err)
+
+		// Double check that it genuinely shutdown.
+		waitUntilPortIsFree(t, m)
+	}
+
+	leaveAndShutdown := func(leaver, bystander *Memberlist, why string) {
+		t.Helper()
+
+		leaveOK(leaver, why)
+		waitUntilSize(t, bystander, 1)
+		shutdownOK(leaver, why)
+		waitUntilSize(t, bystander, 1)
+	}
+
+	// ==== STEP 0 ====
+
+	// Create a first cluster of 2 nodes with no gossip encryption settings.
+	conf0 := newConfig("m0", "")
+	m0 := createOK(conf0)
+	defer m0.Shutdown()
+
+	conf1 := newConfig("m1", "")
+	m1 := createOK(conf1)
 	defer m1.Shutdown()
 
-	// Create a second node with the first stage of gossip transition settings
-	conf2 := DefaultLANConfig()
-	addr2 := getBindAddr()
-	conf2.Name = addr2.String()
-	conf2.BindAddr = addr2.String()
-	conf2.BindPort = m1.config.BindPort
-	conf2.GossipInterval = time.Millisecond
-	conf2.SecretKey = []byte("Hi16ZXu2lNCRVwtr20khAg==")
-	conf2.GossipVerifyIncoming = false
-	conf2.GossipVerifyOutgoing = false
-	conf2.Logger = testLogger(t)
+	joinOK(m1, m0, 2)
 
-	m2, err := Create(conf2)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
-	defer m2.Shutdown()
+	t.Logf("==== STEP 0 complete: two node unencrypted cluster ====")
 
-	// Join the second node. m1 has no encryption while m2 has encryption configured and
+	// ==== STEP 1 ====
+
+	// Take down m0, upgrade to first stage of gossip transition settings.
+	leaveAndShutdown(m0, m1, "to upgrade gossip to first stage")
+
+	// Resurrect the first node with the first stage of gossip transition settings.
+	conf0 = newConfig("m0", m0.config.BindAddr)
+	conf0.SecretKey = []byte("Hi16ZXu2lNCRVwtr20khAg==")
+	conf0.GossipVerifyIncoming = false
+	conf0.GossipVerifyOutgoing = false
+	m0 = createOK(conf0)
+	defer m0.Shutdown()
+
+	// Join the second node. m1 has no encryption while m0 has encryption configured and
 	// can receive encrypted gossip, but will not encrypt outgoing gossip.
-	num, err := m2.Join([]string{m1.config.BindAddr})
-	if num != 1 {
-		t.Fatalf("unexpected 1: %d", num)
-	}
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	joinOK(m0, m1, 2)
 
-	// Check the hosts
-	if len(m2.Members()) != 2 {
-		t.Fatalf("should have 2 nodes! %v", m2.Members())
-	}
-	if m2.estNumNodes() != 2 {
-		t.Fatalf("should have 2 nodes! %v", m2.Members())
-	}
+	leaveAndShutdown(m1, m0, "to upgrade gossip to first stage")
 
-	// Leave with the first node
-	m1.Leave(time.Second)
+	// Resurrect the second node with the first stage of gossip transition settings.
+	conf1 = newConfig("m1", m1.config.BindAddr)
+	conf1.SecretKey = []byte("Hi16ZXu2lNCRVwtr20khAg==")
+	conf1.GossipVerifyIncoming = false
+	conf1.GossipVerifyOutgoing = false
+	m1 = createOK(conf1)
+	defer m1.Shutdown()
 
-	// Wait for leave
-	time.Sleep(10 * time.Millisecond)
+	// Join the first node. Both have encryption configured and can receive
+	// encrypted gossip, but will not encrypt outgoing gossip.
+	joinOK(m1, m0, 2)
 
-	// Create a third node that has the second stage of gossip transition settings
-	conf3 := DefaultLANConfig()
-	addr3 := getBindAddr()
-	conf3.Name = addr3.String()
-	conf3.BindAddr = addr3.String()
-	conf3.BindPort = m1.config.BindPort
-	conf3.GossipInterval = time.Millisecond
-	conf3.SecretKey = conf2.SecretKey
-	conf3.GossipVerifyIncoming = false
-	conf3.Logger = testLogger(t)
+	t.Logf("==== STEP 1 complete: two node encryption-aware cluster ====")
 
-	m3, err := Create(conf3)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
-	defer m3.Shutdown()
+	// ==== STEP 2 ====
 
-	// Join the third node to the second node. At this step, both nodes have encryption
-	// configured but only m3 is sending encrypted gossip.
-	num, err = m3.Join([]string{m2.config.BindAddr})
-	if num != 1 {
-		t.Fatalf("unexpected 1: %d", num)
-	}
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	// Take down m0, upgrade to second stage of gossip transition settings.
+	leaveAndShutdown(m0, m1, "to upgrade gossip to second stage")
 
-	// Check the hosts
-	if len(m3.Members()) != 2 {
-		t.Fatalf("should have 2 nodes! %v", m3.Members())
+	// Resurrect the first node with the second stage of gossip transition settings.
+	conf0 = newConfig("m0", m0.config.BindAddr)
+	conf0.SecretKey = []byte("Hi16ZXu2lNCRVwtr20khAg==")
+	conf0.GossipVerifyIncoming = false
+	m0 = createOK(conf0)
+	defer m0.Shutdown()
 
-	}
-	if m3.estNumNodes() != 2 {
-		t.Fatalf("should have 2 nodes! %v", m3.Members())
-	}
+	// Join the second node. At this step, both nodes have encryption
+	// configured but only m0 is sending encrypted gossip.
+	joinOK(m0, m1, 2)
 
-	// Leave with the second node
-	m2.Leave(time.Second)
+	leaveAndShutdown(m1, m0, "to upgrade gossip to second stage")
 
-	// Wait for leave
-	time.Sleep(10 * time.Millisecond)
+	// Resurrect the second node with the second stage of gossip transition settings.
+	conf1 = newConfig("m1", m1.config.BindAddr)
+	conf1.SecretKey = []byte("Hi16ZXu2lNCRVwtr20khAg==")
+	conf1.GossipVerifyIncoming = false
+	m1 = createOK(conf1)
+	defer m1.Shutdown()
 
-	// Create a fourth node that has the second stage of gossip transition settings
-	conf4 := DefaultLANConfig()
-	addr4 := getBindAddr()
-	conf4.Name = addr4.String()
-	conf4.BindAddr = addr4.String()
-	conf4.BindPort = m3.config.BindPort
-	conf4.GossipInterval = time.Millisecond
-	conf4.SecretKey = conf2.SecretKey
-	conf4.Logger = testLogger(t)
+	// Join the first node. Both have encryption configured and can receive
+	// encrypted gossip, and encrypt outgoing gossip, but aren't forcing
+	// incoming gossip is encrypted.
+	joinOK(m1, m0, 2)
 
-	m4, err := Create(conf4)
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
-	defer m4.Shutdown()
+	t.Logf("==== STEP 2 complete: two node encryption-aware cluster being encrypted ====")
 
-	// Join the fourth node to the third node. At this step, both m3 and m4 are speaking
-	// encrypted gossip and m3 is still accepting insecure gossip.
-	num, err = m4.Join([]string{m3.config.BindAddr})
-	if num != 1 {
-		t.Fatalf("unexpected 1: %d", num)
-	}
-	if err != nil {
-		t.Fatalf("unexpected err: %s", err)
-	}
+	// ==== STEP 3 ====
 
-	// Check the hosts
-	if len(m4.Members()) != 2 {
-		t.Fatalf("should have 2 nodes! %v", m4.Members())
+	// Take down m0, upgrade to final stage of gossip transition settings.
+	leaveAndShutdown(m0, m1, "to upgrade gossip to final stage")
 
-	}
-	if m4.estNumNodes() != 2 {
-		t.Fatalf("should have 2 nodes! %v", m4.Members())
-	}
+	// Resurrect the first node with the final stage of gossip transition settings.
+	conf0 = newConfig("m0", m0.config.BindAddr)
+	conf0.SecretKey = []byte("Hi16ZXu2lNCRVwtr20khAg==")
+	m0 = createOK(conf0)
+	defer m0.Shutdown()
+
+	// Join the second node. At this step, both nodes have encryption
+	// configured and are sending it, bu tonly m0 is verifying inbound gossip
+	// is encrypted.
+	joinOK(m0, m1, 2)
+
+	leaveAndShutdown(m1, m0, "to upgrade gossip to final stage")
+
+	// Resurrect the second node with the final stage of gossip transition settings.
+	conf1 = newConfig("m1", m1.config.BindAddr)
+	conf1.SecretKey = []byte("Hi16ZXu2lNCRVwtr20khAg==")
+	m1 = createOK(conf1)
+	defer m1.Shutdown()
+
+	// Join the first node. Both have encryption configured and fully in
+	// enforcement.
+	joinOK(m1, m0, 2)
+
+	t.Logf("==== STEP 3 complete: two node encrypted cluster locked down ====")
 }
 
 // Consul bug, rapid restart (before failure detection),
