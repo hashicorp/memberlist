@@ -647,6 +647,7 @@ func TestEncryptDecryptState(t *testing.T) {
 		SecretKey:       []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 		ProtocolVersion: ProtocolVersionMax,
 	}
+	config.Logger = testLogger(t)
 
 	m, err := Create(config)
 	if err != nil {
@@ -787,8 +788,8 @@ func TestIngestPacket_CRC(t *testing.T) {
 }
 
 func TestGossip_MismatchedKeys(t *testing.T) {
-	c1 := testConfig()
-	c2 := testConfig()
+	c1 := testConfig(t)
+	c2 := testConfig(t)
 
 	// Create two agents with different gossip keys
 	c1.SecretKey = []byte("4W6DGn2VQVqDEceOdmuRTQ==")
