@@ -33,10 +33,13 @@ func getBindAddr() net.IP {
 	return result
 }
 
-func testConfig() *Config {
+func testConfig(tb testing.TB) *Config {
 	config := DefaultLANConfig()
 	config.BindAddr = getBindAddr().String()
 	config.Name = config.BindAddr
+	if tb != nil {
+		config.Logger = testLogger(tb)
+	}
 	return config
 }
 
@@ -86,7 +89,7 @@ func NewMemberlistOnOpenPort(c *Config) (*Memberlist, error) {
 func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
 	d := &MockDelegate{}
 
-	c := testConfig()
+	c := testConfig(t)
 	c.Delegate = d
 
 	m, err := NewMemberlistOnOpenPort(c)
@@ -98,12 +101,12 @@ func GetMemberlistDelegate(t *testing.T) (*Memberlist, *MockDelegate) {
 	return m, d
 }
 
-func GetMemberlist(t *testing.T) *Memberlist {
-	c := testConfig()
+func GetMemberlist(tb testing.TB) *Memberlist {
+	c := testConfig(tb)
 
 	m, err := NewMemberlistOnOpenPort(c)
 	if err != nil {
-		t.Fatalf("failed to start: %v", err)
+		tb.Fatalf("failed to start: %v", err)
 		return nil
 	}
 
@@ -134,6 +137,7 @@ func TestCreate_protocolVersion(t *testing.T) {
 		c := DefaultLANConfig()
 		c.BindAddr = getBindAddr().String()
 		c.ProtocolVersion = tc.version
+		c.Logger = testLogger(t)
 		m, err := Create(c)
 		if tc.err && err == nil {
 			t.Errorf("Should've failed with version: %d", tc.version)
@@ -162,6 +166,7 @@ func TestCreate_secretKey(t *testing.T) {
 		c := DefaultLANConfig()
 		c.BindAddr = getBindAddr().String()
 		c.SecretKey = tc.key
+		c.Logger = testLogger(t)
 		m, err := Create(c)
 		if tc.err && err == nil {
 			t.Errorf("Should've failed with key: %#v", tc.key)
@@ -179,6 +184,7 @@ func TestCreate_secretKeyEmpty(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
 	c.SecretKey = make([]byte, 0)
+	c.Logger = testLogger(t)
 	m, err := Create(c)
 	if err != nil {
 		t.Fatalf("err: %s", err)
@@ -193,6 +199,7 @@ func TestCreate_secretKeyEmpty(t *testing.T) {
 func TestCreate_keyringOnly(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
+	c.Logger = testLogger(t)
 	keyring, err := NewKeyring(nil, make([]byte, 16))
 	if err != nil {
 		t.Fatalf("err: %s", err)
@@ -213,6 +220,7 @@ func TestCreate_keyringOnly(t *testing.T) {
 func TestCreate_keyringAndSecretKey(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
+	c.Logger = testLogger(t)
 	keyring, err := NewKeyring(nil, make([]byte, 16))
 	if err != nil {
 		t.Fatalf("err: %s", err)
@@ -249,7 +257,7 @@ func TestCreate_invalidLoggerSettings(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
-	c := testConfig()
+	c := testConfig(t)
 	c.ProtocolVersion = ProtocolVersionMin
 	c.DelegateProtocolVersion = 13
 	c.DelegateProtocolMin = 12
@@ -468,6 +476,7 @@ func TestMemberlist_Join(t *testing.T) {
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
 	c.BindPort = m1.config.BindPort
+	c.Logger = testLogger(t)
 
 	m2, err := Create(c)
 	if err != nil {
@@ -494,17 +503,18 @@ func TestMemberlist_Join(t *testing.T) {
 
 type CustomMergeDelegate struct {
 	invoked bool
+	t       *testing.T
 }
 
 func (c *CustomMergeDelegate) NotifyMerge(nodes []*Node) error {
-	log.Printf("Cancel merge")
+	c.t.Logf("Cancel merge")
 	c.invoked = true
 	return fmt.Errorf("Custom merge canceled")
 }
 
 func TestMemberlist_Join_Cancel(t *testing.T) {
 	m1 := GetMemberlist(t)
-	merge1 := &CustomMergeDelegate{}
+	merge1 := &CustomMergeDelegate{t: t}
 	m1.config.Merge = merge1
 	m1.setAlive()
 	m1.schedule()
@@ -516,12 +526,13 @@ func TestMemberlist_Join_Cancel(t *testing.T) {
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
 	c.BindPort = m1.config.BindPort
+	c.Logger = testLogger(t)
 
 	m2, err := Create(c)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
-	merge2 := &CustomMergeDelegate{}
+	merge2 := &CustomMergeDelegate{t: t}
 	m2.config.Merge = merge2
 	defer m2.Shutdown()
 
@@ -553,6 +564,8 @@ func TestMemberlist_Join_Cancel(t *testing.T) {
 type CustomAliveDelegate struct {
 	Ignore string
 	count  int
+
+	t *testing.T
 }
 
 func (c *CustomAliveDelegate) NotifyAlive(peer *Node) error {
@@ -560,7 +573,7 @@ func (c *CustomAliveDelegate) NotifyAlive(peer *Node) error {
 	if peer.Name == c.Ignore {
 		return nil
 	}
-	log.Printf("Cancel alive")
+	c.t.Logf("Cancel alive")
 	return fmt.Errorf("Custom alive canceled")
 }
 
@@ -568,6 +581,7 @@ func TestMemberlist_Join_Cancel_Passive(t *testing.T) {
 	m1 := GetMemberlist(t)
 	alive1 := &CustomAliveDelegate{
 		Ignore: m1.config.Name,
+		t:      t,
 	}
 	m1.config.Alive = alive1
 	m1.setAlive()
@@ -580,6 +594,7 @@ func TestMemberlist_Join_Cancel_Passive(t *testing.T) {
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
 	c.BindPort = m1.config.BindPort
+	c.Logger = testLogger(t)
 
 	m2, err := Create(c)
 	if err != nil {
@@ -587,6 +602,7 @@ func TestMemberlist_Join_Cancel_Passive(t *testing.T) {
 	}
 	alive2 := &CustomAliveDelegate{
 		Ignore: c.Name,
+		t:      t,
 	}
 	m2.config.Alive = alive2
 	defer m2.Shutdown()
@@ -617,9 +633,9 @@ func TestMemberlist_Join_Cancel_Passive(t *testing.T) {
 }
 
 func TestMemberlist_Join_protocolVersions(t *testing.T) {
-	c1 := testConfig()
-	c2 := testConfig()
-	c3 := testConfig()
+	c1 := testConfig(t)
+	c2 := testConfig(t)
+	c3 := testConfig(t)
 	c3.ProtocolVersion = ProtocolVersionMax
 
 	m1, err := Create(c1)
@@ -666,6 +682,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	c.BindAddr = addr1.String()
 	c.BindPort = m1.config.BindPort
 	c.GossipInterval = time.Millisecond
+	c.Logger = testLogger(t)
 
 	m2, err := Create(c)
 	if err != nil {
@@ -719,6 +736,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	c.ProbeInterval = time.Millisecond
 	c.ProbeTimeout = 100 * time.Microsecond
 	c.SuspicionMaxTimeoutMult = 1
+	c.Logger = testLogger(t)
 
 	m2, err := Create(c)
 	if err != nil {
@@ -749,8 +767,8 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 }
 
 func TestMemberlist_delegateMeta(t *testing.T) {
-	c1 := testConfig()
-	c2 := testConfig()
+	c1 := testConfig(t)
+	c2 := testConfig(t)
 	c1.Delegate = &MockDelegate{meta: []byte("web")}
 	c2.Delegate = &MockDelegate{meta: []byte("lb")}
 
@@ -815,8 +833,8 @@ func TestMemberlist_delegateMeta(t *testing.T) {
 }
 
 func TestMemberlist_delegateMeta_Update(t *testing.T) {
-	c1 := testConfig()
-	c2 := testConfig()
+	c1 := testConfig(t)
+	c2 := testConfig(t)
 	mock1 := &MockDelegate{meta: []byte("web")}
 	mock2 := &MockDelegate{meta: []byte("lb")}
 	c1.Delegate = mock1
@@ -917,6 +935,7 @@ func TestMemberlist_UserData(t *testing.T) {
 	c.GossipInterval = time.Millisecond
 	c.PushPullInterval = time.Millisecond
 	c.Delegate = d2
+	c.Logger = testLogger(t)
 
 	m2, err := Create(c)
 	if err != nil {
@@ -970,6 +989,7 @@ func TestMemberlist_SendTo(t *testing.T) {
 	c.GossipInterval = time.Millisecond
 	c.PushPullInterval = time.Millisecond
 	c.Delegate = d2
+	c.Logger = testLogger(t)
 
 	m2, err := Create(c)
 	if err != nil {
@@ -1026,6 +1046,7 @@ func TestMemberlistProtocolVersion(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
 	c.ProtocolVersion = ProtocolVersionMax
+	c.Logger = testLogger(t)
 	m, err := Create(c)
 	if err != nil {
 		t.Fatalf("err: %s", err)
@@ -1073,8 +1094,9 @@ func TestMemberlist_Join_DeadNode(t *testing.T) {
 // discover each other and add themselves to their respective member lists.
 func TestMemberlist_Join_Prototocol_Compatibility(t *testing.T) {
 	testProtocolVersionPair := func(t *testing.T, pv1 uint8, pv2 uint8) {
-		c1 := testConfig()
+		c1 := testConfig(t)
 		c1.ProtocolVersion = pv1
+		c1.Logger = testLogger(t)
 		m1, err := NewMemberlistOnOpenPort(c1)
 		if err != nil {
 			t.Fatalf("failed to start: %v", err)
@@ -1089,6 +1111,7 @@ func TestMemberlist_Join_Prototocol_Compatibility(t *testing.T) {
 		c2.BindAddr = addr1.String()
 		c2.BindPort = m1.config.BindPort
 		c2.ProtocolVersion = pv2
+		c2.Logger = testLogger(t)
 
 		m2, err := Create(c2)
 		if err != nil {
@@ -1130,6 +1153,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	c1 := DefaultLANConfig()
 	c1.Name = "A"
 	c1.BindAddr = "[::1]"
+	c1.Logger = testLogger(t)
 	var m1 *Memberlist
 	var err error
 	for i := 0; i < 100; i++ {
@@ -1148,6 +1172,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	c2 := DefaultLANConfig()
 	c2.Name = "B"
 	c2.BindAddr = "[::1]"
+	c2.Logger = testLogger(t)
 	var m2 *Memberlist
 	for i := 0; i < 100; i++ {
 		c2.BindPort = c1.BindPort + 1 + i
@@ -1180,7 +1205,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 }
 
 func TestAdvertiseAddr(t *testing.T) {
-	c := testConfig()
+	c := testConfig(t)
 	c.AdvertiseAddr = "127.0.1.100"
 	c.AdvertisePort = 23456
 
@@ -1217,8 +1242,8 @@ func (m *MockConflict) NotifyConflict(existing, other *Node) {
 }
 
 func TestMemberlist_conflictDelegate(t *testing.T) {
-	c1 := testConfig()
-	c2 := testConfig()
+	c1 := testConfig(t)
+	c2 := testConfig(t)
 	mock := &MockConflict{}
 	c1.Conflict = mock
 
@@ -1287,6 +1312,7 @@ func TestMemberlist_PingDelegate(t *testing.T) {
 	c.ProbeInterval = time.Millisecond
 	mock := &MockPing{}
 	c.Ping = mock
+	c.Logger = testLogger(t)
 
 	m2, err := Create(c)
 	if err != nil {
@@ -1336,6 +1362,7 @@ func TestMemberlist_EncryptedGossipTransition(t *testing.T) {
 	conf2.SecretKey = []byte("Hi16ZXu2lNCRVwtr20khAg==")
 	conf2.GossipVerifyIncoming = false
 	conf2.GossipVerifyOutgoing = false
+	conf2.Logger = testLogger(t)
 
 	m2, err := Create(conf2)
 	if err != nil {
@@ -1376,6 +1403,7 @@ func TestMemberlist_EncryptedGossipTransition(t *testing.T) {
 	conf3.GossipInterval = time.Millisecond
 	conf3.SecretKey = conf2.SecretKey
 	conf3.GossipVerifyIncoming = false
+	conf3.Logger = testLogger(t)
 
 	m3, err := Create(conf3)
 	if err != nil {
@@ -1416,6 +1444,7 @@ func TestMemberlist_EncryptedGossipTransition(t *testing.T) {
 	conf4.BindPort = m3.config.BindPort
 	conf4.GossipInterval = time.Millisecond
 	conf4.SecretKey = conf2.SecretKey
+	conf4.Logger = testLogger(t)
 
 	m4, err := Create(conf4)
 	if err != nil {
