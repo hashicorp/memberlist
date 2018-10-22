@@ -123,8 +123,10 @@ func TestTransport_Send(t *testing.T) {
 
 	expected := []string{"SendTo", "SendToUDP", "SendToTCP", "SendBestEffort", "SendReliable"}
 
-	received := make([]string, len(d1.msgs))
-	for i, bs := range d1.msgs {
+	msgs1 := d1.getMessages()
+
+	received := make([]string, len(msgs1))
+	for i, bs := range msgs1 {
 		received[i] = string(bs)
 	}
 	// Some of these are UDP so often get re-ordered making the test flaky if we
