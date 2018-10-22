@@ -12,6 +12,7 @@ func HostMemberlist(host string, t *testing.T, f func(*Config)) *Memberlist {
 	c := DefaultLANConfig()
 	c.Name = host
 	c.BindAddr = host
+	c.Logger = testLogger(t)
 	if f != nil {
 		f(c)
 	}
@@ -861,6 +862,7 @@ func TestMemberList_Ping(t *testing.T) {
 
 func TestMemberList_ResetNodes(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	a1 := alive{Node: "test1", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a1, nil, false)
 	a2 := alive{Node: "test2", Addr: []byte{127, 0, 0, 2}, Incarnation: 1}
@@ -1047,6 +1049,7 @@ func TestMemberList_invokeAckHandler_Channel_Nack(t *testing.T) {
 func TestMemberList_AliveNode_NewNode(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	m.config.Events = &ChannelEventDelegate{ch}
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
@@ -1090,6 +1093,7 @@ func TestMemberList_AliveNode_NewNode(t *testing.T) {
 func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a, nil, false)
@@ -1135,6 +1139,7 @@ func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
 func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a, nil, false)
@@ -1174,6 +1179,7 @@ func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 
 	a := alive{
 		Node:        "test",
@@ -1218,6 +1224,7 @@ func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 
 func TestMemberList_AliveNode_Refute(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a, nil, true)
 
@@ -1255,6 +1262,7 @@ func TestMemberList_AliveNode_Refute(t *testing.T) {
 
 func TestMemberList_SuspectNode_NoNode(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	s := suspect{Node: "test", Incarnation: 1}
 	m.suspectNode(&s)
 	if len(m.nodes) != 0 {
@@ -1264,6 +1272,7 @@ func TestMemberList_SuspectNode_NoNode(t *testing.T) {
 
 func TestMemberList_SuspectNode(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	m.config.ProbeInterval = time.Millisecond
 	m.config.SuspicionMult = 1
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
@@ -1321,6 +1330,7 @@ func TestMemberList_SuspectNode(t *testing.T) {
 
 func TestMemberList_SuspectNode_DoubleSuspect(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a, nil, false)
 
@@ -1358,6 +1368,7 @@ func TestMemberList_SuspectNode_DoubleSuspect(t *testing.T) {
 
 func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10}
 	m.aliveNode(&a, nil, false)
 
@@ -1382,6 +1393,7 @@ func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
 
 func TestMemberList_SuspectNode_Refute(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a, nil, true)
 
@@ -1419,6 +1431,7 @@ func TestMemberList_SuspectNode_Refute(t *testing.T) {
 
 func TestMemberList_DeadNode_NoNode(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	d := dead{Node: "test", Incarnation: 1}
 	m.deadNode(&d)
 	if len(m.nodes) != 0 {
@@ -1429,6 +1442,7 @@ func TestMemberList_DeadNode_NoNode(t *testing.T) {
 func TestMemberList_DeadNode(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	m.config.Events = &ChannelEventDelegate{ch}
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a, nil, false)
@@ -1474,6 +1488,7 @@ func TestMemberList_DeadNode(t *testing.T) {
 func TestMemberList_DeadNode_Double(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a, nil, false)
 
@@ -1507,6 +1522,7 @@ func TestMemberList_DeadNode_Double(t *testing.T) {
 
 func TestMemberList_DeadNode_OldDead(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10}
 	m.aliveNode(&a, nil, false)
 
@@ -1523,6 +1539,7 @@ func TestMemberList_DeadNode_OldDead(t *testing.T) {
 
 func TestMemberList_DeadNode_AliveReplay(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10}
 	m.aliveNode(&a, nil, false)
 
@@ -1541,6 +1558,7 @@ func TestMemberList_DeadNode_AliveReplay(t *testing.T) {
 
 func TestMemberList_DeadNode_Refute(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a, nil, true)
 
@@ -1578,6 +1596,7 @@ func TestMemberList_DeadNode_Refute(t *testing.T) {
 
 func TestMemberList_MergeState(t *testing.T) {
 	m := GetMemberlist(t)
+	defer m.Shutdown()
 	a1 := alive{Node: "test1", Addr: []byte{127, 0, 0, 1}, Incarnation: 1}
 	m.aliveNode(&a1, nil, false)
 	a2 := alive{Node: "test2", Addr: []byte{127, 0, 0, 2}, Incarnation: 1}
