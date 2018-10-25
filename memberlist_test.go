@@ -1121,7 +1121,44 @@ func TestMemberlist_Join_Prototocol_Compatibility(t *testing.T) {
 	testProtocolVersionPair(t, 3, 1)
 }
 
+var (
+	ipv6LoopbackAvailableOnce sync.Once
+	ipv6LoopbackAvailable     bool
+)
+
+func isIPv6LoopbackAvailable(t *testing.T) bool {
+	const ipv6LoopbackAddress = "::1"
+	ipv6LoopbackAvailableOnce.Do(func() {
+		ifaces, err := net.Interfaces()
+		require.NoError(t, err)
+
+		for _, iface := range ifaces {
+			if iface.Flags&net.FlagLoopback == 0 {
+				continue
+			}
+			addrs, err := iface.Addrs()
+			require.NoError(t, err)
+
+			for _, addr := range addrs {
+				ipaddr := addr.(*net.IPNet)
+				if ipaddr.IP.String() == ipv6LoopbackAddress {
+					ipv6LoopbackAvailable = true
+					return
+				}
+			}
+		}
+		ipv6LoopbackAvailable = false
+		t.Logf("IPv6 loopback address %q not found, disabling tests that require it", ipv6LoopbackAddress)
+	})
+
+	return ipv6LoopbackAvailable
+}
+
 func TestMemberlist_Join_IPv6(t *testing.T) {
+	if !isIPv6LoopbackAvailable(t) {
+		t.SkipNow()
+		return
+	}
 	// Since this binds to all interfaces we need to exclude other tests
 	// from grabbing an interface.
 	bindLock.Lock()
