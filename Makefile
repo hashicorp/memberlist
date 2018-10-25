@@ -1,4 +1,5 @@
-DEPS = $(go list -f '{{range .Imports}}{{.}} {{end}}' ./...)
+DEPS := $(shell go list -f '{{range .Imports}}{{.}} {{end}}' ./...)
+
 test: subnet
 	go test ./...
 
