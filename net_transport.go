@@ -222,7 +222,12 @@ func (t *NetTransport) Shutdown() error {
 func (t *NetTransport) tcpListen(tcpLn *net.TCPListener) {
 	defer t.wg.Done()
 
+	// baseDelay is the initial delay after an AcceptTCP() error before attempting again
 	const baseDelay = 5 * time.Millisecond
+
+	// maxDelay is the maximum delay after an AcceptTCP() error before attempting again.
+	// In the case that tcpListen() is error-looping, it will delay the shutdown check.
+	// Therefore, changes to maxDelay may have an effect on the latency of shutdown.
 	const maxDelay = 1 * time.Second
 
 	var loopDelay time.Duration
