@@ -1,6 +1,9 @@
 package memberlist
 
 import (
+	"log"
+	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -133,3 +136,51 @@ func TestTransport_Send(t *testing.T) {
 	// assert send ordering. Sort both slices to be tolerant of re-ordering.
 	require.ElementsMatch(t, expected, received)
 }
+
+type testCountingWriter struct {
+	t *testing.T
+	numCalls *int32
+}
+
+func (tw testCountingWriter) Write(p []byte) (n int, err error) {
+	atomic.AddInt32(tw.numCalls, 1)
+	tw.t.Log("countingWriter", string(p))
+	return len(p), nil
+}
+
+func TestTransport_TcpListenBackoff(t *testing.T) {
+
+	listener, _ := net.ListenTCP("tcp", nil)
+	listener.Close()
+
+	var numCalls int32
+	countingWriter := testCountingWriter{t, &numCalls}
+	countingLogger := log.New(countingWriter, "test", log.LstdFlags)
+	transport := NetTransport{
+		streamCh: make(chan net.Conn),
+		logger: countingLogger,
+	}
+	transport.wg.Add(1)
+
+	go transport.tcpListen(listener)
+
+	time.Sleep(5 * time.Second)
+	atomic.StoreInt32(&transport.shutdown, 1)
+
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		transport.wg.Wait()
+	}()
+	select {
+	case <- c:
+	case <-time.After(1 * time.Second):
+		t.Error("timed out waiting for transport waitgroup to be done after setting shutdown == 1")
+	}
+
+	t.Log(countingWriter.numCalls)
+	require.Equal(t, len(transport.streamCh), 0)
+	require.True(t, numCalls > 10)
+	require.True(t, numCalls < 15)
+}
+
