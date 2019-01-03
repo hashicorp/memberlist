@@ -6,7 +6,7 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
 	github.com/hashicorp/go-msgpack v0.0.0-20150518234257-fa3f63826f7c
 	github.com/hashicorp/go-multierror v1.0.0
-	github.com/hashicorp/go-sockaddr v0.0.0-20180320115054-6d291a969b86
+	github.com/hashicorp/go-sockaddr v0.0.0-20190103214136-e92cdb5343bb
 	github.com/miekg/dns v1.0.14
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529
