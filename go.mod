@@ -5,9 +5,9 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c
 	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
-	github.com/hashicorp/go-msgpack v0.0.0-20150518234257-fa3f63826f7c
+	github.com/hashicorp/go-msgpack/codec v0.5.0
 	github.com/hashicorp/go-multierror v1.0.0
-	github.com/hashicorp/go-sockaddr v0.0.0-20190103214136-e92cdb5343bb
+	github.com/hashicorp/go-sockaddr v1.0.0
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/miekg/dns v1.0.14
 	github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c // indirect
