@@ -678,10 +678,14 @@ func (m *Memberlist) rawSendMsgPacket(addr string, node *Node, msg []byte) error
 		}
 		m.nodeLock.RLock()
 		nodeState, ok := m.nodeMap[toAddr]
-		m.nodeLock.RUnlock()
 		if ok {
-			node = &nodeState.Node
+			// if we don't copy this data, we'll be accessing the
+			// pointed-to thing without the mutex held, which means
+			// data races, usually against aliveNode() in state.go.
+			nodeCopy := nodeState.Node
+			node = &nodeCopy
 		}
+		m.nodeLock.RUnlock()
 	}
 
 	// Add a CRC to the end of the payload if the recipient understands
