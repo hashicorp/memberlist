@@ -569,6 +569,10 @@ func TestSendMsg_Piggyback(t *testing.T) {
 		Node:        "rand",
 		Addr:        []byte{127, 0, 0, 255},
 		Meta:        nil,
+		Vsn: []uint8{
+			ProtocolVersionMin, ProtocolVersionMax, ProtocolVersionMin,
+			1, 1, 1,
+		},
 	}
 	m.encodeAndBroadcast("rand", aliveMsg, &a)
 
