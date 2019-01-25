@@ -835,11 +835,11 @@ func TestMemberList_ProbeNode_Awareness_OldProtocol(t *testing.T) {
 	})
 	defer m3.Shutdown()
 
-	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
+	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1}
 	m1.aliveNode(&a1, nil, true)
-	a2 := alive{Node: addr2.String(), Addr: ip2, Port: uint16(bindPort), Incarnation: 1, Vsn: m2.config.BuildVsnArray()}
+	a2 := alive{Node: addr2.String(), Addr: ip2, Port: uint16(bindPort), Incarnation: 1}
 	m1.aliveNode(&a2, nil, false)
-	a3 := alive{Node: addr3.String(), Addr: ip3, Port: uint16(bindPort), Incarnation: 1, Vsn: m3.config.BuildVsnArray()}
+	a3 := alive{Node: addr3.String(), Addr: ip3, Port: uint16(bindPort), Incarnation: 1}
 	m1.aliveNode(&a3, nil, false)
 
 	// Node 4 never gets started.
