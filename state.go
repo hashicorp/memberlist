@@ -896,6 +896,14 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 			},
 			State: stateDead,
 		}
+		if len(a.Vsn) > 5 {
+			state.PMin = a.Vsn[0]
+			state.PMax = a.Vsn[1]
+			state.PCur = a.Vsn[2]
+			state.DMin = a.Vsn[3]
+			state.DMax = a.Vsn[4]
+			state.DCur = a.Vsn[5]
+		}
 
 		// Add to map
 		m.nodeMap[a.Node] = state
