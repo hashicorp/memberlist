@@ -850,7 +850,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		return
 	}
 
-	if len(a.Vsn) > 3 {
+	if len(a.Vsn) >= 3 {
 		pMin := a.Vsn[0]
 		pMax := a.Vsn[1]
 		pCur := a.Vsn[2]
