@@ -865,6 +865,11 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 	// Using a merge delegate is not enough, as it is possible for passive
 	// cluster merging to still occur.
 	if m.config.Alive != nil {
+		if len(a.Vsn) < 6 {
+			m.logger.Printf("[WARN] memberlist: ignoring alive message for '%s' (%v:%d) because Vsn is not present",
+				a.Node, net.IP(a.Addr), a.Port)
+			return
+		}
 		node := &Node{
 			Name: a.Node,
 			Addr: a.Addr,
