@@ -294,7 +294,7 @@ func DefaultLocalConfig() *Config {
 	return conf
 }
 
-// Returns whether or not encryption is enabled
+// EncryptionEnabled returns whether or not encryption is enabled
 func (c *Config) EncryptionEnabled() bool {
 	return c.Keyring != nil && len(c.Keyring.GetKeys()) > 0
 }

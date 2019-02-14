@@ -122,7 +122,7 @@ func (t *NetTransport) GetAutoBindPort() int {
 	return t.tcpListeners[0].Addr().(*net.TCPAddr).Port
 }
 
-// See Transport.
+// FinalAdvertiseAddr: See Transport.
 func (t *NetTransport) FinalAdvertiseAddr(ip string, port int) (net.IP, int, error) {
 	var advertiseAddr net.IP
 	var advertisePort int
@@ -168,7 +168,7 @@ func (t *NetTransport) FinalAdvertiseAddr(ip string, port int) (net.IP, int, err
 	return advertiseAddr, advertisePort, nil
 }
 
-// See Transport.
+// WriteTo: See Transport.
 func (t *NetTransport) WriteTo(b []byte, addr string) (time.Time, error) {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
@@ -183,23 +183,23 @@ func (t *NetTransport) WriteTo(b []byte, addr string) (time.Time, error) {
 	return time.Now(), err
 }
 
-// See Transport.
+// PacketCh: See Transport.
 func (t *NetTransport) PacketCh() <-chan *Packet {
 	return t.packetCh
 }
 
-// See Transport.
+// DialTimeout: See Transport.
 func (t *NetTransport) DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
 	dialer := net.Dialer{Timeout: timeout}
 	return dialer.Dial("tcp", addr)
 }
 
-// See Transport.
+// StreamCh: See Transport.
 func (t *NetTransport) StreamCh() <-chan net.Conn {
 	return t.streamCh
 }
 
-// See Transport.
+// Shutdown: See Transport.
 func (t *NetTransport) Shutdown() error {
 	// This will avoid log spam about errors when we shut down.
 	atomic.StoreInt32(&t.shutdown, 1)

@@ -29,7 +29,7 @@ func (b *memberlistBroadcast) Invalidates(other Broadcast) bool {
 	return b.node == mb.node
 }
 
-// memberlist.NamedBroadcast optional interface
+// Name: memberlist.NamedBroadcast optional interface
 func (b *memberlistBroadcast) Name() string {
 	return b.node
 }
