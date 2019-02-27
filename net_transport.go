@@ -13,10 +13,6 @@ import (
 )
 
 const (
-	// udpPacketBufSize is used to buffer incoming packets during read
-	// operations.
-	udpPacketBufSize = 65536
-
 	// udpRecvBufSize is a large buffer size that we attempt to set UDP
 	// sockets to in order to handle a large volume of messages.
 	udpRecvBufSize = 2 * 1024 * 1024
@@ -30,6 +26,10 @@ type NetTransportConfig struct {
 
 	// BindPort is the port to listen on, for each address above.
 	BindPort int
+
+	// UDPPacketBufSize is used to buffer incoming packets during read
+	// operations.
+	UDPPacketBufSize int
 
 	// Logger is a logger for operator messages.
 	Logger *log.Logger
@@ -266,7 +266,7 @@ func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
 	for {
 		// Do a blocking read into a fresh buffer. Grab a time stamp as
 		// close as possible to the I/O.
-		buf := make([]byte, udpPacketBufSize)
+		buf := make([]byte, t.config.UDPPacketBufSize)
 		n, addr, err := udpLn.ReadFrom(buf)
 		ts := time.Now()
 		if err != nil {
