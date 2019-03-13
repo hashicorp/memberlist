@@ -1472,6 +1472,83 @@ func TestMemberList_AliveNode_Refute(t *testing.T) {
 	}
 }
 
+func TestMemberList_AliveNode_Conflict(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer m.Shutdown()
+
+	nodeName := "test"
+	a := alive{Node: nodeName, Addr: []byte{127, 0, 0, 1}, Port: 8000, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, true)
+
+	// Clear queue
+	m.broadcasts.Reset()
+
+	// Conflicting alive
+	s := alive{
+		Node:        nodeName,
+		Addr:        []byte{127, 0, 0, 2},
+		Port:        9000,
+		Incarnation: 2,
+		Meta:        []byte("foo"),
+		Vsn:         m.config.BuildVsnArray(),
+	}
+	m.aliveNode(&s, nil, false)
+
+	state := m.nodeMap[nodeName]
+	if state.State != stateAlive {
+		t.Fatalf("should still be alive")
+	}
+	if state.Meta != nil {
+		t.Fatalf("meta should still be nil")
+	}
+	if bytes.Equal(state.Addr, []byte{127, 0, 0, 2}) {
+		t.Fatalf("address should not be updated")
+	}
+	if state.Port == 9000 {
+		t.Fatalf("port should not be updated")
+	}
+
+	// Check a broad cast is queued
+	if num := m.broadcasts.NumQueued(); num != 0 {
+		t.Fatalf("expected 0 queued messages: %d", num)
+	}
+
+	// Change the node to dead
+	d := dead{Node: nodeName, Incarnation: 2}
+	m.deadNode(&d)
+	m.broadcasts.Reset()
+
+	state = m.nodeMap[nodeName]
+	if state.State != stateDead {
+		t.Fatalf("should be dead")
+	}
+
+	// New alive node
+	s2 := alive{
+		Node:        nodeName,
+		Addr:        []byte{127, 0, 0, 2},
+		Port:        9000,
+		Incarnation: 3,
+		Meta:        []byte("foo"),
+		Vsn:         m.config.BuildVsnArray(),
+	}
+	m.aliveNode(&s2, nil, false)
+
+	state = m.nodeMap[nodeName]
+	if state.State != stateAlive {
+		t.Fatalf("should still be alive")
+	}
+	if !bytes.Equal(state.Meta, []byte("foo")) {
+		t.Fatalf("meta should be updated")
+	}
+	if !bytes.Equal(state.Addr, []byte{127, 0, 0, 2}) {
+		t.Fatalf("address should be updated")
+	}
+	if state.Port != 9000 {
+		t.Fatalf("port should be updated")
+	}
+}
+
 func TestMemberList_SuspectNode_NoNode(t *testing.T) {
 	m := GetMemberlist(t, nil)
 	defer m.Shutdown()
