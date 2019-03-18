@@ -1473,7 +1473,9 @@ func TestMemberList_AliveNode_Refute(t *testing.T) {
 }
 
 func TestMemberList_AliveNode_Conflict(t *testing.T) {
-	m := GetMemberlist(t, nil)
+	m := GetMemberlist(t, func(c *Config) {
+		c.AllowDeadNodeReclaim = true
+	})
 	defer m.Shutdown()
 
 	nodeName := "test"

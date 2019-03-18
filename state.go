@@ -931,7 +931,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		// Check if this address is different than the existing node unless the old node is dead.
 		if !bytes.Equal([]byte(state.Addr), a.Addr) || state.Port != a.Port {
 			// Allow the address to be updated if a dead node is being replaced.
-			if state.State == stateDead {
+			if state.State == stateDead && m.config.AllowDeadNodeReclaim {
 				m.logger.Printf("[INFO] memberlist: Updating address for failed node %s from %v:%d to %v:%d",
 					state.Name, state.Addr, state.Port, net.IP(a.Addr), a.Port)
 				updatesNode = true
