@@ -571,9 +571,9 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 	if !m.hasLeft() {
 		atomic.StoreInt32(&m.leave, 1)
 
-		m.nodeLock.Lock()
+		m.nodeLock.RLock()
 		state, ok := m.nodeMap[m.config.Name]
-		m.nodeLock.Unlock()
+		m.nodeLock.RUnlock()
 		if !ok {
 			m.logger.Printf("[WARN] memberlist: Leave but we're not in the node map.")
 			return nil
