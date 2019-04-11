@@ -149,6 +149,16 @@ OUTER:
 		// Append the node
 		kNodes = append(kNodes, node)
 	}
+	kNodeStorage := make([]nodeState, len(kNodes))
+	// Copy the contents of the node pointers out to local storage, and
+	// return pointers to that, so we avoid races.
+	for i, node := range kNodes {
+		kNodeStorage[i] = *node
+		metaCopy := make([]byte, len(node.Meta))
+		copy(metaCopy, node.Meta)
+		kNodeStorage[i].Meta = metaCopy
+		kNodes[i] = &kNodeStorage[i]
+	}
 	return kNodes
 }
 
