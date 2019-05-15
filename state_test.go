@@ -1474,7 +1474,7 @@ func TestMemberList_AliveNode_Refute(t *testing.T) {
 
 func TestMemberList_AliveNode_Conflict(t *testing.T) {
 	m := GetMemberlist(t, func(c *Config) {
-		c.AllowDeadNodeReclaim = true
+		c.DeadNodeReclaimTime = 10 * time.Millisecond
 	})
 	defer m.Shutdown()
 
@@ -1524,6 +1524,8 @@ func TestMemberList_AliveNode_Conflict(t *testing.T) {
 	if state.State != stateDead {
 		t.Fatalf("should be dead")
 	}
+
+	time.Sleep(m.config.DeadNodeReclaimTime)
 
 	// New alive node
 	s2 := alive{

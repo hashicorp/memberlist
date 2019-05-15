@@ -216,9 +216,10 @@ type Config struct {
 	// called PacketBufferSize now that we have generalized the transport.
 	UDPBufferSize int
 
-	// AllowDeadNodeReclaim controls whether or not a dead node's name can be
-	// reclaimed by one with a different address or port.
-	AllowDeadNodeReclaim bool
+	// DeadNodeReclaimTime controls the time before a dead node's name can be
+	// reclaimed by one with a different address or port. By default, this is 0,
+	// meaning nodes cannot be reclaimed this way.
+	DeadNodeReclaimTime time.Duration
 }
 
 // DefaultLANConfig returns a sane set of configurations for Memberlist.
@@ -262,8 +263,6 @@ func DefaultLANConfig() *Config {
 
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
-
-		AllowDeadNodeReclaim: false,
 	}
 }
 
