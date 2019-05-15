@@ -931,10 +931,8 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		// Check if this address is different than the existing node unless the old node is dead.
 		if !bytes.Equal([]byte(state.Addr), a.Addr) || state.Port != a.Port {
 			// If DeadNodeReclaimTime is configured, check if enough time has elapsed since the node died.
-			var canReclaim bool
-			if m.config.DeadNodeReclaimTime > 0 && state.StateChange.Add(m.config.DeadNodeReclaimTime).Before(time.Now()) {
-				canReclaim = true
-			}
+			canReclaim := (m.config.DeadNodeReclaimTime > 0 &&
+				time.Since(state.StateChange) > m.config.DeadNodeReclaimTime)
 
 			// Allow the address to be updated if a dead node is being replaced.
 			if state.State == stateDead && canReclaim {
