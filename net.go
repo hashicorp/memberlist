@@ -218,9 +218,9 @@ func (m *Memberlist) streamListen() {
 	}
 }
 
-// EnsureCanConnect return the IP from a RemoteAddress
+// EnsureIsAllowed return the IP from a RemoteAddress
 // return error if this client must not connect
-func (m *Memberlist) EnsureCanConnect(from net.Addr) error {
+func (m *Memberlist) EnsureIsAllowed(from net.Addr) error {
 	source := from.String()
 	if source == "pipe" {
 		return nil
@@ -240,7 +240,7 @@ func (m *Memberlist) EnsureCanConnect(from net.Addr) error {
 // handleConn handles a single incoming stream connection from the transport.
 func (m *Memberlist) handleConn(conn net.Conn) {
 	defer conn.Close()
-	errCon := m.EnsureCanConnect(conn.RemoteAddr())
+	errCon := m.EnsureIsAllowed(conn.RemoteAddr())
 	if errCon != nil {
 		m.logger.Printf("[WARN] memberlist: Rejected connection %s (%s)", LogConn(conn), errCon)
 		return
@@ -346,7 +346,7 @@ func (m *Memberlist) packetListen() {
 }
 
 func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time) {
-	if err := m.EnsureCanConnect(from); err != nil {
+	if err := m.EnsureIsAllowed(from); err != nil {
 		m.logger.Printf("[ERR] memberlist: Rejected packet: %v %s", err, LogAddress(from))
 	}
 	// Check if encryption is enabled
