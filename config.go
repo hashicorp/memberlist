@@ -1,9 +1,12 @@
 package memberlist
 
 import (
+	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -225,9 +228,33 @@ type Config struct {
 	// meaning nodes cannot be reclaimed this way.
 	DeadNodeReclaimTime time.Duration
 
+<<<<<<< HEAD
 	// RequireNodeNames controls if the name of a node is required when sending
 	// a message to that node.
 	RequireNodeNames bool
+=======
+	CidrsAllowed []net.IPNet
+	CidrsDenied  []net.IPNet
+}
+
+// ParseCIDRs return a possible empty list of all Network that have been parsed
+// In case of error, it returns succesfully parsed CIDRs and the last error found
+func ParseCIDRs(v []string) ([]net.IPNet, error) {
+	nets := make([]net.IPNet, 0)
+	var err error
+	if v == nil {
+		return nets, err
+	}
+	for _, p := range v {
+		_, net, err := net.ParseCIDR(strings.TrimSpace(p))
+		if err != nil {
+			err = fmt.Errorf("invalid cidr: %s", p)
+		} else {
+			nets = append(nets, *net)
+		}
+	}
+	return nets, err
+>>>>>>> Added way to block members using CIDR
 }
 
 // DefaultLANConfig returns a sane set of configurations for Memberlist.
@@ -238,6 +265,7 @@ type Config struct {
 // these values are a good starting point when getting started with memberlist.
 func DefaultLANConfig() *Config {
 	hostname, _ := os.Hostname()
+	allowedCidrs, _ := ParseCIDRs([]string{"0.0.0.0/0", "::0/0"})
 	return &Config{
 		Name:                    hostname,
 		BindAddr:                "0.0.0.0",
@@ -271,6 +299,8 @@ func DefaultLANConfig() *Config {
 
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
+		CidrsAllowed:      allowedCidrs,
+		CidrsDenied:       []net.IPNet{},
 	}
 }
 
@@ -288,6 +318,24 @@ func DefaultWANConfig() *Config {
 	conf.GossipInterval = 500 * time.Millisecond
 	conf.GossipToTheDeadTime = 60 * time.Second
 	return conf
+}
+
+// IpAllowed return an error if access to memberlist is denied
+func (c *Config) IpAllowed(ip net.IP) error {
+	err := fmt.Errorf("%s is not allowed", ip)
+	for _, n := range c.CidrsAllowed {
+		if n.Contains(ip) {
+			err = nil
+			break
+		}
+	}
+	for _, n := range c.CidrsDenied {
+		if n.Contains(ip) {
+			err = fmt.Errorf("%s is denied since part of %s", ip, n)
+			break
+		}
+	}
+	return err
 }
 
 // DefaultLocalConfig works like DefaultConfig, however it returns a configuration
