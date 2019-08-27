@@ -622,6 +622,25 @@ func (m *Memberlist) handleSuspect(buf []byte, from net.Addr) {
 	m.suspectNode(&sus)
 }
 
+// EnsureCanConnect return the IP from a RemoteAddress
+// return error if this client must not connect
+func (m *Memberlist) EnsureCanConnect(from net.Addr) error {
+	source := from.String()
+	if source == "pipe" {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(source)
+	if err != nil {
+		return err
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("Cannot parse IP from %s", host)
+	}
+	return m.config.IpAllowed(ip)
+}
+
 func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 	var live alive
 	if err := decode(buf, &live); err != nil {
@@ -633,6 +652,11 @@ func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 	// behavior by using the configured port
 	if m.ProtocolVersion() < 2 || live.Port == 0 {
 		live.Port = uint16(m.config.BindPort)
+	}
+
+	if err := m.EnsureCanConnect(from); err != nil {
+		m.logger.Printf("[DEBUG] memberlist: Blocked alive message: %s %s", err, LogAddress(from))
+		return
 	}
 
 	m.aliveNode(&live, nil, false)
