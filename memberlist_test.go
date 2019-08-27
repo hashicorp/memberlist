@@ -49,7 +49,7 @@ func testConfig(tb testing.TB) *Config {
 }
 
 func yield() {
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 }
 
 type MockDelegate struct {
@@ -1475,7 +1475,7 @@ func TestMemberlist_conflictDelegate(t *testing.T) {
 
 	// Ensure we were notified
 	if mock.existing == nil || mock.other == nil {
-		t.Fatalf("should get notified")
+		t.Fatalf("should get notified mock.existing=%v  VS mock.other=%v", mock.existing, mock.other)
 	}
 	if mock.existing.Name != mock.other.Name {
 		t.Fatalf("bad: %v %v", mock.existing, mock.other)
@@ -1571,7 +1571,7 @@ func TestMemberlist_PingDelegate(t *testing.T) {
 
 func waitUntilSize(t *testing.T, m *Memberlist, expected int) {
 	t.Helper()
-	retry(t, 15, 250*time.Millisecond, func(failf func(string, ...interface{})) {
+	retry(t, 15, 500*time.Millisecond, func(failf func(string, ...interface{})) {
 		t.Helper()
 
 		if m.NumMembers() != expected {
