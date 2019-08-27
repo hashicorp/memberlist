@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	multierror "github.com/hashicorp/go-multierror"
 )
 
 type Config struct {
@@ -228,33 +230,40 @@ type Config struct {
 	// meaning nodes cannot be reclaimed this way.
 	DeadNodeReclaimTime time.Duration
 
-<<<<<<< HEAD
 	// RequireNodeNames controls if the name of a node is required when sending
 	// a message to that node.
 	RequireNodeNames bool
-=======
 	CidrsAllowed []net.IPNet
-	CidrsDenied  []net.IPNet
 }
 
 // ParseCIDRs return a possible empty list of all Network that have been parsed
 // In case of error, it returns succesfully parsed CIDRs and the last error found
 func ParseCIDRs(v []string) ([]net.IPNet, error) {
 	nets := make([]net.IPNet, 0)
-	var err error
 	if v == nil {
-		return nets, err
+		return nets, nil
 	}
+	var errs error
+	hasErrors := false
 	for _, p := range v {
 		_, net, err := net.ParseCIDR(strings.TrimSpace(p))
 		if err != nil {
 			err = fmt.Errorf("invalid cidr: %s", p)
+			errs = multierror.Append(errs, err)
+			hasErrors = true
 		} else {
 			nets = append(nets, *net)
 		}
 	}
+<<<<<<< HEAD
 	return nets, err
 >>>>>>> Added way to block members using CIDR
+=======
+	if !hasErrors {
+		errs = nil
+	}
+	return nets, errs
+>>>>>>> Applied suggestions from @rboyer
 }
 
 // DefaultLANConfig returns a sane set of configurations for Memberlist.
@@ -300,7 +309,7 @@ func DefaultLANConfig() *Config {
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
 		CidrsAllowed:      allowedCidrs,
-		CidrsDenied:       []net.IPNet{},
+		CidrsDenied:       nil,
 	}
 }
 
