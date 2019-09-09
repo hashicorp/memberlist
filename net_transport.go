@@ -296,6 +296,10 @@ func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
 	}
 }
 
+func (t *NetTransport) ProtocolType() ProtocolType {
+	return ProtocolTypeUDP
+}
+
 // setUDPRecvBuf is used to resize the UDP receive window. The function
 // attempts to set the read buffer to `udpRecvBuf` but backs off until
 // the read buffer can be set.
