@@ -21,6 +21,13 @@ type Packet struct {
 	Timestamp time.Time
 }
 
+type ProtocolType int
+
+const (
+	ProtocolTypeTCP ProtocolType = iota
+	ProtocolTypeUDP
+)
+
 // Transport is used to abstract over communicating with other peers. The packet
 // interface is assumed to be best-effort and the stream interface is assumed to
 // be reliable.
@@ -62,4 +69,6 @@ type Transport interface {
 	// Shutdown is called when memberlist is shutting down; this gives the
 	// transport a chance to clean up any listeners.
 	Shutdown() error
+
+	ProtocolType() ProtocolType
 }
