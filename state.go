@@ -298,7 +298,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		if err := m.encodeAndSendMsg(addr, pingMsg, &ping); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
 			if failedRemote(err) {
-				goto CONTINUE
+				goto HANDLE_REMOTE_FAILURE
 			} else {
 				return
 			}
@@ -323,7 +323,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		if err := m.rawSendMsgPacket(addr, &node.Node, compound.Bytes()); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send compound ping and suspect message to %s: %s", addr, err)
 			if failedRemote(err) {
-				goto CONTINUE
+				goto HANDLE_REMOTE_FAILURE
 			} else {
 				return
 			}
@@ -363,7 +363,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		m.logger.Printf("[DEBUG] memberlist: Failed ping: %s (timeout reached)", node.Name)
 	}
 
-CONTINUE:
+HANDLE_REMOTE_FAILURE:
 	// Get some random live nodes.
 	m.nodeLock.RLock()
 	kNodes := kRandomNodes(m.config.IndirectChecks, m.nodes, func(n *nodeState) bool {
