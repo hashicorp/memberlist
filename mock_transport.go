@@ -119,7 +119,3 @@ func (t *MockTransport) StreamCh() <-chan net.Conn {
 func (t *MockTransport) Shutdown() error {
 	return nil
 }
-
-func (t *MockTransport) ProtocolType() ProtocolType {
-	return ProtocolTypeUDP
-}

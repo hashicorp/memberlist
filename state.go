@@ -242,6 +242,25 @@ func (m *Memberlist) probeNodeByAddr(addr string) {
 	m.probeNode(n)
 }
 
+func failedRemote(err error) bool {
+	switch t := err.(type) {
+	case *net.OpError:
+		switch t.Net {
+		case "udp":
+			return true
+		default:
+			switch t.Op {
+			case "dial", "read", "write":
+				return false
+			default:
+				return true
+			}
+		}
+	default:
+		return true
+	}
+}
+
 // probeNode handles a single round of failure checking on a node.
 func (m *Memberlist) probeNode(node *nodeState) {
 	defer metrics.MeasureSince([]string{"memberlist", "probeNode"}, time.Now())
@@ -281,10 +300,9 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	if node.State == stateAlive {
 		if err := m.encodeAndSendMsg(addr, pingMsg, &ping); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
-			switch m.transport.ProtocolType() {
-			case ProtocolTypeTCP:
-				goto TCPCONTINUE
-			default:
+			if failedRemote(err) {
+				goto CONTINUE
+			} else {
 				return
 			}
 		}
@@ -307,10 +325,9 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		compound := makeCompoundMessage(msgs)
 		if err := m.rawSendMsgPacket(addr, &node.Node, compound.Bytes()); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send compound ping and suspect message to %s: %s", addr, err)
-			switch m.transport.ProtocolType() {
-			case ProtocolTypeTCP:
-				goto TCPCONTINUE
-			default:
+			if failedRemote(err) {
+				goto CONTINUE
+			} else {
 				return
 			}
 		}
@@ -349,7 +366,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		m.logger.Printf("[DEBUG] memberlist: Failed ping: %s (timeout reached)", node.Name)
 	}
 
-TCPCONTINUE:
+CONTINUE:
 	// Get some random live nodes.
 	m.nodeLock.RLock()
 	kNodes := kRandomNodes(m.config.IndirectChecks, m.nodes, func(n *nodeState) bool {
@@ -374,51 +391,49 @@ TCPCONTINUE:
 		}
 	}
 
-	if m.transport.ProtocolType() == ProtocolTypeUDP {
-		// Also make an attempt to contact the node directly over TCP. This
-		// helps prevent confused clients who get isolated from UDP traffic
-		// but can still speak TCP (which also means they can possibly report
-		// misinformation to other nodes via anti-entropy), avoiding flapping in
-		// the cluster.
-		//
-		// This is a little unusual because we will attempt a TCP ping to any
-		// member who understands version 3 of the protocol, regardless of
-		// which protocol version we are speaking. That's why we've included a
-		// config option to turn this off if desired.
-		fallbackCh := make(chan bool, 1)
-		if (!m.config.DisableTcpPings) && (node.PMax >= 3) {
-			go func() {
-				defer close(fallbackCh)
-				didContact, err := m.sendPingAndWaitForAck(node.Address(), ping, deadline)
-				if err != nil {
-					m.logger.Printf("[ERR] memberlist: Failed fallback ping: %s", err)
-				} else {
-					fallbackCh <- didContact
-				}
-			}()
-		} else {
-			close(fallbackCh)
-		}
-
-		// Wait for the acks or timeout. Note that we don't check the fallback
-		// channel here because we want to issue a warning below if that's the
-		// *only* way we hear back from the peer, so we have to let this time
-		// out first to allow the normal UDP-based acks to come in.
-		select {
-		case v := <-ackCh:
-			if v.Complete == true {
-				return
+	// Also make an attempt to contact the node directly over TCP. This
+	// helps prevent confused clients who get isolated from UDP traffic
+	// but can still speak TCP (which also means they can possibly report
+	// misinformation to other nodes via anti-entropy), avoiding flapping in
+	// the cluster.
+	//
+	// This is a little unusual because we will attempt a TCP ping to any
+	// member who understands version 3 of the protocol, regardless of
+	// which protocol version we are speaking. That's why we've included a
+	// config option to turn this off if desired.
+	fallbackCh := make(chan bool, 1)
+	if (!m.config.DisableTcpPings) && (node.PMax >= 3) {
+		go func() {
+			defer close(fallbackCh)
+			didContact, err := m.sendPingAndWaitForAck(node.Address(), ping, deadline)
+			if err != nil {
+				m.logger.Printf("[ERR] memberlist: Failed fallback ping: %s", err)
+			} else {
+				fallbackCh <- didContact
 			}
-		}
+		}()
+	} else {
+		close(fallbackCh)
+	}
 
-		// Finally, poll the fallback channel. The timeouts are set such that
-		// the channel will have something or be closed without having to wait
-		// any additional time here.
-		for didContact := range fallbackCh {
-			if didContact {
-				m.logger.Printf("[WARN] memberlist: Was able to connect to %s but other probes failed, network may be misconfigured", node.Name)
-				return
-			}
+	// Wait for the acks or timeout. Note that we don't check the fallback
+	// channel here because we want to issue a warning below if that's the
+	// *only* way we hear back from the peer, so we have to let this time
+	// out first to allow the normal UDP-based acks to come in.
+	select {
+	case v := <-ackCh:
+		if v.Complete == true {
+			return
+		}
+	}
+
+	// Finally, poll the fallback channel. The timeouts are set such that
+	// the channel will have something or be closed without having to wait
+	// any additional time here.
+	for didContact := range fallbackCh {
+		if didContact {
+			m.logger.Printf("[WARN] memberlist: Was able to connect to %s but other probes failed, network may be misconfigured", node.Name)
+			return
 		}
 	}
 
