@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -242,23 +243,19 @@ func (m *Memberlist) probeNodeByAddr(addr string) {
 	m.probeNode(n)
 }
 
+// failedRemote checks the error and decides if it indicates a failure on the
+// other end.
 func failedRemote(err error) bool {
 	switch t := err.(type) {
 	case *net.OpError:
-		switch t.Net {
-		case "udp":
-			return true
-		default:
+		if strings.HasPrefix(t.Net, "tcp") {
 			switch t.Op {
 			case "dial", "read", "write":
-				return false
-			default:
 				return true
 			}
 		}
-	default:
-		return true
 	}
+	return false
 }
 
 // probeNode handles a single round of failure checking on a node.
