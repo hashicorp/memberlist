@@ -2118,6 +2118,37 @@ func TestMemberlist_GossipToDead(t *testing.T) {
 	})
 }
 
+func TestMemberlist_FailedRemote(t *testing.T) {
+	type test struct {
+		name     string
+		err      error
+		expected bool
+	}
+	tests := []test{
+		{"nil error", nil, false},
+		{"normal error", fmt.Errorf(""), false},
+		{"net.OpError for file", &net.OpError{Net: "file"}, false},
+		{"net.OpError for udp", &net.OpError{Net: "udp"}, false},
+		{"net.OpError for udp4", &net.OpError{Net: "udp4"}, false},
+		{"net.OpError for udp6", &net.OpError{Net: "udp6"}, false},
+		{"net.OpError for tcp", &net.OpError{Net: "tcp"}, false},
+		{"net.OpError for tcp4", &net.OpError{Net: "tcp4"}, false},
+		{"net.OpError for tcp6", &net.OpError{Net: "tcp6"}, false},
+		{"net.OpError for tcp with dial", &net.OpError{Net: "tcp", Op: "dial"}, true},
+		{"net.OpError for tcp with write", &net.OpError{Net: "tcp", Op: "write"}, true},
+		{"net.OpError for tcp with read", &net.OpError{Net: "tcp", Op: "read"}, true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := failedRemote(test.err)
+			if actual != test.expected {
+				t.Fatalf("expected %t, got %t", test.expected, actual)
+			}
+		})
+	}
+}
+
 func TestMemberlist_PushPull(t *testing.T) {
 	addr1 := getBindAddr()
 	addr2 := getBindAddr()
