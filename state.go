@@ -969,7 +969,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 	// store this node in our node map.
 	var updatesNode bool
 	if !ok {
-		errCon := m.config.IpAllowed(a.Addr)
+		errCon := m.config.IPAllowed(a.Addr)
 		if errCon != nil {
 			m.logger.Printf("[WARN] memberlist: Rejected node %s (%v): %s", a.Node, net.IP(a.Addr), errCon)
 			return
@@ -1011,7 +1011,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 	} else {
 		// Check if this address is different than the existing node unless the old node is dead.
 		if !bytes.Equal([]byte(state.Addr), a.Addr) || state.Port != a.Port {
-			errCon := m.config.IpAllowed(a.Addr)
+			errCon := m.config.IPAllowed(a.Addr)
 			if errCon != nil {
 				m.logger.Printf("[WARN] memberlist: Rejected IP update from %v to %v for node %s: %s", a.Node, state.Addr, net.IP(a.Addr), errCon)
 				return

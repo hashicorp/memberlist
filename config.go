@@ -6,10 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
 	"time"
-
-	multierror "github.com/hashicorp/go-multierror"
 )
 
 type Config struct {
@@ -255,15 +252,10 @@ func ParseCIDRs(v []string) ([]net.IPNet, error) {
 			nets = append(nets, *net)
 		}
 	}
-<<<<<<< HEAD
-	return nets, err
->>>>>>> Added way to block members using CIDR
-=======
 	if !hasErrors {
 		errs = nil
 	}
 	return nets, errs
->>>>>>> Applied suggestions from @rboyer
 }
 
 // DefaultLANConfig returns a sane set of configurations for Memberlist.
@@ -274,7 +266,6 @@ func ParseCIDRs(v []string) ([]net.IPNet, error) {
 // these values are a good starting point when getting started with memberlist.
 func DefaultLANConfig() *Config {
 	hostname, _ := os.Hostname()
-	allowedCidrs, _ := ParseCIDRs([]string{"0.0.0.0/0", "::0/0"})
 	return &Config{
 		Name:                    hostname,
 		BindAddr:                "0.0.0.0",
@@ -308,8 +299,7 @@ func DefaultLANConfig() *Config {
 
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
-		CidrsAllowed:      allowedCidrs,
-		CidrsDenied:       nil,
+		CidrsAllowed:      nil, // same as allow all
 	}
 }
 
@@ -329,22 +319,22 @@ func DefaultWANConfig() *Config {
 	return conf
 }
 
-// IpAllowed return an error if access to memberlist is denied
-func (c *Config) IpAllowed(ip net.IP) error {
-	err := fmt.Errorf("%s is not allowed", ip)
+// IPMustBeChecked return true if IPAllowed must be called
+func (c *Config) IPMustBeChecked() bool {
+	return c.CidrsAllowed != nil
+}
+
+// IPAllowed return an error if access to memberlist is denied
+func (c *Config) IPAllowed(ip net.IP) error {
+	if !c.IPMustBeChecked() {
+		return nil
+	}
 	for _, n := range c.CidrsAllowed {
 		if n.Contains(ip) {
-			err = nil
-			break
+			return nil
 		}
 	}
-	for _, n := range c.CidrsDenied {
-		if n.Contains(ip) {
-			err = fmt.Errorf("%s is denied since part of %s", ip, n)
-			break
-		}
-	}
-	return err
+	return fmt.Errorf("%s is not allowed", ip)
 }
 
 // DefaultLocalConfig works like DefaultConfig, however it returns a configuration

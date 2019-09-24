@@ -1,8 +1,12 @@
 package memberlist
 
 import (
+	"fmt"
 	"net"
+	"strings"
 	"testing"
+
+	multierror "github.com/hashicorp/go-multierror"
 )
 
 func Test_IsValidAddressDefaults(t *testing.T) {
@@ -18,17 +22,43 @@ func Test_IsValidAddressDefaults(t *testing.T) {
 	config := DefaultLANConfig()
 	for _, ip := range tests {
 		localV4 := net.ParseIP(ip)
-		if err := config.IpAllowed(localV4); err != nil {
+		if err := config.IPAllowed(localV4); err != nil {
 			t.Fatalf("IP %s Localhost Should be accepted for LAN", ip)
 		}
 	}
 	config = DefaultWANConfig()
 	for _, ip := range tests {
 		localV4 := net.ParseIP(ip)
-		if err := config.IpAllowed(localV4); err != nil {
+		if err := config.IPAllowed(localV4); err != nil {
 			t.Fatalf("IP %s Localhost Should be accepted for WAN", ip)
 		}
 	}
+}
+
+// parseCIDRs return a possible empty list of all Network that have been parsed
+// In case of error, it returns succesfully parsed CIDRs and the last error found
+// If nil is given it returns nil, nil
+func parseCIDRs(v []string) ([]net.IPNet, error) {
+	if v == nil {
+		return nil, nil
+	}
+	nets := make([]net.IPNet, 0)
+	var errs error
+	hasErrors := false
+	for _, p := range v {
+		_, net, err := net.ParseCIDR(strings.TrimSpace(p))
+		if err != nil {
+			err = fmt.Errorf("invalid cidr: %s", p)
+			errs = multierror.Append(errs, err)
+			hasErrors = true
+		} else {
+			nets = append(nets, *net)
+		}
+	}
+	if !hasErrors {
+		errs = nil
+	}
+	return nets, errs
 }
 
 func Test_IsValidAddressOverride(t *testing.T) {
@@ -36,37 +66,38 @@ func Test_IsValidAddressOverride(t *testing.T) {
 	cases := []struct {
 		name    string
 		allow   []string
-		deny    []string
 		success []string
 		fail    []string
 	}{
 		{
+			name:    "Default, nil allows all",
+			allow:   nil,
+			success: []string{"127.0.0.5", "10.0.0.9", "192.168.1.7", "::1"},
+			fail:    []string{},
+		},
+		{
+			name:    "[] blocks all",
+			allow:   []string{},
+			success: []string{},
+			fail:    []string{"127.0.0.5", "10.0.0.9", "192.168.1.7", "::1"},
+		},
+		{
 			name:    "Only IPv4",
 			allow:   []string{"0.0.0.0/0"},
-			deny:    []string{},
 			success: []string{"127.0.0.5", "10.0.0.9", "192.168.1.7"},
-			fail:    []string{"fe80::38bc:4dff:fe62:b1ae"},
+			fail:    []string{"fe80::38bc:4dff:fe62:b1ae", "::1"},
 		},
 		{
 			name:    "Only IPv6",
 			allow:   []string{"::0/0"},
-			deny:    []string{},
-			success: []string{"fe80::38bc:4dff:fe62:b1ae"},
+			success: []string{"fe80::38bc:4dff:fe62:b1ae", "::1"},
 			fail:    []string{"127.0.0.5", "10.0.0.9", "192.168.1.7"},
 		},
 		{
-			name:    "All OK but not localhost IPv4/6",
-			allow:   []string{"0.0.0.0/0", "::0/0"},
-			deny:    []string{"127.0.0.0/8", "::1/128"},
-			success: []string{"fe80::38bc:4dff:fe62:b1ae", "10.0.0.9", "192.168.1.7"},
-			fail:    []string{"::1", "127.0.0.5"},
-		},
-		{
-			name:    "Only 192.168.5.0 IPv4/6 without 192.168.5.1",
-			allow:   []string{"192.168.5.0/24", "::ffff:192.0.5.0/120"},
-			deny:    []string{"192.168.5.1/32", "::ffff:192.0.5.1/128"},
-			success: []string{"192.168.5.2", "::ffff:192.0.5.2", "192.168.5.3", "::ffff:192.0.5.3"},
-			fail:    []string{"8.8.8.8", "::1", "127.0.0.5", "192.168.5.1", "::ffff:192.0.5.1", "192.168.1.2", "::ffff:192.0.1.2"},
+			name:    "Only 127.0.0.0/8 and ::1",
+			allow:   []string{"::1/128", "127.0.0.0/8"},
+			success: []string{"127.0.0.5", "::1"},
+			fail:    []string{"::2", "178.250.0.187", "10.0.0.9", "192.168.1.7", "fe80::38bc:4dff:fe62:b1ae"},
 		},
 	}
 
@@ -74,23 +105,19 @@ func Test_IsValidAddressOverride(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			config := DefaultLANConfig()
 			var err error
-			config.CidrsAllowed, err = ParseCIDRs(testCase.allow)
+			config.CidrsAllowed, err = parseCIDRs(testCase.allow)
 			if err != nil {
 				t.Fatalf("failed parsing %s", testCase.allow)
 			}
-			config.CidrsDenied, err = ParseCIDRs(testCase.deny)
-			if err != nil {
-				t.Fatalf("failed parsing %s", testCase.deny)
-			}
 			for _, ips := range testCase.success {
 				ip := net.ParseIP(ips)
-				if err := config.IpAllowed(ip); err != nil {
+				if err := config.IPAllowed(ip); err != nil {
 					t.Fatalf("Test case with %s should pass", ip)
 				}
 			}
 			for _, ips := range testCase.fail {
 				ip := net.ParseIP(ips)
-				if err := config.IpAllowed(ip); err == nil {
+				if err := config.IPAllowed(ip); err == nil {
 					t.Fatalf("Test case with %s should fail", ip)
 				}
 			}
