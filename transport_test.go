@@ -139,7 +139,7 @@ func TestTransport_Send(t *testing.T) {
 }
 
 type testCountingWriter struct {
-	t *testing.T
+	t        *testing.T
 	numCalls *int32
 }
 
@@ -167,7 +167,7 @@ func TestTransport_TcpListenBackoff(t *testing.T) {
 	countingLogger := log.New(countingWriter, "test", log.LstdFlags)
 	transport := NetTransport{
 		streamCh: make(chan net.Conn),
-		logger: countingLogger,
+		logger:   countingLogger,
 	}
 	transport.wg.Add(1)
 
@@ -188,7 +188,7 @@ func TestTransport_TcpListenBackoff(t *testing.T) {
 		transport.wg.Wait()
 	}()
 	select {
-	case <- c:
+	case <-c:
 	case <-time.After(1250 * time.Millisecond):
 		t.Error("timed out waiting for transport waitgroup to be done after flagging shutdown")
 	}
@@ -207,4 +207,3 @@ func TestTransport_TcpListenBackoff(t *testing.T) {
 	// no connections should have been accepted and sent to the channel
 	require.Equal(t, len(transport.streamCh), 0)
 }
-
