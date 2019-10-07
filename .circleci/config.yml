@@ -44,7 +44,6 @@ jobs:
     steps:
       - checkout
       - run: mkdir -p $TEST_RESULTS
-      - run: make bin
 
       # Restore go module cache if there is one
       - restore_cache:
