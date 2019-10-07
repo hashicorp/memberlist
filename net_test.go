@@ -27,19 +27,8 @@ func TestHandleCompoundPing(t *testing.T) {
 	})
 	defer m.Shutdown()
 
-	var udp *net.UDPConn
-	for port := 60000; port < 61000; port++ {
-		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
-		udpLn, err := net.ListenPacket("udp", udpAddr)
-		if err == nil {
-			udp = udpLn.(*net.UDPConn)
-			break
-		}
-	}
-
-	if udp == nil {
-		t.Fatalf("no udp listener")
-	}
+	udp := listenUDP(t)
+	defer udp.Close()
 
 	// Encode a ping
 	ping := ping{SeqNo: 42}
@@ -97,19 +86,8 @@ func TestHandlePing(t *testing.T) {
 	})
 	defer m.Shutdown()
 
-	var udp *net.UDPConn
-	for port := 60000; port < 61000; port++ {
-		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
-		udpLn, err := net.ListenPacket("udp", udpAddr)
-		if err == nil {
-			udp = udpLn.(*net.UDPConn)
-			break
-		}
-	}
-
-	if udp == nil {
-		t.Fatalf("no udp listener")
-	}
+	udp := listenUDP(t)
+	defer udp.Close()
 
 	// Encode a ping
 	ping := ping{SeqNo: 42}
@@ -162,19 +140,8 @@ func TestHandlePing_WrongNode(t *testing.T) {
 	})
 	defer m.Shutdown()
 
-	var udp *net.UDPConn
-	for port := 60000; port < 61000; port++ {
-		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
-		udpLn, err := net.ListenPacket("udp", udpAddr)
-		if err == nil {
-			udp = udpLn.(*net.UDPConn)
-			break
-		}
-	}
-
-	if udp == nil {
-		t.Fatalf("no udp listener")
-	}
+	udp := listenUDP(t)
+	defer udp.Close()
 
 	// Encode a ping, wrong node!
 	ping := ping{SeqNo: 42, Node: m.config.Name + "-bad"}
@@ -204,19 +171,8 @@ func TestHandleIndirectPing(t *testing.T) {
 	})
 	defer m.Shutdown()
 
-	var udp *net.UDPConn
-	for port := 60000; port < 61000; port++ {
-		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
-		udpLn, err := net.ListenPacket("udp", udpAddr)
-		if err == nil {
-			udp = udpLn.(*net.UDPConn)
-			break
-		}
-	}
-
-	if udp == nil {
-		t.Fatalf("no udp listener")
-	}
+	udp := listenUDP(t)
+	defer udp.Close()
 
 	// Encode an indirect ping
 	ind := indirectPingReq{
@@ -576,15 +532,8 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	}
 	m.encodeAndBroadcast("rand", aliveMsg, &a)
 
-	var udp *net.UDPConn
-	for port := 60000; port < 61000; port++ {
-		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
-		udpLn, err := net.ListenPacket("udp", udpAddr)
-		if err == nil {
-			udp = udpLn.(*net.UDPConn)
-			break
-		}
-	}
+	udp := listenUDP(t)
+	defer udp.Close()
 
 	// Encode a ping
 	ping := ping{SeqNo: 42}
@@ -691,19 +640,8 @@ func TestRawSendUdp_CRC(t *testing.T) {
 	})
 	defer m.Shutdown()
 
-	var udp *net.UDPConn
-	for port := 60000; port < 61000; port++ {
-		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
-		udpLn, err := net.ListenPacket("udp", udpAddr)
-		if err == nil {
-			udp = udpLn.(*net.UDPConn)
-			break
-		}
-	}
-
-	if udp == nil {
-		t.Fatalf("no udp listener")
-	}
+	udp := listenUDP(t)
+	defer udp.Close()
 
 	// Pass a nil node with no nodes registered, should result in no checksum
 	payload := []byte{3, 3, 3, 3}
@@ -758,19 +696,8 @@ func TestIngestPacket_CRC(t *testing.T) {
 	})
 	defer m.Shutdown()
 
-	var udp *net.UDPConn
-	for port := 60000; port < 61000; port++ {
-		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
-		udpLn, err := net.ListenPacket("udp", udpAddr)
-		if err == nil {
-			udp = udpLn.(*net.UDPConn)
-			break
-		}
-	}
-
-	if udp == nil {
-		t.Fatalf("no udp listener")
-	}
+	udp := listenUDP(t)
+	defer udp.Close()
 
 	// Get a message with a checksum
 	payload := []byte{3, 3, 3, 3}
@@ -824,4 +751,20 @@ func TestGossip_MismatchedKeys(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "No installed keys could decrypt the message") {
 		t.Fatalf("bad: %s", err)
 	}
+}
+
+func listenUDP(t *testing.T) *net.UDPConn {
+	var udp *net.UDPConn
+	for port := 60000; port < 61000; port++ {
+		udpAddr := fmt.Sprintf("127.0.0.1:%d", port)
+		udpLn, err := net.ListenPacket("udp", udpAddr)
+		if err == nil {
+			udp = udpLn.(*net.UDPConn)
+			break
+		}
+	}
+	if udp == nil {
+		t.Fatalf("no udp listener")
+	}
+	return udp
 }

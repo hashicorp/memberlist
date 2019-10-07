@@ -55,8 +55,8 @@ type Memberlist struct {
 
 	nodeLock   sync.RWMutex
 	nodes      []*nodeState          // Known nodes
-	nodeMap    map[string]*nodeState // Maps Addr.String() -> NodeState
-	nodeTimers map[string]*suspicion // Maps Addr.String() -> suspicion timer
+	nodeMap    map[string]*nodeState // Maps Node.Name -> NodeState
+	nodeTimers map[string]*suspicion // Maps Node.Name -> suspicion timer
 	awareness  *awareness
 
 	tickerLock sync.Mutex
@@ -472,7 +472,7 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 	return nil
 }
 
-// SendTo is deprecated in favor of SendBestEffort, which requires a node to
+// Deprecated: SendTo is deprecated in favor of SendBestEffort, which requires a node to
 // target.
 func (m *Memberlist) SendTo(to net.Addr, msg []byte) error {
 	// Encode as a user message
@@ -484,12 +484,12 @@ func (m *Memberlist) SendTo(to net.Addr, msg []byte) error {
 	return m.rawSendMsgPacket(to.String(), nil, buf)
 }
 
-// SendToUDP is deprecated in favor of SendBestEffort.
+// Deprecated: SendToUDP is deprecated in favor of SendBestEffort.
 func (m *Memberlist) SendToUDP(to *Node, msg []byte) error {
 	return m.SendBestEffort(to, msg)
 }
 
-// SendToTCP is deprecated in favor of SendReliable.
+// Deprecated: SendToTCP is deprecated in favor of SendReliable.
 func (m *Memberlist) SendToTCP(to *Node, msg []byte) error {
 	return m.SendReliable(to, msg)
 }

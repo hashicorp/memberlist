@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	iretry "github.com/hashicorp/memberlist/internal/retry"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 )
@@ -987,24 +988,24 @@ func TestMemberlist_UserData(t *testing.T) {
 	}
 
 	// Wait for a little while
-	time.Sleep(2 * (c1.PushPullInterval + c1.GossipInterval))
+	iretry.Run(t, func(r *iretry.R) {
+		msgs1 := d1.getMessages()
 
-	msgs1 := d1.getMessages()
+		// Ensure we got the messages. Ordering of messages is not guaranteed so just
+		// check we got them both in either order.
+		require.ElementsMatch(r, bcasts, msgs1)
 
-	// Ensure we got the messages. Ordering of messages is not guaranteed so just
-	// check we got them both in either order.
-	require.ElementsMatch(t, bcasts, msgs1)
+		rs1 := d1.getRemoteState()
+		rs2 := d2.getRemoteState()
 
-	rs1 := d1.getRemoteState()
-	rs2 := d2.getRemoteState()
-
-	// Check the push/pull state
-	if !reflect.DeepEqual(rs1, []byte("my state")) {
-		t.Fatalf("bad state %s", rs1)
-	}
-	if !reflect.DeepEqual(rs2, []byte("something")) {
-		t.Fatalf("bad state %s", rs2)
-	}
+		// Check the push/pull state
+		if !reflect.DeepEqual(rs1, []byte("my state")) {
+			r.Fatalf("bad state %s", rs1)
+		}
+		if !reflect.DeepEqual(rs2, []byte("something")) {
+			r.Fatalf("bad state %s", rs2)
+		}
+	})
 }
 
 func TestMemberlist_SendTo(t *testing.T) {
