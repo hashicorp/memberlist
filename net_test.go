@@ -30,8 +30,15 @@ func TestHandleCompoundPing(t *testing.T) {
 	udp := listenUDP(t)
 	defer udp.Close()
 
+	udpAddr := udp.LocalAddr().(*net.UDPAddr)
+
 	// Encode a ping
-	ping := ping{SeqNo: 42}
+	ping := ping{
+		SeqNo:      42,
+		SourceAddr: udpAddr.IP,
+		SourcePort: uint16(udpAddr.Port),
+		SourceNode: "test",
+	}
 	buf, err := encode(pingMsg, ping)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
@@ -42,7 +49,10 @@ func TestHandleCompoundPing(t *testing.T) {
 
 	// Send compound version
 	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.BindPort}
-	udp.WriteTo(compound.Bytes(), addr)
+	_, err = udp.WriteTo(compound.Bytes(), addr)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
 
 	// Wait for responses
 	doneCh := make(chan struct{}, 1)
@@ -89,8 +99,15 @@ func TestHandlePing(t *testing.T) {
 	udp := listenUDP(t)
 	defer udp.Close()
 
+	udpAddr := udp.LocalAddr().(*net.UDPAddr)
+
 	// Encode a ping
-	ping := ping{SeqNo: 42}
+	ping := ping{
+		SeqNo:      42,
+		SourceAddr: udpAddr.IP,
+		SourcePort: uint16(udpAddr.Port),
+		SourceNode: "test",
+	}
 	buf, err := encode(pingMsg, ping)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
@@ -98,7 +115,10 @@ func TestHandlePing(t *testing.T) {
 
 	// Send
 	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.BindPort}
-	udp.WriteTo(buf.Bytes(), addr)
+	_, err = udp.WriteTo(buf.Bytes(), addr)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
 
 	// Wait for response
 	doneCh := make(chan struct{}, 1)
@@ -143,8 +163,16 @@ func TestHandlePing_WrongNode(t *testing.T) {
 	udp := listenUDP(t)
 	defer udp.Close()
 
+	udpAddr := udp.LocalAddr().(*net.UDPAddr)
+
 	// Encode a ping, wrong node!
-	ping := ping{SeqNo: 42, Node: m.config.Name + "-bad"}
+	ping := ping{
+		SeqNo:      42,
+		Node:       m.config.Name + "-bad",
+		SourceAddr: udpAddr.IP,
+		SourcePort: uint16(udpAddr.Port),
+		SourceNode: "test",
+	}
 	buf, err := encode(pingMsg, ping)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
@@ -152,7 +180,10 @@ func TestHandlePing_WrongNode(t *testing.T) {
 
 	// Send
 	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.BindPort}
-	udp.WriteTo(buf.Bytes(), addr)
+	_, err = udp.WriteTo(buf.Bytes(), addr)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
 
 	// Wait for response
 	udp.SetDeadline(time.Now().Add(50 * time.Millisecond))
@@ -174,11 +205,17 @@ func TestHandleIndirectPing(t *testing.T) {
 	udp := listenUDP(t)
 	defer udp.Close()
 
+	udpAddr := udp.LocalAddr().(*net.UDPAddr)
+
 	// Encode an indirect ping
 	ind := indirectPingReq{
-		SeqNo:  100,
-		Target: net.ParseIP(m.config.BindAddr),
-		Port:   uint16(m.config.BindPort),
+		SeqNo:      100,
+		Target:     net.ParseIP(m.config.BindAddr),
+		Port:       uint16(m.config.BindPort),
+		Node:       m.config.Name,
+		SourceAddr: udpAddr.IP,
+		SourcePort: uint16(udpAddr.Port),
+		SourceNode: "test",
 	}
 	buf, err := encode(indirectPingMsg, &ind)
 	if err != nil {
@@ -187,7 +224,10 @@ func TestHandleIndirectPing(t *testing.T) {
 
 	// Send
 	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.BindPort}
-	udp.WriteTo(buf.Bytes(), addr)
+	_, err = udp.WriteTo(buf.Bytes(), addr)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
 
 	// Wait for response
 	doneCh := make(chan struct{}, 1)
@@ -237,6 +277,8 @@ func TestTCPPing(t *testing.T) {
 	if tcp == nil {
 		t.Fatalf("no tcp listener")
 	}
+
+	tcpAddr2 := Address{Addr: tcpAddr.String(), Name: "test"}
 
 	// Note that tcp gets closed in the last test, so we avoid a deferred
 	// Close() call here.
@@ -291,7 +333,7 @@ func TestTCPPing(t *testing.T) {
 		}
 	}()
 	deadline := time.Now().Add(pingTimeout)
-	didContact, err := m.sendPingAndWaitForAck(tcpAddr.String(), pingOut, deadline)
+	didContact, err := m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
 	if err != nil {
 		t.Fatalf("error trying to ping: %s", err)
 	}
@@ -330,7 +372,7 @@ func TestTCPPing(t *testing.T) {
 		}
 	}()
 	deadline = time.Now().Add(pingTimeout)
-	didContact, err = m.sendPingAndWaitForAck(tcpAddr.String(), pingOut, deadline)
+	didContact, err = m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
 	if err == nil || !strings.Contains(err.Error(), "Sequence number") {
 		t.Fatalf("expected an error from mis-matched sequence number")
 	}
@@ -364,7 +406,7 @@ func TestTCPPing(t *testing.T) {
 		}
 	}()
 	deadline = time.Now().Add(pingTimeout)
-	didContact, err = m.sendPingAndWaitForAck(tcpAddr.String(), pingOut, deadline)
+	didContact, err = m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
 	if err == nil || !strings.Contains(err.Error(), "Unexpected msgType") {
 		t.Fatalf("expected an error from bogus message")
 	}
@@ -377,7 +419,7 @@ func TestTCPPing(t *testing.T) {
 	tcp.Close()
 	deadline = time.Now().Add(pingTimeout)
 	startPing := time.Now()
-	didContact, err = m.sendPingAndWaitForAck(tcpAddr.String(), pingOut, deadline)
+	didContact, err = m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
 	pingTime := time.Now().Sub(startPing)
 	if err != nil {
 		t.Fatalf("expected no error during ping on closed socket, got: %s", err)
@@ -535,8 +577,15 @@ func TestSendMsg_Piggyback(t *testing.T) {
 	udp := listenUDP(t)
 	defer udp.Close()
 
+	udpAddr := udp.LocalAddr().(*net.UDPAddr)
+
 	// Encode a ping
-	ping := ping{SeqNo: 42}
+	ping := ping{
+		SeqNo:      42,
+		SourceAddr: udpAddr.IP,
+		SourcePort: uint16(udpAddr.Port),
+		SourceNode: "test",
+	}
 	buf, err := encode(pingMsg, ping)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
@@ -544,7 +593,10 @@ func TestSendMsg_Piggyback(t *testing.T) {
 
 	// Send
 	addr := &net.UDPAddr{IP: net.ParseIP(m.config.BindAddr), Port: m.config.BindPort}
-	udp.WriteTo(buf.Bytes(), addr)
+	_, err = udp.WriteTo(buf.Bytes(), addr)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
 
 	// Wait for response
 	doneCh := make(chan struct{}, 1)
@@ -643,9 +695,14 @@ func TestRawSendUdp_CRC(t *testing.T) {
 	udp := listenUDP(t)
 	defer udp.Close()
 
+	a := Address{
+		Addr: udp.LocalAddr().String(),
+		Name: "test",
+	}
+
 	// Pass a nil node with no nodes registered, should result in no checksum
 	payload := []byte{3, 3, 3, 3}
-	m.rawSendMsgPacket(udp.LocalAddr().String(), nil, payload)
+	m.rawSendMsgPacket(a, nil, payload)
 
 	in := make([]byte, 1500)
 	n, _, err := udp.ReadFrom(in)
@@ -659,7 +716,7 @@ func TestRawSendUdp_CRC(t *testing.T) {
 	}
 
 	// Pass a non-nil node with PMax >= 5, should result in a checksum
-	m.rawSendMsgPacket(udp.LocalAddr().String(), &Node{PMax: 5}, payload)
+	m.rawSendMsgPacket(a, &Node{PMax: 5}, payload)
 
 	in = make([]byte, 1500)
 	n, _, err = udp.ReadFrom(in)
@@ -676,7 +733,7 @@ func TestRawSendUdp_CRC(t *testing.T) {
 	m.nodeMap["127.0.0.1"] = &nodeState{
 		Node: Node{PMax: 5},
 	}
-	m.rawSendMsgPacket(udp.LocalAddr().String(), nil, payload)
+	m.rawSendMsgPacket(a, nil, payload)
 
 	in = make([]byte, 1500)
 	n, _, err = udp.ReadFrom(in)
@@ -699,9 +756,14 @@ func TestIngestPacket_CRC(t *testing.T) {
 	udp := listenUDP(t)
 	defer udp.Close()
 
+	a := Address{
+		Addr: udp.LocalAddr().String(),
+		Name: "test",
+	}
+
 	// Get a message with a checksum
 	payload := []byte{3, 3, 3, 3}
-	m.rawSendMsgPacket(udp.LocalAddr().String(), &Node{PMax: 5}, payload)
+	m.rawSendMsgPacket(a, &Node{PMax: 5}, payload)
 
 	in := make([]byte, 1500)
 	n, _, err := udp.ReadFrom(in)
@@ -747,7 +809,7 @@ func TestGossip_MismatchedKeys(t *testing.T) {
 	defer m2.Shutdown()
 
 	// Make sure we get this error on the joining side
-	_, err = m2.Join([]string{c1.BindAddr})
+	_, err = m2.Join([]string{c1.Name + "/" + c1.BindAddr})
 	if err == nil || !strings.Contains(err.Error(), "No installed keys could decrypt the message") {
 		t.Fatalf("bad: %s", err)
 	}

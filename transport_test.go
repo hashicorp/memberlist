@@ -14,7 +14,7 @@ import (
 func TestTransport_Join(t *testing.T) {
 	net := &MockNetwork{}
 
-	t1 := net.NewTransport()
+	t1 := net.NewTransport("node1")
 
 	c1 := DefaultLANConfig()
 	c1.Name = "node1"
@@ -30,7 +30,7 @@ func TestTransport_Join(t *testing.T) {
 
 	c2 := DefaultLANConfig()
 	c2.Name = "node2"
-	c2.Transport = net.NewTransport()
+	c2.Transport = net.NewTransport("node2")
 	c2.Logger = testLogger(t)
 	m2, err := Create(c2)
 	if err != nil {
@@ -40,7 +40,7 @@ func TestTransport_Join(t *testing.T) {
 	m2.schedule()
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{t1.addr.String()})
+	num, err := m2.Join([]string{c1.Name + "/" + t1.addr.String()})
 	if num != 1 {
 		t.Fatalf("bad: %d", num)
 	}
@@ -60,7 +60,7 @@ func TestTransport_Join(t *testing.T) {
 func TestTransport_Send(t *testing.T) {
 	net := &MockNetwork{}
 
-	t1 := net.NewTransport()
+	t1 := net.NewTransport("node1")
 	d1 := &MockDelegate{}
 
 	c1 := DefaultLANConfig()
@@ -78,7 +78,7 @@ func TestTransport_Send(t *testing.T) {
 
 	c2 := DefaultLANConfig()
 	c2.Name = "node2"
-	c2.Transport = net.NewTransport()
+	c2.Transport = net.NewTransport("node2")
 	c2.Logger = testLogger(t)
 	m2, err := Create(c2)
 	if err != nil {
@@ -88,7 +88,7 @@ func TestTransport_Send(t *testing.T) {
 	m2.schedule()
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{t1.addr.String()})
+	num, err := m2.Join([]string{c1.Name + "/" + t1.addr.String()})
 	if num != 1 {
 		t.Fatalf("bad: %d", num)
 	}
