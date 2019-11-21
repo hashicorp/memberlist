@@ -1,6 +1,8 @@
 SHELL := bash
-DEPS := $(shell go list -f '{{range .Imports}}{{.}} {{end}}' ./...)
-GOFILES ?= $(shell go list $(GOMODULES) | grep -v /vendor/)
+
+GOFILES ?= $(shell go list ./... | grep -v /vendor/)
+
+default: test
 
 test: vet subnet
 	go test ./...
@@ -12,8 +14,8 @@ subnet:
 	./test/setup_subnet.sh
 
 cov:
-	gocov test github.com/hashicorp/memberlist | gocov-html > /tmp/coverage.html
-	open /tmp/coverage.html
+	go test ./... -coverprofile=coverage.out
+	go tool cover -html=coverage.out
 
 format:
 	@echo "--> Running go fmt"
@@ -28,8 +30,4 @@ vet:
 		exit 1; \
 	fi
 
-deps:
-	go get -t -d -v ./...
-	echo $(DEPS) | xargs -n1 go get -d
-
-.PHONY: test cov integ
+.PHONY: default test integ subnet cov format vet
