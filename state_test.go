@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	iretry "github.com/hashicorp/memberlist/internal/retry"
 	"github.com/stretchr/testify/require"
 )
 
@@ -796,10 +797,9 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 	// test is waiting for probeTimeMax and then doing some other work before it
 	// updates the awareness, so we need to wait some extra time. Rather than just
 	// add longer and longer sleeps, we'll retry a few times.
-	time.Sleep(probeTimeMax)
-	retry(t, 5, 10*time.Millisecond, func(failf func(string, ...interface{})) {
+	iretry.Run(t, func(r *iretry.R) {
 		if score := m1.GetHealthScore(); score != 1 {
-			failf("expected health score to decrement on missed nack. want %d, "+
+			r.Fatalf("expected health score to decrement on missed nack. want %d, "+
 				"got: %d", 1, score)
 		}
 	})
