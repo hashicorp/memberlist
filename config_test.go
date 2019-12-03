@@ -36,7 +36,7 @@ func Test_IsValidAddressDefaults(t *testing.T) {
 }
 
 // parseCIDRs return a possible empty list of all Network that have been parsed
-// In case of error, it returns succesfully parsed CIDRs and the last error found
+// In case of error, it returns successfully parsed CIDRs and the last error found
 // If nil is given it returns nil, nil
 func parseCIDRs(v []string) ([]net.IPNet, error) {
 	if v == nil {

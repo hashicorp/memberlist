@@ -230,6 +230,9 @@ type Config struct {
 	// RequireNodeNames controls if the name of a node is required when sending
 	// a message to that node.
 	RequireNodeNames bool
+	// If nil, allow any connection (default), otherwise specify all networks
+	// allowed to connect (you must specify IPv6/IPv4 separately)
+	// Using [] will block all connections.
 	CidrsAllowed []net.IPNet
 }
 
