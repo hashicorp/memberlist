@@ -686,12 +686,17 @@ func (m *Memberlist) rawSendMsgPacket(addr string, node *Node, msg []byte) error
 
 	// Add a CRC to the end of the payload if the recipient understands
 	// ProtocolVersion >= 5
-	if node != nil && node.PMax >= 5 {
-		crc := crc32.ChecksumIEEE(msg)
-		header := make([]byte, 5, 5+len(msg))
-		header[0] = byte(hasCrcMsg)
-		binary.BigEndian.PutUint32(header[1:], crc)
-		msg = append(header, msg...)
+	if node != nil {
+		m.nodeLock.RLock()
+		pMax := node.PMax
+		m.nodeLock.RUnlock()
+		if pMax >= 5 {
+			crc := crc32.ChecksumIEEE(msg)
+			header := make([]byte, 5, 5+len(msg))
+			header[0] = byte(hasCrcMsg)
+			binary.BigEndian.PutUint32(header[1:], crc)
+			msg = append(header, msg...)
+		}
 	}
 
 	// Check if we have encryption enabled
