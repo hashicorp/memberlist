@@ -630,7 +630,7 @@ func (m *Memberlist) ProtocolVersion() uint8 {
 	return m.config.ProtocolVersion
 }
 
-// Shutdown will stop any background maintanence of network activity
+// Shutdown will stop any background maintenance of network activity
 // for this memberlist, causing it to appear "dead". A leave message
 // will not be broadcasted prior, so the cluster being left will have
 // to detect this node's shutdown using probing. If you wish to more
