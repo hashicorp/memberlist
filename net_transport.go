@@ -211,6 +211,13 @@ func (t *NetTransport) IngestPacket(conn net.Conn, addr net.Addr, now time.Time)
 		return fmt.Errorf("failed to read packet: %v", err)
 	}
 
+	// Check the length - it needs to have at least one byte to be a proper
+	// message. This is checked elsewhere for writes coming in directly from
+	// the UDP socket.
+	if n := buf.Len(); n < 1 {
+		return fmt.Errorf("packet too short (%d bytes) %s", n, LogAddress(addr))
+	}
+
 	// Inject the packet.
 	t.packetCh <- &Packet{
 		Buf:       buf.Bytes(),

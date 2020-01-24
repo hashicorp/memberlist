@@ -789,6 +789,38 @@ func TestIngestPacket_CRC(t *testing.T) {
 	}
 }
 
+func TestIngestPacket_ExportedFunc_EmptyMessage(t *testing.T) {
+	m := GetMemberlist(t, func(c *Config) {
+		c.EnableCompression = false
+	})
+	defer m.Shutdown()
+
+	udp := listenUDP(t)
+	defer udp.Close()
+
+	emptyConn := &emptyReadNetConn{}
+
+	logs := &bytes.Buffer{}
+	logger := log.New(logs, "", 0)
+	m.logger = logger
+
+	err := m.transport.IngestPacket(emptyConn, udp.LocalAddr(), time.Now())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "packet too short")
+}
+
+type emptyReadNetConn struct {
+	net.Conn
+}
+
+func (c *emptyReadNetConn) Read(b []byte) (n int, err error) {
+	return 0, io.EOF
+}
+
+func (c *emptyReadNetConn) Close() error {
+	return nil
+}
+
 func TestGossip_MismatchedKeys(t *testing.T) {
 	// Create two agents with different gossip keys
 	c1 := testConfig(t)
