@@ -1741,6 +1741,53 @@ func TestMemberList_DeadNode_NoNode(t *testing.T) {
 	}
 }
 
+func TestMemberList_DeadNodeLeft(t *testing.T) {
+	ch := make(chan NodeEvent, 1)
+
+	m := GetMemberlist(t, func(c *Config) {
+		c.Events = &ChannelEventDelegate{ch}
+	})
+	defer m.Shutdown()
+
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, false)
+
+	// Read the join event
+	<-ch
+
+	d := dead{Node: "test", From: "test", Incarnation: 1}
+	m.deadNode(&d)
+
+	state := m.nodeMap["test"]
+	if state.State != stateLeft {
+		t.Fatalf("Bad state")
+	}
+
+	// change := state.StateChange
+	// if time.Now().Sub(change) > time.Second {
+	// 	t.Fatalf("bad change delta")
+	// }
+
+	// select {
+	// case leave := <-ch:
+	// 	if leave.Event != NodeLeave || leave.Node.Name != "test" {
+	// 		t.Fatalf("bad node name")
+	// 	}
+	// default:
+	// 	t.Fatalf("no leave message")
+	// }
+
+	// // Check a broad cast is queued
+	// if m.broadcasts.NumQueued() != 1 {
+	// 	t.Fatalf("expected only one queued message")
+	// }
+
+	// // Check its a suspect message
+	// if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != deadMsg {
+	// 	t.Fatalf("expected queued dead msg")
+	// }
+}
+
 func TestMemberList_DeadNode(t *testing.T) {
 	ch := make(chan NodeEvent, 1)
 

@@ -525,7 +525,7 @@ func (m *Memberlist) Members() []*Node {
 
 	nodes := make([]*Node, 0, len(m.nodes))
 	for _, n := range m.nodes {
-		if n.State != stateDead {
+		if !n.DeadOrLeft() {
 			nodes = append(nodes, &n.Node)
 		}
 	}
@@ -542,7 +542,7 @@ func (m *Memberlist) NumMembers() (alive int) {
 	defer m.nodeLock.RUnlock()
 
 	for _, n := range m.nodes {
-		if n.State != stateDead {
+		if !n.DeadOrLeft() {
 			alive++
 		}
 	}
@@ -582,6 +582,7 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 		d := dead{
 			Incarnation: state.Incarnation,
 			Node:        state.Name,
+			From:        state.Name,
 		}
 		m.deadNode(&d)
 
@@ -607,7 +608,7 @@ func (m *Memberlist) anyAlive() bool {
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
 	for _, n := range m.nodes {
-		if n.State != stateDead && n.Name != m.config.Name {
+		if !n.DeadOrLeft() && n.Name != m.config.Name {
 			return true
 		}
 	}
