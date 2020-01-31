@@ -1749,16 +1749,26 @@ func TestMemberList_DeadNodeLeft(t *testing.T) {
 	})
 	defer m.Shutdown()
 
-	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
-	m.aliveNode(&a, nil, false)
+	nodeName := "node1"
+	s1 := alive{
+		Node:        nodeName,
+		Addr:        []byte{127, 0, 0, 1},
+		Port:        8000,
+		Incarnation: 1,
+		Vsn:         m.config.BuildVsnArray(),
+	}
+	m.aliveNode(&s1, nil, false)
 
 	// Read the join event
 	<-ch
 
-	d := dead{Node: "test", From: "test", Incarnation: 1}
+	d := dead{Node: nodeName, From: nodeName, Incarnation: 1}
 	m.deadNode(&d)
 
-	state := m.nodeMap["test"]
+	// Read the dead event
+	<-ch
+
+	state := m.nodeMap[nodeName]
 	if state.State != stateLeft {
 		t.Fatalf("Bad state")
 	}
@@ -1768,9 +1778,40 @@ func TestMemberList_DeadNodeLeft(t *testing.T) {
 		t.Fatalf("expected only one queued message")
 	}
 
-	// Check its a suspect message
+	// Check its a dead message
 	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != deadMsg {
 		t.Fatalf("expected queued dead msg")
+	}
+
+	// Clear queue
+	// m.broadcasts.Reset()
+
+	// New alive node
+	s2 := alive{
+		Node:        nodeName,
+		Addr:        []byte{127, 0, 0, 2},
+		Port:        9000,
+		Incarnation: 3,
+		Meta:        []byte("foo"),
+		Vsn:         m.config.BuildVsnArray(),
+	}
+	m.aliveNode(&s2, nil, false)
+
+	// Read the join event
+	<-ch
+
+	state = m.nodeMap[nodeName]
+	if state.State != stateAlive {
+		t.Fatalf("should still be alive")
+	}
+	if !bytes.Equal(state.Meta, []byte("foo")) {
+		t.Fatalf("meta should be updated")
+	}
+	if !bytes.Equal(state.Addr, []byte{127, 0, 0, 2}) {
+		t.Fatalf("address should be updated")
+	}
+	if state.Port != 9000 {
+		t.Fatalf("port should be updated")
 	}
 }
 
@@ -1817,7 +1858,7 @@ func TestMemberList_DeadNode(t *testing.T) {
 		t.Fatalf("expected only one queued message")
 	}
 
-	// Check its a suspect message
+	// Check its a dead message
 	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != deadMsg {
 		t.Fatalf("expected queued dead msg")
 	}
