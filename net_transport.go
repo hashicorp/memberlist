@@ -174,14 +174,13 @@ func (t *NetTransport) FinalAdvertiseAddr(ip string, port int) (net.IP, int, err
 
 // See Transport.
 func (t *NetTransport) WriteTo(b []byte, addr string) (time.Time, error) {
-	a := Address{Addr: addr, Name: ""} // TODO
+	a := Address{Addr: addr, Name: ""}
 	return t.WriteToAddress(b, a)
 }
 
 // See NodeAwareTransport.
 func (t *NetTransport) WriteToAddress(b []byte, a Address) (time.Time, error) {
 	addr := a.Addr
-	// TODO a.Name
 
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
@@ -229,14 +228,13 @@ func (t *NetTransport) IngestPacket(conn net.Conn, addr net.Addr, now time.Time)
 
 // See Transport.
 func (t *NetTransport) DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
-	a := Address{Addr: addr, Name: ""} // TODO
+	a := Address{Addr: addr, Name: ""}
 	return t.DialAddressTimeout(a, timeout)
 }
 
 // See NodeAwareTransport.
 func (t *NetTransport) DialAddressTimeout(a Address, timeout time.Duration) (net.Conn, error) {
 	addr := a.Addr
-	// TODO a.Name
 
 	dialer := net.Dialer{Timeout: timeout}
 	return dialer.Dial("tcp", addr)
