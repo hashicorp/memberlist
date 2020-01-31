@@ -969,7 +969,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 
 			// Allow the address to be updated if a dead node is being replaced.
 			if state.State == stateLeft || (state.State == stateDead && canReclaim) {
-				m.logger.Printf("[INFO] memberlist: Updating address for failed node %s from %v:%d to %v:%d",
+				m.logger.Printf("[INFO] memberlist: Updating address for left or failed node %s from %v:%d to %v:%d",
 					state.Name, state.Addr, state.Port, net.IP(a.Addr), a.Port)
 				updatesNode = true
 			} else {
