@@ -116,6 +116,9 @@ type Config struct {
 	// indirect UDP pings.
 	DisableTcpPings bool
 
+	// TODO
+	DisableTcpPingsForNode func(nodeName string) bool
+
 	// AwarenessMaxMultiplier will increase the probe interval if the node
 	// becomes aware that it might be degraded and not meeting the soft real
 	// time requirements to reliably probe other nodes.

@@ -435,7 +435,10 @@ HANDLE_REMOTE_FAILURE:
 	// which protocol version we are speaking. That's why we've included a
 	// config option to turn this off if desired.
 	fallbackCh := make(chan bool, 1)
-	if (!m.config.DisableTcpPings) && (node.PMax >= 3) {
+
+	disableTcpPings := m.config.DisableTcpPings ||
+		(m.config.DisableTcpPingsForNode != nil && m.config.DisableTcpPingsForNode(node.Name))
+	if (!disableTcpPings) && (node.PMax >= 3) {
 		go func() {
 			defer close(fallbackCh)
 			didContact, err := m.sendPingAndWaitForAck(node.FullAddress(), ping, deadline)
