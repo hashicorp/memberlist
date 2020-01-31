@@ -579,6 +579,10 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 			return nil
 		}
 
+		// This dead message is special, because Node and From are the
+		// same. This helps other nodes figure out that a node left
+		// intentionally. When Node equals From, other nodes know for
+		// sure this node is gone.
 		d := dead{
 			Incarnation: state.Incarnation,
 			Node:        state.Name,
