@@ -577,7 +577,7 @@ func (m *Memberlist) SendBestEffort(to *Node, msg []byte) error {
 // mechanism). Delivery is guaranteed if no error is returned, and there is no
 // limit on the size of the message.
 func (m *Memberlist) SendReliable(to *Node, msg []byte) error {
-	return m.sendUserMsg(to.Address2(), msg)
+	return m.sendUserMsg(to.FullAddress(), msg)
 }
 
 // Members returns a list of all known live nodes. The node structures

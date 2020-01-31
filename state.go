@@ -42,8 +42,9 @@ func (n *Node) Address() string {
 	return joinHostPort(n.Addr.String(), n.Port)
 }
 
-// TODO:docs
-func (n *Node) Address2() Address {
+// FullAddress returns the node name and host:port form of a node's address,
+// suitable for use with a transport.
+func (n *Node) FullAddress() Address {
 	return Address{
 		Addr: joinHostPort(n.Addr.String(), n.Port),
 		Name: n.Name,
@@ -69,9 +70,10 @@ func (n *nodeState) Address() string {
 	return n.Node.Address()
 }
 
-// TODO:docs
-func (n *nodeState) Address2() Address {
-	return n.Node.Address2()
+// FullAddress returns the node name and host:port form of a node's address,
+// suitable for use with a transport.
+func (n *nodeState) FullAddress() Address {
+	return n.Node.FullAddress()
 }
 
 func (n *nodeState) DeadOrLeft() bool {
@@ -320,7 +322,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		m.awareness.ApplyDelta(awarenessDelta)
 	}()
 	if node.State == stateAlive {
-		if err := m.encodeAndSendMsg(node.Address2(), pingMsg, &ping); err != nil {
+		if err := m.encodeAndSendMsg(node.FullAddress(), pingMsg, &ping); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
 			if failedRemote(err) {
 				goto HANDLE_REMOTE_FAILURE
@@ -345,7 +347,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		}
 
 		compound := makeCompoundMessage(msgs)
-		if err := m.rawSendMsgPacket(node.Address2(), &node.Node, compound.Bytes()); err != nil {
+		if err := m.rawSendMsgPacket(node.FullAddress(), &node.Node, compound.Bytes()); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send compound ping and suspect message to %s: %s", addr, err)
 			if failedRemote(err) {
 				goto HANDLE_REMOTE_FAILURE
@@ -417,7 +419,7 @@ HANDLE_REMOTE_FAILURE:
 			expectedNacks++
 		}
 
-		if err := m.encodeAndSendMsg(peer.Address2(), indirectPingMsg, &ind); err != nil {
+		if err := m.encodeAndSendMsg(peer.FullAddress(), indirectPingMsg, &ind); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send indirect ping: %s", err)
 		}
 	}
@@ -436,7 +438,7 @@ HANDLE_REMOTE_FAILURE:
 	if (!m.config.DisableTcpPings) && (node.PMax >= 3) {
 		go func() {
 			defer close(fallbackCh)
-			didContact, err := m.sendPingAndWaitForAck(node.Address2(), ping, deadline)
+			didContact, err := m.sendPingAndWaitForAck(node.FullAddress(), ping, deadline)
 			if err != nil {
 				m.logger.Printf("[ERR] memberlist: Failed fallback ping: %s", err)
 			} else {
@@ -596,13 +598,13 @@ func (m *Memberlist) gossip() {
 		addr := node.Address()
 		if len(msgs) == 1 {
 			// Send single message as is
-			if err := m.rawSendMsgPacket(node.Address2(), &node.Node, msgs[0]); err != nil {
+			if err := m.rawSendMsgPacket(node.FullAddress(), &node.Node, msgs[0]); err != nil {
 				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", addr, err)
 			}
 		} else {
 			// Otherwise create and send a compound message
 			compound := makeCompoundMessage(msgs)
-			if err := m.rawSendMsgPacket(node.Address2(), &node.Node, compound.Bytes()); err != nil {
+			if err := m.rawSendMsgPacket(node.FullAddress(), &node.Node, compound.Bytes()); err != nil {
 				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", addr, err)
 			}
 		}
@@ -629,7 +631,7 @@ func (m *Memberlist) pushPull() {
 	node := nodes[0]
 
 	// Attempt a push pull
-	if err := m.pushPullNode(node.Address2(), false); err != nil {
+	if err := m.pushPullNode(node.FullAddress(), false); err != nil {
 		m.logger.Printf("[ERR] memberlist: Push/Pull with %s failed: %s", node.Name, err)
 	}
 }
