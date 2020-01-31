@@ -747,6 +747,10 @@ func TestMemberlist_Leave(t *testing.T) {
 	if len(m2.Members()) != 1 {
 		t.Fatalf("should have 1 node")
 	}
+
+	if m2.nodeMap[c1.Name].State != stateLeft {
+		t.Fatalf("bad state")
+	}
 }
 
 func TestMemberlist_JoinShutdown(t *testing.T) {
