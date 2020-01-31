@@ -14,7 +14,6 @@ type Packet struct {
 
 	// From has the address of the peer. This is an actual net.Addr so we
 	// can expose some concrete details about incoming packets.
-	// TODO: ensure this is not used for reply
 	From net.Addr
 
 	// Timestamp is the time when the packet was received. This should be
