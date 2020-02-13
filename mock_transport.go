@@ -39,12 +39,12 @@ type MockAddress struct {
 	addr string
 }
 
-// See net.Addr.
+// Network: See net.Addr.
 func (a *MockAddress) Network() string {
 	return "mock"
 }
 
-// See net.Addr.
+// String: See net.Addr.
 func (a *MockAddress) String() string {
 	return a.addr
 }
@@ -57,7 +57,7 @@ type MockTransport struct {
 	streamCh chan net.Conn
 }
 
-// See Transport.
+// FinalAdvertiseAddr: See Transport.
 func (t *MockTransport) FinalAdvertiseAddr(string, int) (net.IP, int, error) {
 	host, portStr, err := net.SplitHostPort(t.addr.String())
 	if err != nil {
@@ -77,7 +77,7 @@ func (t *MockTransport) FinalAdvertiseAddr(string, int) (net.IP, int, error) {
 	return ip, int(port), nil
 }
 
-// See Transport.
+// WriteTo: See Transport.
 func (t *MockTransport) WriteTo(b []byte, addr string) (time.Time, error) {
 	dest, ok := t.net.transports[addr]
 	if !ok {
@@ -93,12 +93,12 @@ func (t *MockTransport) WriteTo(b []byte, addr string) (time.Time, error) {
 	return now, nil
 }
 
-// See Transport.
+// PacketCh: See Transport.
 func (t *MockTransport) PacketCh() <-chan *Packet {
 	return t.packetCh
 }
 
-// See Transport.
+// DialTimeout: See Transport.
 func (t *MockTransport) DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
 	dest, ok := t.net.transports[addr]
 	if !ok {
@@ -110,12 +110,12 @@ func (t *MockTransport) DialTimeout(addr string, timeout time.Duration) (net.Con
 	return p2, nil
 }
 
-// See Transport.
+// StreamCh: See Transport.
 func (t *MockTransport) StreamCh() <-chan net.Conn {
 	return t.streamCh
 }
 
-// See Transport.
+// Shutdown: See Transport.
 func (t *MockTransport) Shutdown() error {
 	return nil
 }
