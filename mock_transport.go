@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -184,12 +183,4 @@ func (t *MockTransport) getPeer(a Address) (*MockTransport, error) {
 		return nil, fmt.Errorf("No route to %s", a)
 	}
 	return dest, nil
-}
-
-func getDatacenter(node string) (string, error) {
-	parts := strings.Split(node, ".")
-	if len(parts) != 2 {
-		return "", fmt.Errorf("node name does not encode a datacenter: %s", node)
-	}
-	return parts[1], nil
 }
