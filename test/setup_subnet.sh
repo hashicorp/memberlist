@@ -4,11 +4,16 @@
 # is a bug that it isn't routable and this causes errors.
 #
 
-# Check if loopback is setup
-ping -c 1 -W 10 127.0.0.2 > /dev/null 2>&1
-if [ $? -eq 0 ]
+action=${1:-up}
+
+if [  "$action" = "up" ]
 then
-    exit
+  # Check if loopback is setup
+  ping -c 1 -W 10 127.0.0.2 > /dev/null 2>&1
+  if [ $? -eq 0 ]
+  then
+      exit
+  fi
 fi
 
 # If we're not on OS X, then error
@@ -22,7 +27,15 @@ case $OSTYPE in
 esac
 
 # Setup loopback
-for ((i=2;i<256;i++))
+for j in 0 1 2
 do
-    sudo ifconfig lo0 alias 127.0.0.$i up
+  for ((i=2;i<256;i++))
+  do
+      if [ "$action" = "up" ]
+      then
+        sudo ifconfig lo0 alias 127.0.$j.$i up
+      else
+        sudo ifconfig lo0 127.0.$j.$i delete
+     fi
+  done
 done
