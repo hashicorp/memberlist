@@ -44,6 +44,7 @@ func testConfig(tb testing.TB) *Config {
 	if tb != nil {
 		config.Logger = testLoggerWithName(tb, config.Name)
 	}
+	config.RequireNodeNames = true
 	return config
 }
 
@@ -348,35 +349,140 @@ func TestMemberList_ResolveAddr(t *testing.T) {
 	m := GetMemberlist(t, nil)
 	defer m.Shutdown()
 
-	if _, err := m.resolveAddr("localhost"); err != nil {
-		t.Fatalf("Could not resolve localhost: %s", err)
+	defaultPort := uint16(m.config.BindPort)
+
+	type testCase struct {
+		name           string
+		in             string
+		expectErr      bool
+		ignoreExpectIP bool
+		expect         []ipPort
 	}
-	if _, err := m.resolveAddr("[::1]:80"); err != nil {
-		t.Fatalf("Could not understand ipv6 pair: %s", err)
+
+	baseCases := []testCase{
+		{
+			name:           "localhost",
+			in:             "localhost",
+			ignoreExpectIP: true,
+			expect: []ipPort{
+				{port: defaultPort},
+			},
+		},
+		{
+			name: "ipv6 pair",
+			in:   "[::1]:80",
+			expect: []ipPort{
+				{ip: net.IPv6loopback, port: 80},
+			},
+		},
+		{
+			name: "ipv6 non-pair",
+			in:   "[::1]",
+			expect: []ipPort{
+				{ip: net.IPv6loopback, port: defaultPort},
+			},
+		},
+		{
+			name:      "hostless port",
+			in:        ":80",
+			expectErr: true,
+		},
+		{
+			name:           "hostname port combo",
+			in:             "localhost:80",
+			ignoreExpectIP: true,
+			expect: []ipPort{
+				{port: 80},
+			},
+		},
+		{
+			name:      "too high port",
+			in:        "localhost:80000",
+			expectErr: true,
+		},
+		{
+			name: "ipv4 port combo",
+			in:   "127.0.0.1:80",
+			expect: []ipPort{
+				{ip: net.IPv4(127, 0, 0, 1), port: 80},
+			},
+		},
+		{
+			name: "ipv6 port combo",
+			in:   "[2001:db8:a0b:12f0::1]:80",
+			expect: []ipPort{
+				{
+					ip:   net.IP{0x20, 0x01, 0x0d, 0xb8, 0x0a, 0x0b, 0x12, 0xf0, 0, 0, 0, 0, 0, 0, 0, 0x1},
+					port: 80,
+				},
+			},
+		},
+		{
+			name:      "ipv4 port combo with empty tag",
+			in:        "/127.0.0.1:80",
+			expectErr: true,
+		},
+		{
+			name: "ipv4 only",
+			in:   "127.0.0.1",
+			expect: []ipPort{
+				{ip: net.IPv4(127, 0, 0, 1), port: defaultPort},
+			},
+		},
+		{
+			name: "ipv6 only",
+			in:   "[2001:db8:a0b:12f0::1]",
+			expect: []ipPort{
+				{
+					ip:   net.IP{0x20, 0x01, 0x0d, 0xb8, 0x0a, 0x0b, 0x12, 0xf0, 0, 0, 0, 0, 0, 0, 0, 0x1},
+					port: defaultPort,
+				},
+			},
+		},
 	}
-	if _, err := m.resolveAddr("[::1]"); err != nil {
-		t.Fatalf("Could not understand ipv6 non-pair")
+
+	// explode the cases to include tagged versions of everything
+	var cases []testCase
+	for _, tc := range baseCases {
+		cases = append(cases, tc)
+		if !strings.Contains(tc.in, "/") { // don't double tag already tagged cases
+			tc2 := testCase{
+				name:           tc.name + " (tagged)",
+				in:             "foo.bar/" + tc.in,
+				expectErr:      tc.expectErr,
+				ignoreExpectIP: tc.ignoreExpectIP,
+			}
+			for _, ipp := range tc.expect {
+				tc2.expect = append(tc2.expect, ipPort{
+					ip:       ipp.ip,
+					port:     ipp.port,
+					nodeName: "foo.bar",
+				})
+			}
+			cases = append(cases, tc2)
+		}
 	}
-	if _, err := m.resolveAddr(":80"); err == nil {
-		t.Fatalf("Understood hostless port")
-	}
-	if _, err := m.resolveAddr("localhost:80"); err != nil {
-		t.Fatalf("Could not understand hostname port combo: %s", err)
-	}
-	if _, err := m.resolveAddr("localhost:80000"); err == nil {
-		t.Fatalf("Understood too high port")
-	}
-	if _, err := m.resolveAddr("127.0.0.1:80"); err != nil {
-		t.Fatalf("Could not understand hostname port combo: %s", err)
-	}
-	if _, err := m.resolveAddr("[2001:db8:a0b:12f0::1]:80"); err != nil {
-		t.Fatalf("Could not understand hostname port combo: %s", err)
-	}
-	if _, err := m.resolveAddr("127.0.0.1"); err != nil {
-		t.Fatalf("Could not understand IPv4 only %s", err)
-	}
-	if _, err := m.resolveAddr("[2001:db8:a0b:12f0::1]"); err != nil {
-		t.Fatalf("Could not understand IPv6 only %s", err)
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := m.resolveAddr(tc.in)
+			if tc.expectErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				if tc.ignoreExpectIP {
+					if len(got) > 1 {
+						got = got[0:1]
+					}
+					for i := 0; i < len(got); i++ {
+						got[i].ip = nil
+					}
+				}
+				require.Equal(t, tc.expect, got)
+			}
+		})
 	}
 }
 
@@ -476,8 +582,8 @@ func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
 			// IP.String converts IP4-mapped addresses back to dotted decimal notation
 			// but the underlying IP bytes don't compare as equal to the actual IPv4
 			// bytes the resolver will get from DNS.
-			ipPort{net.ParseIP("127.0.0.1").To4(), port},
-			ipPort{net.ParseIP("2001:db8:a0b:12f0::1"), port},
+			ipPort{ip: net.ParseIP("127.0.0.1").To4(), port: port, nodeName: ""},
+			ipPort{ip: net.ParseIP("2001:db8:a0b:12f0::1"), port: port, nodeName: ""},
 		}
 		require.Equal(t, expected, ips)
 	}
@@ -518,7 +624,7 @@ func TestMemberlist_Join(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{m1.config.BindAddr})
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 	if num != 1 {
 		t.Fatalf("unexpected 1: %d", num)
 	}
@@ -567,7 +673,7 @@ func TestMemberlist_Join_Cancel(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{m1.config.BindAddr})
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 	if num != 0 {
 		t.Fatalf("unexpected 0: %d", num)
 	}
@@ -635,7 +741,7 @@ func TestMemberlist_Join_Cancel_Passive(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{m1.config.BindAddr})
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 	if num != 1 {
 		t.Fatalf("unexpected 1: %d", num)
 	}
@@ -684,12 +790,12 @@ func TestMemberlist_Join_protocolVersions(t *testing.T) {
 	require.NoError(t, err)
 	defer m3.Shutdown()
 
-	_, err = m1.Join([]string{c2.BindAddr})
+	_, err = m1.Join([]string{c2.Name + "/" + c2.BindAddr})
 	require.NoError(t, err)
 
 	yield()
 
-	_, err = m1.Join([]string{c3.BindAddr})
+	_, err = m1.Join([]string{c3.Name + "/" + c3.BindAddr})
 	require.NoError(t, err)
 }
 
@@ -716,7 +822,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{m1.config.BindAddr})
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 	if num != 1 {
 		t.Fatalf("unexpected 1: %d", num)
 	}
@@ -778,7 +884,7 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{m1.config.BindAddr})
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 	if num != 1 {
 		t.Fatalf("unexpected 1: %d", num)
 	}
@@ -818,7 +924,7 @@ func TestMemberlist_delegateMeta(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	_, err = m1.Join([]string{c2.BindAddr})
+	_, err = m1.Join([]string{c2.Name + "/" + c2.BindAddr})
 	require.NoError(t, err)
 
 	yield()
@@ -884,7 +990,7 @@ func TestMemberlist_delegateMeta_Update(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	_, err = m1.Join([]string{c2.BindAddr})
+	_, err = m1.Join([]string{c2.Name + "/" + c2.BindAddr})
 	require.NoError(t, err)
 
 	yield()
@@ -980,7 +1086,7 @@ func TestMemberlist_UserData(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{m1.config.BindAddr})
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 	if num != 1 {
 		t.Fatalf("unexpected 1: %d", num)
 	}
@@ -1037,7 +1143,7 @@ func TestMemberlist_SendTo(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{m1.config.BindAddr})
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 	require.NoError(t, err)
 	require.Equal(t, 1, num)
 
@@ -1049,7 +1155,11 @@ func TestMemberlist_SendTo(t *testing.T) {
 		IP:   addr2,
 		Port: bindPort,
 	}
-	if err := m1.SendTo(m2Addr, []byte("ping")); err != nil {
+	m2Address := Address{
+		Addr: m2Addr.String(),
+		Name: m2.config.Name,
+	}
+	if err := m1.SendToAddress(m2Address, []byte("ping")); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
@@ -1057,7 +1167,11 @@ func TestMemberlist_SendTo(t *testing.T) {
 		IP:   net.ParseIP(m1.config.BindAddr),
 		Port: bindPort,
 	}
-	if err := m2.SendTo(m1Addr, []byte("pong")); err != nil {
+	m1Address := Address{
+		Addr: m1Addr.String(),
+		Name: m1.config.Name,
+	}
+	if err := m2.SendToAddress(m1Address, []byte("pong")); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
@@ -1108,7 +1222,7 @@ func TestMemberlist_Join_DeadNode(t *testing.T) {
 	bindPort := m1.config.BindPort
 
 	// Create a second "node", which is just a TCP listener that
-	// does not ever respond. This is to test our deadliens
+	// does not ever respond. This is to test our deadlines
 	addr2 := getBindAddr()
 	list, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr2.String(), bindPort))
 	if err != nil {
@@ -1122,7 +1236,7 @@ func TestMemberlist_Join_DeadNode(t *testing.T) {
 	})
 	defer timer.Stop()
 
-	num, err := m1.Join([]string{addr2.String()})
+	num, err := m1.Join([]string{"fake/" + addr2.String()})
 	if num != 0 {
 		t.Fatalf("unexpected 0: %d", num)
 	}
@@ -1154,7 +1268,7 @@ func TestMemberlist_Join_Protocol_Compatibility(t *testing.T) {
 		require.NoError(t, err)
 		defer m2.Shutdown()
 
-		num, err := m2.Join([]string{m1.config.BindAddr})
+		num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 		require.NoError(t, err)
 		require.Equal(t, 1, num)
 
@@ -1247,7 +1361,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{fmt.Sprintf("%s:%d", m1.config.BindAddr, m1.config.BindPort)})
+	num, err := m2.Join([]string{fmt.Sprintf("%s/%s:%d", m1.config.Name, m1.config.BindAddr, m1.config.BindPort)})
 	require.NoError(t, err)
 	require.Equal(t, 1, num)
 
@@ -1353,7 +1467,7 @@ func TestMemberlist_conflictDelegate(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m1.Join([]string{c2.BindAddr})
+	num, err := m1.Join([]string{c2.Name + "/" + c2.BindAddr})
 	require.NoError(t, err)
 	require.Equal(t, 1, num)
 
@@ -1421,7 +1535,7 @@ func TestMemberlist_PingDelegate(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{m1.config.BindAddr})
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 	require.NoError(t, err)
 	require.Equal(t, 1, num)
 
@@ -1560,7 +1674,7 @@ func TestMemberlist_EncryptedGossipTransition(t *testing.T) {
 		srcName, dstName := pretty[src.config.Name], pretty[dst.config.Name]
 		t.Logf("Node %s[%s] joining node %s[%s]", srcName, src.config.Name, dstName, dst.config.Name)
 
-		num, err := src.Join([]string{dst.config.BindAddr})
+		num, err := src.Join([]string{dst.config.Name + "/" + dst.config.BindAddr})
 		require.NoError(t, err)
 		require.Equal(t, 1, num)
 

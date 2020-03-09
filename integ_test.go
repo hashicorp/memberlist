@@ -57,7 +57,7 @@ func TestMemberlist_Integ(t *testing.T) {
 
 		if i > 0 {
 			last := members[i-1]
-			num, err := m.Join([]string{last.config.Name})
+			num, err := m.Join([]string{last.config.Name + "/" + last.config.Name})
 			if num == 0 || err != nil {
 				t.Fatalf("unexpected err: %s", err)
 			}
