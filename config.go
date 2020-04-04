@@ -169,6 +169,11 @@ type Config struct {
 	// AES-192, or AES-256.
 	SecretKey []byte
 
+	// A unique key per cluster that is used enhance encryption keys to provide
+	// basic authentication. When this is set, the PKI version of the protocol
+	// is enabled.
+	AccessKey []byte
+
 	// The keyring holds all of the encryption keys used internally. It is
 	// automatically initialized using the SecretKey and SecretKeys values.
 	Keyring *Keyring
@@ -309,5 +314,5 @@ func DefaultLocalConfig() *Config {
 
 // Returns whether or not encryption is enabled
 func (c *Config) EncryptionEnabled() bool {
-	return c.Keyring != nil && len(c.Keyring.GetKeys()) > 0
+	return (c.Keyring != nil && len(c.Keyring.GetKeys()) > 0) || c.ProtocolVersion == ProtocolPKIVersion1
 }

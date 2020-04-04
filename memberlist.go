@@ -33,6 +33,7 @@ import (
 )
 
 var errNodeNamesAreRequired = errors.New("memberlist: node names are required by configuration but one was not provided")
+var errNodeKeysAreRequired = errors.New("memberlist: node public kesy are required by configuration but one was not provided")
 
 type Memberlist struct {
 	sequenceNum uint32 // Local sequence number
@@ -77,6 +78,14 @@ type Memberlist struct {
 	broadcasts *TransmitLimitedQueue
 
 	logger *log.Logger
+
+	privateKey       PrivateKey
+	publicKey        Key
+	encryptionStates map[KeyArray]*encryptionState // Map public key -> encryption info
+}
+
+type encryptionState struct {
+	key []byte
 }
 
 // BuildVsnArray creates the array of Vsn
@@ -201,7 +210,27 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		ackHandlers:          make(map[uint32]*ackHandler),
 		broadcasts:           &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
 		logger:               logger,
+		encryptionStates:     make(map[KeyArray]*encryptionState),
 	}
+
+	if len(conf.AccessKey) > 0 {
+		conf.ProtocolVersion = ProtocolPKIVersion1
+	}
+
+	if conf.ProtocolVersion >= ProtocolPKIVersion1 {
+		if len(conf.AccessKey) == 0 {
+			return nil, fmt.Errorf("PKI protocol requested but no access token provided")
+		}
+
+		dhkey, err := NewPrivateKey()
+		if err != nil {
+			return nil, err
+		}
+
+		m.privateKey = dhkey
+		m.publicKey = dhkey.Public()
+	}
+
 	m.broadcasts.NumNodes = func() int {
 		return m.estNumNodes()
 	}
@@ -235,6 +264,16 @@ func Create(conf *Config) (*Memberlist, error) {
 	}
 	m.schedule()
 	return m, nil
+}
+
+// PublicKey returns a string that should be used as the public key by other
+// nodes when attempting to join this one when public key encryption is enabled.
+func (m *Memberlist) PublicKey() (string, error) {
+	if m.publicKey != nil {
+		return m.publicKey.HexString(), nil
+	}
+
+	return "", fmt.Errorf("not configured for public key encryption")
 }
 
 // Join is used to take an existing Memberlist and attempt to join a cluster
@@ -446,7 +485,9 @@ func (m *Memberlist) setAlive() error {
 		Port:        uint16(port),
 		Meta:        meta,
 		Vsn:         m.config.BuildVsnArray(),
+		PublicKey:   m.publicKey.Bytes(),
 	}
+
 	m.aliveNode(&a, nil, true)
 
 	return nil

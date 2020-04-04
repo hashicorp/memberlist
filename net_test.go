@@ -321,7 +321,7 @@ func TestTCPPing(t *testing.T) {
 			t.Fatalf("node name isn't correct (%s) vs (%s)", pingIn.Node, pingOut.Node)
 		}
 
-		ack := ackResp{pingIn.SeqNo, nil}
+		ack := ackResp{SeqNo: pingIn.SeqNo}
 		out, err := encode(ackRespMsg, &ack)
 		if err != nil {
 			t.Fatalf("failed to encode ack: %s", err)
@@ -360,7 +360,7 @@ func TestTCPPing(t *testing.T) {
 			t.Fatalf("failed to decode ping: %s", err)
 		}
 
-		ack := ackResp{pingIn.SeqNo + 1, nil}
+		ack := ackResp{SeqNo: pingIn.SeqNo + 1}
 		out, err := encode(ackRespMsg, &ack)
 		if err != nil {
 			t.Fatalf("failed to encode ack: %s", err)
@@ -557,6 +557,175 @@ func TestTCPPushPull(t *testing.T) {
 	}
 }
 
+func TestTCPPushPullPK(t *testing.T) {
+	config := DefaultLANConfig()
+	config.BindAddr = getBindAddr().String()
+	config.Name = config.BindAddr
+	config.BindPort = 0 // choose free port
+	config.Logger = testLoggerWithName(t, config.Name)
+	config.RequireNodeNames = true
+	config.ProtocolVersion = ProtocolPKIVersion1
+	config.AccessKey = []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+
+	m, err := newMemberlist(config)
+	require.NoError(t, err)
+
+	defer m.Shutdown()
+
+	m.nodes = append(m.nodes, &nodeState{
+		Node: Node{
+			Name: "Test 0",
+			Addr: net.ParseIP(m.config.BindAddr),
+			Port: uint16(m.config.BindPort),
+		},
+		Incarnation: 0,
+		State:       stateSuspect,
+		StateChange: time.Now().Add(-1 * time.Second),
+	})
+
+	addr := fmt.Sprintf("%s:%d", m.config.BindAddr, m.config.BindPort)
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	defer conn.Close()
+
+	localNodes := make([]pushNodeState, 3)
+	localNodes[0].Name = "Test 0"
+	localNodes[0].Addr = net.ParseIP(m.config.BindAddr)
+	localNodes[0].Port = uint16(m.config.BindPort)
+	localNodes[0].Incarnation = 1
+	localNodes[0].State = stateAlive
+	localNodes[1].Name = "Test 1"
+	localNodes[1].Addr = net.ParseIP(m.config.BindAddr)
+	localNodes[1].Port = uint16(m.config.BindPort)
+	localNodes[1].Incarnation = 1
+	localNodes[1].State = stateAlive
+	localNodes[2].Name = "Test 2"
+	localNodes[2].Addr = net.ParseIP(m.config.BindAddr)
+	localNodes[2].Port = uint16(m.config.BindPort)
+	localNodes[2].Incarnation = 1
+	localNodes[2].State = stateAlive
+
+	// Send our node state
+	header := pushPullHeader{Nodes: 3}
+	hd := codec.MsgpackHandle{}
+
+	var buf bytes.Buffer
+
+	enc := codec.NewEncoder(&buf, &hd)
+
+	// Send the push/pull indicator
+	buf.Write([]byte{byte(pushPullMsg)})
+
+	if err := enc.Encode(&header); err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	for i := 0; i < header.Nodes; i++ {
+		if err := enc.Encode(&localNodes[i]); err != nil {
+			t.Fatalf("unexpected err %s", err)
+		}
+	}
+
+	var tempm Memberlist
+	tempm.config = config
+	tempm.encryptionStates = make(map[KeyArray]*encryptionState)
+	tempm.logger = m.logger
+
+	dhkey, err := NewPrivateKey()
+	require.NoError(t, err)
+
+	tempm.privateKey = dhkey
+	tempm.publicKey = dhkey.Public()
+
+	wrapped, err := tempm.exchangePubKeys(conn, true)
+	require.NoError(t, err)
+
+	econn, ok := wrapped.(*encryptedConn)
+	require.True(t, ok)
+
+	data, err := tempm.encryptLocalState(econn, buf.Bytes())
+	require.NoError(t, err)
+
+	conn.Write(data)
+
+	// Read the message type
+	var msgType messageType
+	if err := binary.Read(conn, binary.BigEndian, &msgType); err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	require.Equal(t, encryptMsg, msgType)
+
+	var bufConn io.Reader = conn
+	plain, err := tempm.decryptRemoteState(econn, bufConn)
+	require.NoError(t, err)
+
+	msgType = messageType(plain[0])
+	bufConn = bytes.NewReader(plain[1:])
+
+	msghd := codec.MsgpackHandle{}
+	dec := codec.NewDecoder(bufConn, &msghd)
+
+	// Check if we have a compressed message
+	if msgType == compressMsg {
+		var c compress
+		if err := dec.Decode(&c); err != nil {
+			t.Fatalf("unexpected err %s", err)
+		}
+		decomp, err := decompressBuffer(&c)
+		if err != nil {
+			t.Fatalf("unexpected err %s", err)
+		}
+
+		// Reset the message type
+		msgType = messageType(decomp[0])
+
+		// Create a new bufConn
+		bufConn = bytes.NewReader(decomp[1:])
+
+		// Create a new decoder
+		dec = codec.NewDecoder(bufConn, &hd)
+	}
+
+	// Quit if not push/pull
+	if msgType != pushPullMsg {
+		t.Fatalf("bad message type")
+	}
+
+	if err := dec.Decode(&header); err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	// Allocate space for the transfer
+	remoteNodes := make([]pushNodeState, header.Nodes)
+
+	// Try to decode all the states
+	for i := 0; i < header.Nodes; i++ {
+		if err := dec.Decode(&remoteNodes[i]); err != nil {
+			t.Fatalf("unexpected err %s", err)
+		}
+	}
+
+	if len(remoteNodes) != 1 {
+		t.Fatalf("bad response")
+	}
+
+	n := &remoteNodes[0]
+	if n.Name != "Test 0" {
+		t.Fatalf("bad name")
+	}
+	if bytes.Compare(n.Addr, net.ParseIP(m.config.BindAddr)) != 0 {
+		t.Fatal("bad addr")
+	}
+	if n.Incarnation != 0 {
+		t.Fatal("bad incarnation")
+	}
+	if n.State != stateSuspect {
+		t.Fatal("bad state")
+	}
+}
+
 func TestSendMsg_Piggyback(t *testing.T) {
 	m := GetMemberlist(t, nil)
 	defer m.Shutdown()
@@ -667,7 +836,9 @@ func TestEncryptDecryptState(t *testing.T) {
 	}
 	defer m.Shutdown()
 
-	crypt, err := m.encryptLocalState(state)
+	econn := &encryptedConn{}
+
+	crypt, err := m.encryptLocalState(econn, state)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -676,7 +847,48 @@ func TestEncryptDecryptState(t *testing.T) {
 	buf := bytes.NewReader(crypt)
 	buf.Seek(1, 0)
 
-	plain, err := m.decryptRemoteState(buf)
+	plain, err := m.decryptRemoteState(econn, buf)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	if !reflect.DeepEqual(state, plain) {
+		t.Fatalf("Decrypt failed: %v", plain)
+	}
+}
+
+func TestEncryptDecryptStatePK(t *testing.T) {
+	state := []byte("this is our internal state...")
+
+	config := &Config{
+		AccessKey:       []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		ProtocolVersion: ProtocolPKIVersion1,
+	}
+	config.Logger = testLogger(t)
+
+	m, err := Create(config)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	defer m.Shutdown()
+
+	otherKey, err := NewPrivateKey()
+	require.NoError(t, err)
+
+	econn := &encryptedConn{
+		PublicKey: otherKey.Public(),
+	}
+
+	crypt, err := m.encryptLocalState(econn, state)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	// Create reader, seek past the type byte
+	buf := bytes.NewReader(crypt)
+	buf.Seek(1, 0)
+
+	plain, err := m.decryptRemoteState(econn, buf)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}

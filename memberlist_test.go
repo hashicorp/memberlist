@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -24,6 +25,10 @@ var bindNum byte = 10
 func getBindAddr() net.IP {
 	bindLock.Lock()
 	defer bindLock.Unlock()
+
+	if runtime.GOOS == "darwin" {
+		bindNum = 1
+	}
 
 	result := net.IPv4(127, 0, 0, bindNum)
 	bindNum++
