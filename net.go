@@ -913,8 +913,9 @@ func (m *Memberlist) rawSendMsgStream(conn net.Conn, sendBuf []byte) error {
 	if m.config.EncryptionEnabled() && m.config.GossipVerifyOutgoing {
 		econn, ok := conn.(*encryptedConn)
 		if !ok {
-			return fmt.Errorf("[ERROR] memberlist: encrypted required but not encryption context provided")
+			econn = &encryptedConn{Conn: conn}
 		}
+
 		crypt, err := m.encryptLocalState(econn, sendBuf)
 		if err != nil {
 			m.logger.Printf("[ERROR] memberlist: Failed to encrypt local state: %v", err)
@@ -1192,15 +1193,14 @@ func (m *Memberlist) readStream(conn net.Conn) (messageType, io.Reader, *codec.D
 
 	// Check if the message is encrypted
 	if msgType == encryptMsg {
-		econn, ok := conn.(*encryptedConn)
-		if !ok {
-			return 0, nil, nil,
-				fmt.Errorf("Remote state is encrypted but no encryption context is available")
-		}
-
 		if !m.config.EncryptionEnabled() {
 			return 0, nil, nil,
 				fmt.Errorf("Remote state is encrypted and encryption is not configured")
+		}
+
+		econn, ok := conn.(*encryptedConn)
+		if !ok {
+			econn = &encryptedConn{Conn: conn}
 		}
 
 		plain, err := m.decryptRemoteState(econn, bufConn)

@@ -826,7 +826,7 @@ func TestEncryptDecryptState(t *testing.T) {
 	state := []byte("this is our internal state...")
 	config := &Config{
 		SecretKey:       []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-		ProtocolVersion: ProtocolVersionMax,
+		ProtocolVersion: ProtocolVersion2Compatible,
 	}
 	config.Logger = testLogger(t)
 
