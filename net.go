@@ -645,6 +645,10 @@ func (m *Memberlist) ensureCanConnect(from net.Addr) error {
 }
 
 func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
+	if err := m.ensureCanConnect(from); err != nil {
+		m.logger.Printf("[DEBUG] memberlist: Blocked alive message: %s %s", err, LogAddress(from))
+		return
+	}
 	var live alive
 	if err := decode(buf, &live); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to decode alive message: %s %s", err, LogAddress(from))
@@ -655,11 +659,6 @@ func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 	// behavior by using the configured port
 	if m.ProtocolVersion() < 2 || live.Port == 0 {
 		live.Port = uint16(m.config.BindPort)
-	}
-
-	if err := m.ensureCanConnect(from); err != nil {
-		m.logger.Printf("[DEBUG] memberlist: Blocked alive message: %s %s", err, LogAddress(from))
-		return
 	}
 
 	m.aliveNode(&live, nil, false)
