@@ -327,7 +327,7 @@ func DefaultWANConfig() *Config {
 
 // IPMustBeChecked return true if IPAllowed must be called
 func (c *Config) IPMustBeChecked() bool {
-	return c.CIDRsAllowed != nil
+	return len(c.CIDRsAllowed) > 0
 }
 
 // IPAllowed return an error if access to memberlist is denied
