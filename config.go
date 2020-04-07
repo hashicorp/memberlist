@@ -174,6 +174,12 @@ type Config struct {
 	// is enabled.
 	AccessKey []byte
 
+	// Private key to use for public key encryption along with the AccessKey.
+	// If one is not specified, an ephemeral key will be used. This is exposed
+	// to allow higher layers to generate and note keys to allow them to reject
+	// unknown keys (and thus nodes) from cluster access.
+	PrivateKey PrivateKey
+
 	// The keyring holds all of the encryption keys used internally. It is
 	// automatically initialized using the SecretKey and SecretKeys values.
 	Keyring *Keyring

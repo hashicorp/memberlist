@@ -222,9 +222,15 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 			return nil, fmt.Errorf("PKI protocol requested but no access token provided")
 		}
 
-		dhkey, err := NewPrivateKey()
-		if err != nil {
-			return nil, err
+		dhkey := conf.PrivateKey
+
+		var err error
+
+		if dhkey == nil {
+			dhkey, err = NewPrivateKey()
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		m.privateKey = dhkey

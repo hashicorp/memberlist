@@ -948,7 +948,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 	}
 
 	// Invoke the Alive delegate if any. This can be used to filter out
-	// alive messages based on custom logic. For example, using a cluster name.
+	// alive messages based on custom logic. For example, using a cluster name or that the node's public key is known.
 	// Using a merge delegate is not enough, as it is possible for passive
 	// cluster merging to still occur.
 	if m.config.Alive != nil {
