@@ -105,7 +105,7 @@ func Test_IsValidAddressOverride(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			config := DefaultLANConfig()
 			var err error
-			config.CidrsAllowed, err = parseCIDRs(testCase.allow)
+			config.CIDRsAllowed, err = parseCIDRs(testCase.allow)
 			if err != nil {
 				t.Fatalf("failed parsing %s", testCase.allow)
 			}

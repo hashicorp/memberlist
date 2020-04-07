@@ -651,7 +651,7 @@ func TestMemberlist_Join(t *testing.T) {
 
 func TestMemberlist_JoinDifferentNetworksUniqueMask(t *testing.T) {
 	c1 := testConfigNet(t, 0)
-	c1.CidrsAllowed, _ = parseCIDRs([]string{"127.0.0.0/8"})
+	c1.CIDRsAllowed, _ = parseCIDRs([]string{"127.0.0.0/8"})
 	m1, err := Create(c1)
 	require.NoError(t, err)
 	defer m1.Shutdown()
@@ -660,7 +660,7 @@ func TestMemberlist_JoinDifferentNetworksUniqueMask(t *testing.T) {
 
 	// Create a second node
 	c2 := testConfigNet(t, 1)
-	c2.CidrsAllowed, _ = parseCIDRs([]string{"127.0.0.0/8"})
+	c2.CIDRsAllowed, _ = parseCIDRs([]string{"127.0.0.0/8"})
 	c2.BindPort = bindPort
 
 	m2, err := Create(c2)
@@ -686,7 +686,7 @@ func TestMemberlist_JoinDifferentNetworksUniqueMask(t *testing.T) {
 
 func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 	c1 := testConfigNet(t, 0)
-	c1.CidrsAllowed, _ = parseCIDRs([]string{"127.0.0.0/24", "127.0.1.0/24"})
+	c1.CIDRsAllowed, _ = parseCIDRs([]string{"127.0.0.0/24", "127.0.1.0/24"})
 	m1, err := Create(c1)
 	require.NoError(t, err)
 	defer m1.Shutdown()
@@ -695,7 +695,7 @@ func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 
 	// Create a second node
 	c2 := testConfigNet(t, 1)
-	c2.CidrsAllowed, _ = parseCIDRs([]string{"127.0.0.0/24", "127.0.1.0/24"})
+	c2.CIDRsAllowed, _ = parseCIDRs([]string{"127.0.0.0/24", "127.0.1.0/24"})
 	c2.BindPort = bindPort
 
 	m2, err := Create(c2)
@@ -710,7 +710,7 @@ func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 	// Create a rogue node that allows all networks
 	// It should see others, but will not be seen by others
 	c3 := testConfigNet(t, 2)
-	c3.CidrsAllowed, _ = parseCIDRs([]string{"127.0.0.0/8"})
+	c3.CIDRsAllowed, _ = parseCIDRs([]string{"127.0.0.0/8"})
 	c3.BindPort = bindPort
 
 	m3, err := Create(c3)
@@ -743,7 +743,7 @@ func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 	// Create a rogue node that allows all networks
 	// It should see others, but will not be seen by others
 	c4 := testConfigNet(t, 2)
-	c4.CidrsAllowed, _ = parseCIDRs([]string{"127.0.0.0/24", "127.0.1.0/24"})
+	c4.CIDRsAllowed, _ = parseCIDRs([]string{"127.0.0.0/24", "127.0.1.0/24"})
 	c4.BindPort = bindPort
 
 	m4, err := Create(c4)

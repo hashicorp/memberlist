@@ -305,7 +305,7 @@ func DefaultLANConfig() *Config {
 
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
-		CidrsAllowed:      nil, // same as allow all
+		CIDRsAllowed:      nil, // same as allow all
 	}
 }
 
