@@ -46,12 +46,6 @@ func Test_IsValidAddressOverride(t *testing.T) {
 			fail:    []string{},
 		},
 		{
-			name:    "[] blocks all",
-			allow:   []string{},
-			success: []string{},
-			fail:    []string{"127.0.0.5", "10.0.0.9", "192.168.1.7", "::1"},
-		},
-		{
 			name:    "Only IPv4",
 			allow:   []string{"0.0.0.0/0"},
 			success: []string{"127.0.0.5", "10.0.0.9", "192.168.1.7"},

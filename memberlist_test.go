@@ -667,7 +667,7 @@ func TestMemberlist_JoinDifferentNetworksUniqueMask(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{m1.config.BindAddr})
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 	if num != 1 {
 		t.Fatalf("unexpected 1: %d", num)
 	}
@@ -702,7 +702,7 @@ func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	err = joinAndTestMemberShip(t, m2, []string{m1.config.BindAddr}, 2)
+	err = joinAndTestMemberShip(t, m2, []string{m1.config.Name + "/" + m1.config.BindAddr}, 2)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
@@ -718,7 +718,7 @@ func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 	defer m3.Shutdown()
 
 	// The rogue can see others, but others cannot see it
-	err = joinAndTestMemberShip(t, m3, []string{m1.config.BindAddr}, 3)
+	err = joinAndTestMemberShip(t, m3, []string{m1.config.Name + "/" + m1.config.BindAddr}, 3)
 	// For the node itself, everything seems fine, it should see others
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
@@ -971,7 +971,7 @@ func TestMemberlist_Leave(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	err = joinAndTestMemberShip(t, m2, []string{m1.config.BindAddr}, 2)
+	err = joinAndTestMemberShip(t, m2, []string{m1.config.Name + "/" + m1.config.BindAddr}, 2)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
