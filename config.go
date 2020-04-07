@@ -6,7 +6,10 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"time"
+
+	multierror "github.com/hashicorp/go-multierror"
 )
 
 type Config struct {
@@ -230,10 +233,10 @@ type Config struct {
 	// RequireNodeNames controls if the name of a node is required when sending
 	// a message to that node.
 	RequireNodeNames bool
-	// If nil, allow any connection (default), otherwise specify all networks
+	// CIDRsAllowed If nil, allow any connection (default), otherwise specify all networks
 	// allowed to connect (you must specify IPv6/IPv4 separately)
 	// Using [] will block all connections.
-	CidrsAllowed []net.IPNet
+	CIDRsAllowed []net.IPNet
 }
 
 // ParseCIDRs return a possible empty list of all Network that have been parsed
@@ -324,7 +327,7 @@ func DefaultWANConfig() *Config {
 
 // IPMustBeChecked return true if IPAllowed must be called
 func (c *Config) IPMustBeChecked() bool {
-	return c.CidrsAllowed != nil
+	return c.CIDRsAllowed != nil
 }
 
 // IPAllowed return an error if access to memberlist is denied
@@ -332,7 +335,7 @@ func (c *Config) IPAllowed(ip net.IP) error {
 	if !c.IPMustBeChecked() {
 		return nil
 	}
-	for _, n := range c.CidrsAllowed {
+	for _, n := range c.CIDRsAllowed {
 		if n.Contains(ip) {
 			return nil
 		}
