@@ -654,11 +654,13 @@ func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 		m.logger.Printf("[ERR] memberlist: Failed to decode alive message: %s %s", err, LogAddress(from))
 		return
 	}
-	innerIP := net.IP(live.Addr)
-	if innerIP != nil {
-		if err := m.config.IPAllowed(innerIP); err != nil {
-			m.logger.Printf("[DEBUG] memberlist: Blocked alive.Addr=%s message from: %s %s", innerIP.String(), err, LogAddress(from))
-			return
+	if m.config.IPMustBeChecked() {
+		innerIP := net.IP(live.Addr)
+		if innerIP != nil {
+			if err := m.config.IPAllowed(innerIP); err != nil {
+				m.logger.Printf("[DEBUG] memberlist: Blocked alive.Addr=%s message from: %s %s", innerIP.String(), err, LogAddress(from))
+				return
+			}
 		}
 	}
 
