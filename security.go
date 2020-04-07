@@ -18,7 +18,6 @@ currently support the following versions:
  0 - AES-GCM 128, using PKCS7 padding
  1 - AES-GCM 128, no padding. Padding not needed, caused bloat.
  2 - Curve25519 derived keys, AES-GCM 128, no padding.
- 3 - Same as 2 but includes the sender public key in the content
 
 */
 type encryptionVersion uint8

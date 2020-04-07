@@ -48,8 +48,9 @@ func (n *Node) Address() string {
 // suitable for use with a transport.
 func (n *Node) FullAddress() Address {
 	return Address{
-		Addr: joinHostPort(n.Addr.String(), n.Port),
-		Name: n.Name,
+		Addr:      joinHostPort(n.Addr.String(), n.Port),
+		Name:      n.Name,
+		PublicKey: n.PublicKey,
 	}
 }
 
@@ -301,7 +302,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		SourcePort: selfPort,
 		SourceNode: m.config.Name,
 
-		SourcePublicKey: m.publicKey[:],
+		SourcePublicKey: m.publicKey,
 	}
 
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
@@ -916,7 +917,7 @@ func (m *Memberlist) refute(me *nodeState, accusedInc uint32) {
 			me.DMin, me.DMax, me.DCur,
 		},
 
-		PublicKey: me.PublicKey[:],
+		PublicKey: me.PublicKey,
 	}
 	m.encodeAndBroadcast(me.Addr.String(), aliveMsg, a)
 }
@@ -983,15 +984,14 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 	if !ok {
 		state = &nodeState{
 			Node: Node{
-				Name: a.Node,
-				Addr: a.Addr,
-				Port: a.Port,
-				Meta: a.Meta,
+				Name:      a.Node,
+				Addr:      a.Addr,
+				Port:      a.Port,
+				Meta:      a.Meta,
+				PublicKey: a.PublicKey,
 			},
 			State: stateDead,
 		}
-
-		state.Node.PublicKey = a.PublicKey
 
 		if len(a.Vsn) > 5 {
 			state.PMin = a.Vsn[0]
@@ -1048,6 +1048,9 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 				return
 			}
 		}
+
+		// We update the public key of this node we already know about so we always have it's latest key
+		state.Node.PublicKey = a.PublicKey
 	}
 
 	// Bail if the incarnation number is older, and this is not about us

@@ -485,7 +485,7 @@ func (m *Memberlist) setAlive() error {
 		Port:        uint16(port),
 		Meta:        meta,
 		Vsn:         m.config.BuildVsnArray(),
-		PublicKey:   m.publicKey.Bytes(),
+		PublicKey:   m.publicKey,
 	}
 
 	m.aliveNode(&a, nil, true)

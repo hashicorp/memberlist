@@ -350,6 +350,9 @@ func (m *Memberlist) packetListen() {
 }
 
 func (m *Memberlist) computeKey(peerpub Key) ([]byte, error) {
+	if len(peerpub) != KeySize {
+		panic("bad key")
+	}
 	mk := peerpub.MapKey()
 
 	es, ok := m.encryptionStates[mk]
@@ -382,14 +385,12 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time
 
 		if encryptionVersion(buf[0]) == 2 {
 			var peerpub Key
-			copy(peerpub[:], buf[:KeySize])
+			peerpub = buf[1 : 1+KeySize]
 
 			pkk, err = m.computeKey(peerpub)
 			if err != nil {
 				panic(err)
 			}
-
-			buf = buf[KeySize:]
 		}
 
 		var keys [][]byte
@@ -838,7 +839,11 @@ func (m *Memberlist) rawSendMsgPacket(a Address, node *Node, msg []byte) error {
 
 	// Check if we have encryption enabled
 	if m.config.EncryptionEnabled() && m.config.GossipVerifyOutgoing {
-		primaryKey := m.config.Keyring.GetPrimaryKey()
+		var primaryKey []byte
+
+		if m.config.Keyring != nil {
+			primaryKey = m.config.Keyring.GetPrimaryKey()
+		}
 
 		if m.config.ProtocolVersion >= ProtocolPKIVersion1 {
 
@@ -1047,6 +1052,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 		localNodes[idx].Incarnation = n.Incarnation
 		localNodes[idx].State = n.State
 		localNodes[idx].Meta = n.Meta
+		localNodes[idx].PublicKey = n.PublicKey
 		localNodes[idx].Vsn = []uint8{
 			n.PMin, n.PMax, n.PCur,
 			n.DMin, n.DMax, n.DCur,
