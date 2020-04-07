@@ -1,12 +1,8 @@
 package memberlist
 
 import (
-	"fmt"
 	"net"
-	"strings"
 	"testing"
-
-	multierror "github.com/hashicorp/go-multierror"
 )
 
 func Test_IsValidAddressDefaults(t *testing.T) {
@@ -33,32 +29,6 @@ func Test_IsValidAddressDefaults(t *testing.T) {
 			t.Fatalf("IP %s Localhost Should be accepted for WAN", ip)
 		}
 	}
-}
-
-// parseCIDRs return a possible empty list of all Network that have been parsed
-// In case of error, it returns successfully parsed CIDRs and the last error found
-// If nil is given it returns nil, nil
-func parseCIDRs(v []string) ([]net.IPNet, error) {
-	if v == nil {
-		return nil, nil
-	}
-	nets := make([]net.IPNet, 0)
-	var errs error
-	hasErrors := false
-	for _, p := range v {
-		_, net, err := net.ParseCIDR(strings.TrimSpace(p))
-		if err != nil {
-			err = fmt.Errorf("invalid cidr: %s", p)
-			errs = multierror.Append(errs, err)
-			hasErrors = true
-		} else {
-			nets = append(nets, *net)
-		}
-	}
-	if !hasErrors {
-		errs = nil
-	}
-	return nets, errs
 }
 
 func Test_IsValidAddressOverride(t *testing.T) {
@@ -105,7 +75,7 @@ func Test_IsValidAddressOverride(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			config := DefaultLANConfig()
 			var err error
-			config.CIDRsAllowed, err = parseCIDRs(testCase.allow)
+			config.CIDRsAllowed, err = ParseCIDRs(testCase.allow)
 			if err != nil {
 				t.Fatalf("failed parsing %s", testCase.allow)
 			}
