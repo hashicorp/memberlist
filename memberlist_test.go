@@ -21,11 +21,11 @@ import (
 var bindLock sync.Mutex
 var bindNum byte = 10
 
-func getBindAddr() net.IP {
+func getBindAddrNet(network byte) net.IP {
 	bindLock.Lock()
 	defer bindLock.Unlock()
 
-	result := net.IPv4(127, 0, 0, bindNum)
+	result := net.IPv4(127, 0, network, bindNum)
 	bindNum++
 	if bindNum > 255 {
 		bindNum = 10
@@ -34,11 +34,15 @@ func getBindAddr() net.IP {
 	return result
 }
 
-func testConfig(tb testing.TB) *Config {
+func getBindAddr() net.IP {
+	return getBindAddrNet(0)
+}
+
+func testConfigNet(tb testing.TB, network byte) *Config {
 	tb.Helper()
 
 	config := DefaultLANConfig()
-	config.BindAddr = getBindAddr().String()
+	config.BindAddr = getBindAddrNet(network).String()
 	config.Name = config.BindAddr
 	config.BindPort = 0 // choose free port
 	if tb != nil {
@@ -48,8 +52,12 @@ func testConfig(tb testing.TB) *Config {
 	return config
 }
 
+func testConfig(tb testing.TB) *Config {
+	return testConfigNet(tb, 0)
+}
+
 func yield() {
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 }
 
 type MockDelegate struct {
@@ -641,6 +649,125 @@ func TestMemberlist_Join(t *testing.T) {
 	}
 }
 
+func TestMemberlist_JoinDifferentNetworksUniqueMask(t *testing.T) {
+	c1 := testConfigNet(t, 0)
+	c1.CIDRsAllowed, _ = ParseCIDRs([]string{"127.0.0.0/8"})
+	m1, err := Create(c1)
+	require.NoError(t, err)
+	defer m1.Shutdown()
+
+	bindPort := m1.config.BindPort
+
+	// Create a second node
+	c2 := testConfigNet(t, 1)
+	c2.CIDRsAllowed, _ = ParseCIDRs([]string{"127.0.0.0/8"})
+	c2.BindPort = bindPort
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
+	defer m2.Shutdown()
+
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
+	if num != 1 {
+		t.Fatalf("unexpected 1: %d", num)
+	}
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+
+	// Check the hosts
+	if len(m2.Members()) != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+	if m2.estNumNodes() != 2 {
+		t.Fatalf("should have 2 nodes! %v", m2.Members())
+	}
+}
+
+func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
+	c1 := testConfigNet(t, 0)
+	c1.CIDRsAllowed, _ = ParseCIDRs([]string{"127.0.0.0/24", "127.0.1.0/24"})
+	m1, err := Create(c1)
+	require.NoError(t, err)
+	defer m1.Shutdown()
+
+	bindPort := m1.config.BindPort
+
+	// Create a second node
+	c2 := testConfigNet(t, 1)
+	c2.CIDRsAllowed, _ = ParseCIDRs([]string{"127.0.0.0/24", "127.0.1.0/24"})
+	c2.BindPort = bindPort
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
+	defer m2.Shutdown()
+
+	err = joinAndTestMemberShip(t, m2, []string{m1.config.Name + "/" + m1.config.BindAddr}, 2)
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+
+	// Create a rogue node that allows all networks
+	// It should see others, but will not be seen by others
+	c3 := testConfigNet(t, 2)
+	c3.CIDRsAllowed, _ = ParseCIDRs([]string{"127.0.0.0/8"})
+	c3.BindPort = bindPort
+
+	m3, err := Create(c3)
+	require.NoError(t, err)
+	defer m3.Shutdown()
+
+	// The rogue can see others, but others cannot see it
+	err = joinAndTestMemberShip(t, m3, []string{m1.config.Name + "/" + m1.config.BindAddr}, 3)
+	// For the node itself, everything seems fine, it should see others
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+
+	// m1 and m2 should not see newcomer however
+	if len(m1.Members()) != 2 {
+		t.Fatalf("m1 should have 2 nodes! %v", m1.Members())
+	}
+	if m1.estNumNodes() != 2 {
+		t.Fatalf("m1 should have 2 est. nodes! %v", m1.estNumNodes())
+	}
+
+	if len(m2.Members()) != 2 {
+		t.Fatalf("m2 should have 2 nodes! %v", m2.Members())
+	}
+	if m2.estNumNodes() != 2 {
+		t.Fatalf("m2 should have 2 est. nodes! %v", m2.estNumNodes())
+	}
+
+	// Another rogue, this time with a config that denies itself
+	// Create a rogue node that allows all networks
+	// It should see others, but will not be seen by others
+	c4 := testConfigNet(t, 2)
+	c4.CIDRsAllowed, _ = ParseCIDRs([]string{"127.0.0.0/24", "127.0.1.0/24"})
+	c4.BindPort = bindPort
+
+	m4, err := Create(c4)
+	require.NoError(t, err)
+	defer m4.Shutdown()
+
+	// This time, the node should not even see itself, so 2 expected nodes
+	err = joinAndTestMemberShip(t, m4, []string{m1.config.BindAddr, m2.config.BindAddr}, 2)
+	// m1 and m2 should not see newcomer however
+	if len(m1.Members()) != 2 {
+		t.Fatalf("m1 should have 2 nodes! %v", m1.Members())
+	}
+	if m1.estNumNodes() != 2 {
+		t.Fatalf("m1 should have 2 est. nodes! %v", m1.estNumNodes())
+	}
+
+	if len(m2.Members()) != 2 {
+		t.Fatalf("m2 should have 2 nodes! %v", m2.Members())
+	}
+	if m2.estNumNodes() != 2 {
+		t.Fatalf("m2 should have 2 est. nodes! %v", m2.estNumNodes())
+	}
+}
+
 type CustomMergeDelegate struct {
 	invoked bool
 	t       *testing.T
@@ -799,6 +926,28 @@ func TestMemberlist_Join_protocolVersions(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func joinAndTestMemberShip(t *testing.T, self *Memberlist, membersToJoin []string, expectedMembers int) error {
+	t.Helper()
+	num, err := self.Join(membersToJoin)
+	if err != nil {
+		return err
+	}
+	if num != len(membersToJoin) {
+		t.Fatalf("unexpected %d, was expecting %d to be joined", num, len(membersToJoin))
+	}
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
+	}
+	// Check the hosts
+	if len(self.Members()) != expectedMembers {
+		t.Fatalf("should have 2 nodes! %v", self.Members())
+	}
+	if len(self.Members()) != expectedMembers {
+		t.Fatalf("should have 2 nodes! %v", self.Members())
+	}
+	return nil
+}
+
 func TestMemberlist_Leave(t *testing.T) {
 	newConfig := func() *Config {
 		c := testConfig(t)
@@ -822,20 +971,9 @@ func TestMemberlist_Leave(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
-	if num != 1 {
-		t.Fatalf("unexpected 1: %d", num)
-	}
+	err = joinAndTestMemberShip(t, m2, []string{m1.config.Name + "/" + m1.config.BindAddr}, 2)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
-	}
-
-	// Check the hosts
-	if len(m2.Members()) != 2 {
-		t.Fatalf("should have 2 nodes! %v", m2.Members())
-	}
-	if len(m1.Members()) != 2 {
-		t.Fatalf("should have 2 nodes! %v", m2.Members())
 	}
 
 	// Leave
@@ -1475,7 +1613,7 @@ func TestMemberlist_conflictDelegate(t *testing.T) {
 
 	// Ensure we were notified
 	if mock.existing == nil || mock.other == nil {
-		t.Fatalf("should get notified")
+		t.Fatalf("should get notified mock.existing=%v  VS mock.other=%v", mock.existing, mock.other)
 	}
 	if mock.existing.Name != mock.other.Name {
 		t.Fatalf("bad: %v %v", mock.existing, mock.other)
@@ -1571,7 +1709,7 @@ func TestMemberlist_PingDelegate(t *testing.T) {
 
 func waitUntilSize(t *testing.T, m *Memberlist, expected int) {
 	t.Helper()
-	retry(t, 15, 250*time.Millisecond, func(failf func(string, ...interface{})) {
+	retry(t, 15, 500*time.Millisecond, func(failf func(string, ...interface{})) {
 		t.Helper()
 
 		if m.NumMembers() != expected {

@@ -220,9 +220,9 @@ func (m *Memberlist) streamListen() {
 
 // handleConn handles a single incoming stream connection from the transport.
 func (m *Memberlist) handleConn(conn net.Conn) {
+	defer conn.Close()
 	m.logger.Printf("[DEBUG] memberlist: Stream connection %s", LogConn(conn))
 
-	defer conn.Close()
 	metrics.IncrCounter([]string{"memberlist", "tcp", "accept"}, 1)
 
 	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
@@ -622,11 +622,46 @@ func (m *Memberlist) handleSuspect(buf []byte, from net.Addr) {
 	m.suspectNode(&sus)
 }
 
+// ensureCanConnect return the IP from a RemoteAddress
+// return error if this client must not connect
+func (m *Memberlist) ensureCanConnect(from net.Addr) error {
+	if !m.config.IPMustBeChecked() {
+		return nil
+	}
+	source := from.String()
+	if source == "pipe" {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(source)
+	if err != nil {
+		return err
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("Cannot parse IP from %s", host)
+	}
+	return m.config.IPAllowed(ip)
+}
+
 func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
+	if err := m.ensureCanConnect(from); err != nil {
+		m.logger.Printf("[DEBUG] memberlist: Blocked alive message: %s %s", err, LogAddress(from))
+		return
+	}
 	var live alive
 	if err := decode(buf, &live); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to decode alive message: %s %s", err, LogAddress(from))
 		return
+	}
+	if m.config.IPMustBeChecked() {
+		innerIP := net.IP(live.Addr)
+		if innerIP != nil {
+			if err := m.config.IPAllowed(innerIP); err != nil {
+				m.logger.Printf("[DEBUG] memberlist: Blocked alive.Addr=%s message from: %s %s", innerIP.String(), err, LogAddress(from))
+				return
+			}
+		}
 	}
 
 	// For proto versions < 2, there is no port provided. Mask old
