@@ -233,10 +233,14 @@ type Config struct {
 	// RequireNodeNames controls if the name of a node is required when sending
 	// a message to that node.
 	RequireNodeNames bool
+
 	// CIDRsAllowed If nil, allow any connection (default), otherwise specify all networks
 	// allowed to connect (you must specify IPv6/IPv4 separately)
 	// Using [] will block all connections.
 	CIDRsAllowed []net.IPNet
+
+	// MetaMaxSize is the maximum size for node meta data
+	MetaMaxSize int
 }
 
 // ParseCIDRs return a possible empty list of all Network that have been parsed
@@ -306,6 +310,7 @@ func DefaultLANConfig() *Config {
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
 		CIDRsAllowed:      nil, // same as allow all
+		MetaMaxSize:       defaultMetaMaxSize,
 	}
 }
 
