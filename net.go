@@ -67,7 +67,7 @@ const (
 )
 
 const (
-	defaultMetaMaxSize     = 512 // Maximum size for node meta data
+	DefaultMetaMaxSize     = 512 // Maximum size for node meta data
 	compoundHeaderOverhead = 2   // Assumed header overhead
 	compoundOverhead       = 2   // Assumed overhead per entry in compoundHeader
 	userMsgOverhead        = 1

@@ -161,8 +161,8 @@ func GetMemberlist(tb testing.TB, f func(c *Config)) *Memberlist {
 
 func TestDefaultLANConfig_MetaMaxSize(t *testing.T) {
 	c := DefaultLANConfig()
-	if c.MetaMaxSize != defaultMetaMaxSize {
-		t.Fatalf("should be default: %d", defaultMetaMaxSize)
+	if c.MetaMaxSize != DefaultMetaMaxSize {
+		t.Fatalf("should be default: %d", DefaultMetaMaxSize)
 	}
 }
 

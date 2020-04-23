@@ -310,7 +310,7 @@ func DefaultLANConfig() *Config {
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
 		CIDRsAllowed:      nil, // same as allow all
-		MetaMaxSize:       defaultMetaMaxSize,
+		MetaMaxSize:       DefaultMetaMaxSize,
 	}
 }
 
