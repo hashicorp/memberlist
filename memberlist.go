@@ -568,7 +568,7 @@ func (m *Memberlist) SendBestEffort(to *Node, msg []byte) error {
 	buf = append(buf, msg...)
 
 	// Send the message
-	a := Address{Addr: to.String(), Name: to.Name}
+	a := Address{Addr: to.Address(), Name: to.Name}
 	return m.rawSendMsgPacket(a, to, buf)
 }
 
