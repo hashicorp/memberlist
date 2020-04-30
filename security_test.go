@@ -46,7 +46,7 @@ func encryptDecryptVersioned(vsn encryptionVersion, t *testing.T) {
 	extra := []byte("random data")
 
 	var buf bytes.Buffer
-	err := encryptPayload(vsn, k1, plaintext, extra, &buf)
+	err := encryptPayload(vsn, k1, plaintext, extra, nil, &buf)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -56,7 +56,7 @@ func encryptDecryptVersioned(vsn encryptionVersion, t *testing.T) {
 		t.Fatalf("output length is unexpected %d %d %d", len(plaintext), buf.Len(), expLen)
 	}
 
-	msg, err := decryptPayload([][]byte{k1}, buf.Bytes(), extra)
+	msg, err := decryptPayload(nil, [][]byte{k1}, buf.Bytes(), extra)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}

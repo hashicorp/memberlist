@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -132,6 +133,10 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 }
 
 func TestMemberList_ProbeNode_Suspect_Dogpile(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("multiple interfaces not supported on darwin")
+	}
+
 	cases := []struct {
 		name          string
 		numPeers      int
@@ -1101,7 +1106,7 @@ func TestMemberList_invokeAckHandler(t *testing.T) {
 	m.setAckHandler(0, f, 10*time.Millisecond)
 
 	// Should set b
-	m.invokeAckHandler(ackResp{0, nil}, time.Now())
+	m.invokeAckHandler(ackResp{}, time.Now())
 	if !b {
 		t.Fatalf("b not set")
 	}
@@ -1112,7 +1117,7 @@ func TestMemberList_invokeAckHandler(t *testing.T) {
 func TestMemberList_invokeAckHandler_Channel_Ack(t *testing.T) {
 	m := &Memberlist{ackHandlers: make(map[uint32]*ackHandler)}
 
-	ack := ackResp{0, []byte{0, 0, 0}}
+	ack := ackResp{SeqNo: 0, Payload: []byte{0, 0, 0}}
 
 	// Does nothing
 	m.invokeAckHandler(ack, time.Now())
@@ -1173,7 +1178,7 @@ func TestMemberList_invokeAckHandler_Channel_Nack(t *testing.T) {
 	// an ack up to the reap time, if we get one.
 	require.True(t, ackHandlerExists(t, m, 0), "handler should not be reaped")
 
-	ack := ackResp{0, []byte{0, 0, 0}}
+	ack := ackResp{SeqNo: 0, Payload: []byte{0, 0, 0}}
 	m.invokeAckHandler(ack, time.Now())
 
 	select {

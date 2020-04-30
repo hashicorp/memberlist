@@ -3,7 +3,9 @@ package memberlist
 import (
 	"bufio"
 	"bytes"
+	"crypto/subtle"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -13,6 +15,7 @@ import (
 
 	metrics "github.com/armon/go-metrics"
 	"github.com/hashicorp/go-msgpack/codec"
+	"golang.org/x/crypto/blake2b"
 )
 
 // This is the minimum and maximum protocol version that we can
@@ -34,7 +37,9 @@ const (
 	// understand version 4 or greater.
 	ProtocolVersion2Compatible = 2
 
-	ProtocolVersionMax = 5
+	ProtocolPKIVersion1 = 5
+
+	ProtocolVersionMax = ProtocolPKIVersion1
 )
 
 // messageType is an integer ID of a type of message that can be received
@@ -88,13 +93,16 @@ type ping struct {
 	SourceAddr []byte `codec:",omitempty"` // Source address, used for a direct reply
 	SourcePort uint16 `codec:",omitempty"` // Source port, used for a direct reply
 	SourceNode string `codec:",omitempty"` // Source name, used for a direct reply
+
+	SourcePublicKey []byte `codec:",omitempty"` // Source public key, used for direct reply
 }
 
 // indirect ping sent to an indirect node
 type indirectPingReq struct {
-	SeqNo  uint32
-	Target []byte
-	Port   uint16
+	SeqNo     uint32
+	Target    []byte
+	Port      uint16
+	PublicKey []byte `codec:",omitempty"` // The public key of the target if known
 
 	// Node is sent so the target can verify they are
 	// the intended recipient. This is to protect against an agent
@@ -106,12 +114,16 @@ type indirectPingReq struct {
 	SourceAddr []byte `codec:",omitempty"` // Source address, used for a direct reply
 	SourcePort uint16 `codec:",omitempty"` // Source port, used for a direct reply
 	SourceNode string `codec:",omitempty"` // Source name, used for a direct reply
+
+	SourcePublicKey []byte `codec:",omitempty"` // Source public key, used for direct reply
 }
 
 // ack response is sent for a ping
 type ackResp struct {
 	SeqNo   uint32
 	Payload []byte
+
+	SourcePublicKey []byte `codec:",omitempty"` // The public key of the ack sender
 }
 
 // nack response is sent for an indirect ping when the pinger doesn't hear from
@@ -145,6 +157,8 @@ type alive struct {
 	// The versions of the protocol/delegate that are being spoken, order:
 	// pmin, pmax, pcur, dmin, dmax, dcur
 	Vsn []uint8
+
+	PublicKey []byte
 }
 
 // dead is broadcast when we confirm a node is dead
@@ -178,6 +192,7 @@ type pushNodeState struct {
 	Incarnation uint32
 	State       nodeStateType
 	Vsn         []uint8 // Protocol versions
+	PublicKey   []byte
 }
 
 // compress is used to wrap an underlying payload
@@ -199,6 +214,8 @@ func (m *Memberlist) encryptionVersion() encryptionVersion {
 	switch m.ProtocolVersion() {
 	case 1:
 		return 0
+	case 5:
+		return 2
 	default:
 		return 1
 	}
@@ -226,6 +243,17 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 	metrics.IncrCounter([]string{"memberlist", "tcp", "accept"}, 1)
 
 	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
+
+	var err error
+
+	if m.encryptionVersion() == 2 {
+		conn, err = m.exchangePubKeys(conn, false)
+		if err != nil {
+			m.logger.Printf("[ERR] memberlist: Unable to negotiate stream connection: %s", err)
+			return
+		}
+	}
+
 	msgType, bufConn, dec, err := m.readStream(conn)
 	if err != nil {
 		if err != io.EOF {
@@ -290,7 +318,7 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 			return
 		}
 
-		ack := ackResp{p.SeqNo, nil}
+		ack := ackResp{p.SeqNo, nil, m.publicKey[:]}
 		out, err := encode(ackRespMsg, &ack)
 		if err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to encode ack: %s", err)
@@ -321,11 +349,58 @@ func (m *Memberlist) packetListen() {
 	}
 }
 
+func (m *Memberlist) computeKey(peerpub Key) ([]byte, error) {
+	if len(peerpub) != KeySize {
+		panic("bad key")
+	}
+	mk := peerpub.MapKey()
+
+	es, ok := m.encryptionStates[mk]
+	if !ok {
+		secret := m.privateKey.SharedSecret(peerpub)
+
+		h, err := blake2b.New256(m.config.AccessKey)
+		if err != nil {
+			panic(err)
+		}
+
+		h.Write(secret[:])
+
+		sharedKey := h.Sum(nil)
+
+		es = &encryptionState{sharedKey}
+		m.encryptionStates[mk] = es
+	}
+
+	return es.key, nil
+}
+
 func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time) {
 	// Check if encryption is enabled
 	if m.config.EncryptionEnabled() {
+		var (
+			pkk []byte
+			err error
+		)
+
+		if encryptionVersion(buf[0]) == 2 {
+			var peerpub Key
+			peerpub = buf[1 : 1+KeySize]
+
+			pkk, err = m.computeKey(peerpub)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		var keys [][]byte
+
+		if m.config.Keyring != nil {
+			keys = m.config.Keyring.GetKeys()
+		}
+
 		// Decrypt the payload
-		plain, err := decryptPayload(m.config.Keyring.GetKeys(), buf, nil)
+		plain, err := decryptPayload(pkk, keys, buf, nil)
 		if err != nil {
 			if !m.config.GossipVerifyIncoming {
 				// Treat the message as plaintext
@@ -505,8 +580,10 @@ func (m *Memberlist) handlePing(buf []byte, from net.Addr) {
 	}
 
 	a := Address{
-		Addr: addr,
-		Name: p.SourceNode,
+		Addr:      addr,
+		Name:      p.SourceNode,
+		PublicKey: p.SourcePublicKey,
+		LiveKey:   true,
 	}
 	if err := m.encodeAndSendMsg(a, ackRespMsg, &ack); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ack: %s %s", err, LogAddress(from))
@@ -533,9 +610,10 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 		SeqNo: localSeqNo,
 		Node:  ind.Node,
 		// The outbound message is addressed FROM us.
-		SourceAddr: selfAddr,
-		SourcePort: selfPort,
-		SourceNode: m.config.Name,
+		SourceAddr:      selfAddr,
+		SourcePort:      selfPort,
+		SourceNode:      m.config.Name,
+		SourcePublicKey: m.publicKey,
 	}
 
 	// Forward the ack back to the requestor. If the request encodes an origin
@@ -554,10 +632,12 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 		// Try to prevent the nack if we've caught it in time.
 		close(cancelCh)
 
-		ack := ackResp{ind.SeqNo, nil}
+		ack := ackResp{ind.SeqNo, nil, m.publicKey.Bytes()}
 		a := Address{
-			Addr: indAddr,
-			Name: ind.SourceNode,
+			Addr:      indAddr,
+			Name:      ind.SourceNode,
+			PublicKey: ind.SourcePublicKey,
+			LiveKey:   true,
 		}
 		if err := m.encodeAndSendMsg(a, ackRespMsg, &ack); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to forward ack: %s %s", err, LogStringAddress(indAddr))
@@ -568,9 +648,11 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 	// Send the ping.
 	addr := joinHostPort(net.IP(ind.Target).String(), ind.Port)
 	a := Address{
-		Addr: addr,
-		Name: ind.Node,
+		Addr:      addr,
+		Name:      ind.Node,
+		PublicKey: ind.PublicKey,
 	}
+
 	if err := m.encodeAndSendMsg(a, pingMsg, &ping); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send indirect ping: %s %s", err, LogStringAddress(indAddr))
 	}
@@ -584,8 +666,10 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 			case <-time.After(m.config.ProbeTimeout):
 				nack := nackResp{ind.SeqNo}
 				a := Address{
-					Addr: indAddr,
-					Name: ind.SourceNode,
+					Addr:      indAddr,
+					Name:      ind.SourceNode,
+					PublicKey: ind.SourcePublicKey,
+					LiveKey:   true,
 				}
 				if err := m.encodeAndSendMsg(a, nackRespMsg, &nack); err != nil {
 					m.logger.Printf("[ERR] memberlist: Failed to send nack: %s %s", err, LogStringAddress(indAddr))
@@ -790,10 +874,56 @@ func (m *Memberlist) rawSendMsgPacket(a Address, node *Node, msg []byte) error {
 
 	// Check if we have encryption enabled
 	if m.config.EncryptionEnabled() && m.config.GossipVerifyOutgoing {
+		var primaryKey []byte
+
+		if m.config.Keyring != nil {
+			primaryKey = m.config.Keyring.GetPrimaryKey()
+		}
+
+		if m.config.ProtocolVersion >= ProtocolPKIVersion1 {
+
+			// So there can be 2 keys for a node: the one we know about via our own knowledge
+			// of the nodes (and available in `node`), and one that is passed in from the message
+			// layer in `key`. If only one is available, no biggy, use it. If both are available,
+			// we check a flag in Address that will indicated if it's a "live" key, in other words one
+			// that was just observed. If it's live, we use it. If the message layer key is not live,
+			// then we trust the one in `node` with the idea being that our node database is kept
+			// up to date by having nodes send out alive updates about themselves when they come online
+			// which would mean the node database has the higher likelyhood of containing the correct key.
+
+			var addrpub, nodepub, peerpub []byte
+
+			addrpub = a.PublicKey
+			if node != nil {
+				nodepub = node.PublicKey
+			}
+
+			switch {
+			case addrpub != nil && nodepub != nil:
+				if a.LiveKey {
+					peerpub = addrpub
+				} else {
+					peerpub = nodepub
+				}
+			case addrpub != nil:
+				peerpub = addrpub
+			case nodepub != nil:
+				peerpub = nodepub
+			default:
+				m.logger.Printf("[ERR] memberlist: Attempting to send encrypted data node with no public key")
+				return fmt.Errorf("failed attempting to send encrypted data to node with no public key")
+			}
+
+			var err error
+			primaryKey, err = m.computeKey(peerpub)
+			if err != nil {
+				return err
+			}
+		}
+
 		// Encrypt the payload
 		var buf bytes.Buffer
-		primaryKey := m.config.Keyring.GetPrimaryKey()
-		err := encryptPayload(m.encryptionVersion(), primaryKey, msg, nil, &buf)
+		err := encryptPayload(m.encryptionVersion(), primaryKey, msg, nil, m.publicKey.Bytes(), &buf)
 		if err != nil {
 			m.logger.Printf("[ERR] memberlist: Encryption of message failed: %v", err)
 			return err
@@ -821,7 +951,12 @@ func (m *Memberlist) rawSendMsgStream(conn net.Conn, sendBuf []byte) error {
 
 	// Check if encryption is enabled
 	if m.config.EncryptionEnabled() && m.config.GossipVerifyOutgoing {
-		crypt, err := m.encryptLocalState(sendBuf)
+		econn, ok := conn.(*encryptedConn)
+		if !ok {
+			econn = &encryptedConn{Conn: conn}
+		}
+
+		crypt, err := m.encryptLocalState(econn, sendBuf)
 		if err != nil {
 			m.logger.Printf("[ERROR] memberlist: Failed to encrypt local state: %v", err)
 			return err
@@ -853,6 +988,13 @@ func (m *Memberlist) sendUserMsg(a Address, sendBuf []byte) error {
 	}
 	defer conn.Close()
 
+	if m.encryptionVersion() == 2 {
+		conn, err = m.exchangePubKeys(conn, true)
+		if err != nil {
+			return err
+		}
+	}
+
 	bufConn := bytes.NewBuffer(nil)
 	if err := bufConn.WriteByte(byte(userMsg)); err != nil {
 		return err
@@ -870,6 +1012,13 @@ func (m *Memberlist) sendUserMsg(a Address, sendBuf []byte) error {
 	return m.rawSendMsgStream(conn, bufConn.Bytes())
 }
 
+type encryptedConn struct {
+	net.Conn
+	PublicKey Key
+}
+
+var ErrBadNegotiation = errors.New("error verifying negoation")
+
 // sendAndReceiveState is used to initiate a push/pull over a stream with a
 // remote host.
 func (m *Memberlist) sendAndReceiveState(a Address, join bool) ([]pushNodeState, []byte, error) {
@@ -885,6 +1034,13 @@ func (m *Memberlist) sendAndReceiveState(a Address, join bool) ([]pushNodeState,
 	defer conn.Close()
 	m.logger.Printf("[DEBUG] memberlist: Initiating push/pull sync with: %s %s", a.Name, conn.RemoteAddr())
 	metrics.IncrCounter([]string{"memberlist", "tcp", "connect"}, 1)
+
+	if m.encryptionVersion() == 2 {
+		conn, err = m.exchangePubKeys(conn, true)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 
 	// Send our state
 	if err := m.sendLocalState(conn, join); err != nil {
@@ -931,6 +1087,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 		localNodes[idx].Incarnation = n.Incarnation
 		localNodes[idx].State = n.State
 		localNodes[idx].Meta = n.Meta
+		localNodes[idx].PublicKey = n.PublicKey
 		localNodes[idx].Vsn = []uint8{
 			n.PMin, n.PMax, n.PCur,
 			n.DMin, n.DMax, n.DCur,
@@ -978,13 +1135,26 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool) error {
 }
 
 // encryptLocalState is used to help encrypt local state before sending
-func (m *Memberlist) encryptLocalState(sendBuf []byte) ([]byte, error) {
+func (m *Memberlist) encryptLocalState(conn *encryptedConn, sendBuf []byte) ([]byte, error) {
 	var buf bytes.Buffer
 
 	// Write the encryptMsg byte
 	buf.WriteByte(byte(encryptMsg))
 
-	// Write the size of the message
+	var (
+		key []byte
+		err error
+	)
+
+	if conn.PublicKey != nil {
+		key, err = m.computeKey(conn.PublicKey)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		key = m.config.Keyring.GetPrimaryKey()
+	}
+
 	sizeBuf := make([]byte, 4)
 	encVsn := m.encryptionVersion()
 	encLen := encryptedLength(encVsn, len(sendBuf))
@@ -992,20 +1162,32 @@ func (m *Memberlist) encryptLocalState(sendBuf []byte) ([]byte, error) {
 	buf.Write(sizeBuf)
 
 	// Write the encrypted cipher text to the buffer
-	key := m.config.Keyring.GetPrimaryKey()
-	err := encryptPayload(encVsn, key, sendBuf, buf.Bytes()[:5], &buf)
+	err = encryptPayload(encVsn, key, sendBuf, buf.Bytes()[:5], m.publicKey, &buf)
 	if err != nil {
 		return nil, err
 	}
+
 	return buf.Bytes(), nil
 }
 
 // decryptRemoteState is used to help decrypt the remote state
-func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
+func (m *Memberlist) decryptRemoteState(econn *encryptedConn, bufConn io.Reader) ([]byte, error) {
+	var (
+		pkk []byte
+		err error
+	)
+
+	if econn.PublicKey != nil {
+		pkk, err = m.computeKey(econn.PublicKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Read in enough to determine message length
 	cipherText := bytes.NewBuffer(nil)
 	cipherText.WriteByte(byte(encryptMsg))
-	_, err := io.CopyN(cipherText, bufConn, 4)
+	_, err = io.CopyN(cipherText, bufConn, 4)
 	if err != nil {
 		return nil, err
 	}
@@ -1028,8 +1210,13 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader) ([]byte, error) {
 	cipherBytes := cipherText.Bytes()[5:]
 
 	// Decrypt the payload
-	keys := m.config.Keyring.GetKeys()
-	return decryptPayload(keys, cipherBytes, dataBytes)
+	var keys [][]byte
+
+	if m.config.Keyring != nil {
+		keys = m.config.Keyring.GetKeys()
+	}
+
+	return decryptPayload(pkk, keys, cipherBytes, dataBytes)
 }
 
 // readStream is used to read from a stream connection, decrypting and
@@ -1052,7 +1239,12 @@ func (m *Memberlist) readStream(conn net.Conn) (messageType, io.Reader, *codec.D
 				fmt.Errorf("Remote state is encrypted and encryption is not configured")
 		}
 
-		plain, err := m.decryptRemoteState(bufConn)
+		econn, ok := conn.(*encryptedConn)
+		if !ok {
+			econn = &encryptedConn{Conn: conn}
+		}
+
+		plain, err := m.decryptRemoteState(econn, bufConn)
 		if err != nil {
 			return 0, nil, nil, err
 		}
@@ -1206,6 +1398,104 @@ func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
 	return nil
 }
 
+/*
+ For streaming connections, exchange the public key used by the sender (initiator) and
+ receive. This exchange adds an addition access check crafted to have the following
+ properties:
+   1. The sender must prove that they have the same AccessKey. This is done without
+      the reciever sending any data related to the AccessKey, for instance an encrypted
+      payload. This is done because we have no protection from the curve25519 derived
+			encryption yet and we don't want to transmit any data that the sender could brute
+			force to find the value of the AccessKey.
+	 2. The sender must signed a random nonce, along with the public keys of both halves
+	    of the communication to continue. This prevents any replay attacks on this endpoint.
+*/
+
+func (m *Memberlist) exchangePubKeys(conn net.Conn, initiator bool) (net.Conn, error) {
+	ok := make(Key, KeySize)
+
+	if initiator {
+		_, err := conn.Write(m.publicKey)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = io.ReadFull(conn, ok)
+		if err != nil {
+			return nil, err
+		}
+
+		nonce := make([]byte, 32)
+		_, err = io.ReadFull(conn, nonce)
+		if err != nil {
+			return nil, err
+		}
+
+		h, err := blake2b.New256(m.config.AccessKey)
+		if err != nil {
+			return nil, err
+		}
+
+		h.Write(nonce)
+		h.Write(m.publicKey)
+		h.Write(ok)
+
+		sum := h.Sum(nil)
+
+		_, err = conn.Write(sum)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		nonce, err := ReadRandom(32)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = io.ReadFull(conn, ok)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = conn.Write(m.publicKey)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = conn.Write(nonce)
+		if err != nil {
+			return nil, err
+		}
+
+		remoteSum := make([]byte, blake2b.Size256)
+
+		_, err = io.ReadFull(conn, remoteSum)
+		if err != nil {
+			return nil, err
+		}
+
+		h, err := blake2b.New256(m.config.AccessKey)
+		if err != nil {
+			return nil, err
+		}
+
+		h.Write(nonce)
+		h.Write(ok)
+		h.Write(m.publicKey)
+
+		sum := h.Sum(nil)
+
+		if subtle.ConstantTimeCompare(sum, remoteSum) != 1 {
+			return nil, ErrBadNegotiation
+		}
+	}
+
+	return &encryptedConn{
+		Conn:      conn,
+		PublicKey: ok,
+	}, nil
+}
+
 // sendPingAndWaitForAck makes a stream connection to the given address, sends
 // a ping, and waits for an ack. All of this is done as a series of blocking
 // operations, given the deadline. The bool return parameter is true if we
@@ -1224,7 +1514,15 @@ func (m *Memberlist) sendPingAndWaitForAck(a Address, ping ping, deadline time.T
 		return false, nil
 	}
 	defer conn.Close()
+
 	conn.SetDeadline(deadline)
+
+	if m.encryptionVersion() == 2 {
+		conn, err = m.exchangePubKeys(conn, true)
+		if err != nil {
+			return false, err
+		}
+	}
 
 	out, err := encode(pingMsg, &ping)
 	if err != nil {

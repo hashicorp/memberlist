@@ -187,6 +187,10 @@ func TestCreate_protocolVersion(t *testing.T) {
 			c.ProtocolVersion = tc.version
 			c.Logger = testLogger(t)
 
+			if c.ProtocolVersion == ProtocolPKIVersion1 {
+				c.AccessKey = []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+			}
+
 			m, err := Create(c)
 			if err == nil {
 				require.NoError(t, m.Shutdown())
@@ -911,7 +915,7 @@ func TestMemberlist_Join_protocolVersions(t *testing.T) {
 
 	c3 := testConfig(t)
 	c3.BindPort = bindPort
-	c3.ProtocolVersion = ProtocolVersionMax
+	c3.ProtocolVersion = ProtocolVersion2Compatible
 
 	m3, err := Create(c3)
 	require.NoError(t, err)
@@ -1337,14 +1341,14 @@ func TestMemberlist_SendTo(t *testing.T) {
 
 func TestMemberlistProtocolVersion(t *testing.T) {
 	c := testConfig(t)
-	c.ProtocolVersion = ProtocolVersionMax
+	c.ProtocolVersion = ProtocolVersion2Compatible
 
 	m, err := Create(c)
 	require.NoError(t, err)
 	defer m.Shutdown()
 
 	result := m.ProtocolVersion()
-	if result != ProtocolVersionMax {
+	if result != ProtocolVersion2Compatible {
 		t.Fatalf("bad: %d", result)
 	}
 }

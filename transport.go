@@ -73,6 +73,15 @@ type Address struct {
 	// Name is the name of the node being addressed. This is optional but
 	// transports may require it.
 	Name string
+
+	// The public key of the destination if known. If this is nil, then
+	// when transmitting with encryption, the public key will be resolved
+	// from the nodes list
+	PublicKey Key
+
+	// Inidcates if Key was observed as being sent from the address listed, meaning
+	// it's the most recent key the address has used.
+	LiveKey bool
 }
 
 func (a *Address) String() string {

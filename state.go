@@ -34,6 +34,8 @@ type Node struct {
 	DMin uint8  // Min protocol version for the delegate to understand
 	DMax uint8  // Max protocol version for the delegate to understand
 	DCur uint8  // Current version delegate is speaking
+
+	PublicKey Key // The public key for the node
 }
 
 // Address returns the host:port form of a node's address, suitable for use
@@ -46,8 +48,9 @@ func (n *Node) Address() string {
 // suitable for use with a transport.
 func (n *Node) FullAddress() Address {
 	return Address{
-		Addr: joinHostPort(n.Addr.String(), n.Port),
-		Name: n.Name,
+		Addr:      joinHostPort(n.Addr.String(), n.Port),
+		Name:      n.Name,
+		PublicKey: n.PublicKey,
 	}
 }
 
@@ -298,7 +301,10 @@ func (m *Memberlist) probeNode(node *nodeState) {
 		SourceAddr: selfAddr,
 		SourcePort: selfPort,
 		SourceNode: m.config.Name,
+
+		SourcePublicKey: m.publicKey,
 	}
+
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
 	nackCh := make(chan struct{}, m.config.IndirectChecks+1)
 	m.setProbeChannels(ping.SeqNo, ackCh, nackCh, probeInterval)
@@ -411,6 +417,8 @@ HANDLE_REMOTE_FAILURE:
 		SourceAddr: selfAddr,
 		SourcePort: selfPort,
 		SourceNode: m.config.Name,
+
+		SourcePublicKey: m.publicKey[:],
 	}
 	for _, peer := range kNodes {
 		// We only expect nack to be sent from peers who understand
@@ -500,11 +508,12 @@ func (m *Memberlist) Ping(node string, addr net.Addr) (time.Duration, error) {
 	// Prepare a ping message and setup an ack handler.
 	selfAddr, selfPort := m.getAdvertise()
 	ping := ping{
-		SeqNo:      m.nextSeqNo(),
-		Node:       node,
-		SourceAddr: selfAddr,
-		SourcePort: selfPort,
-		SourceNode: m.config.Name,
+		SeqNo:           m.nextSeqNo(),
+		Node:            node,
+		SourceAddr:      selfAddr,
+		SourcePort:      selfPort,
+		SourceNode:      m.config.Name,
+		SourcePublicKey: m.publicKey,
 	}
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
 	m.setProbeChannels(ping.SeqNo, ackCh, nil, m.config.ProbeInterval)
@@ -907,6 +916,8 @@ func (m *Memberlist) refute(me *nodeState, accusedInc uint32) {
 			me.PMin, me.PMax, me.PCur,
 			me.DMin, me.DMax, me.DCur,
 		},
+
+		PublicKey: me.PublicKey,
 	}
 	m.encodeAndBroadcast(me.Addr.String(), aliveMsg, a)
 }
@@ -937,7 +948,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 	}
 
 	// Invoke the Alive delegate if any. This can be used to filter out
-	// alive messages based on custom logic. For example, using a cluster name.
+	// alive messages based on custom logic. For example, using a cluster name or that the node's public key is known.
 	// Using a merge delegate is not enough, as it is possible for passive
 	// cluster merging to still occur.
 	if m.config.Alive != nil {
@@ -947,17 +958,19 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 			return
 		}
 		node := &Node{
-			Name: a.Node,
-			Addr: a.Addr,
-			Port: a.Port,
-			Meta: a.Meta,
-			PMin: a.Vsn[0],
-			PMax: a.Vsn[1],
-			PCur: a.Vsn[2],
-			DMin: a.Vsn[3],
-			DMax: a.Vsn[4],
-			DCur: a.Vsn[5],
+			Name:      a.Node,
+			Addr:      a.Addr,
+			Port:      a.Port,
+			Meta:      a.Meta,
+			PMin:      a.Vsn[0],
+			PMax:      a.Vsn[1],
+			PCur:      a.Vsn[2],
+			DMin:      a.Vsn[3],
+			DMax:      a.Vsn[4],
+			DCur:      a.Vsn[5],
+			PublicKey: a.PublicKey,
 		}
+
 		if err := m.config.Alive.NotifyAlive(node); err != nil {
 			m.logger.Printf("[WARN] memberlist: ignoring alive message for '%s': %s",
 				a.Node, err)
@@ -976,13 +989,15 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		}
 		state = &nodeState{
 			Node: Node{
-				Name: a.Node,
-				Addr: a.Addr,
-				Port: a.Port,
-				Meta: a.Meta,
+				Name:      a.Node,
+				Addr:      a.Addr,
+				Port:      a.Port,
+				Meta:      a.Meta,
+				PublicKey: a.PublicKey,
 			},
 			State: stateDead,
 		}
+
 		if len(a.Vsn) > 5 {
 			state.PMin = a.Vsn[0]
 			state.PMax = a.Vsn[1]
@@ -1032,16 +1047,20 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 				// Inform the conflict delegate if provided
 				if m.config.Conflict != nil {
 					other := Node{
-						Name: a.Node,
-						Addr: a.Addr,
-						Port: a.Port,
-						Meta: a.Meta,
+						Name:      a.Node,
+						Addr:      a.Addr,
+						Port:      a.Port,
+						Meta:      a.Meta,
+						PublicKey: a.PublicKey,
 					}
 					m.config.Conflict.NotifyConflict(&state.Node, &other)
 				}
 				return
 			}
 		}
+
+		// We update the public key of this node we already know about so we always have it's latest key
+		state.Node.PublicKey = a.PublicKey
 	}
 
 	// Bail if the incarnation number is older, and this is not about us
@@ -1106,6 +1125,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		state.Meta = a.Meta
 		state.Addr = a.Addr
 		state.Port = a.Port
+		state.PublicKey = a.PublicKey
 		if state.State != stateAlive {
 			state.State = stateAlive
 			state.StateChange = time.Now()
@@ -1290,6 +1310,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 				Port:        r.Port,
 				Meta:        r.Meta,
 				Vsn:         r.Vsn,
+				PublicKey:   r.PublicKey,
 			}
 			m.aliveNode(&a, nil, false)
 

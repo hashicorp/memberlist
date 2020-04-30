@@ -189,7 +189,7 @@ func (t *MockTransport) getPeer(a Address) (*MockTransport, error) {
 		dest, ok = t.net.transportsByAddr[a.Addr]
 	}
 	if !ok {
-		return nil, fmt.Errorf("No route to %s", a)
+		return nil, fmt.Errorf("No route to %s", a.String())
 	}
 	return dest, nil
 }
