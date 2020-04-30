@@ -443,7 +443,7 @@ func TestTCPPushPull(t *testing.T) {
 			Port: uint16(m.config.BindPort),
 		},
 		Incarnation: 0,
-		State:       stateSuspect,
+		State:       StateSuspect,
 		StateChange: time.Now().Add(-1 * time.Second),
 	})
 
@@ -459,17 +459,17 @@ func TestTCPPushPull(t *testing.T) {
 	localNodes[0].Addr = net.ParseIP(m.config.BindAddr)
 	localNodes[0].Port = uint16(m.config.BindPort)
 	localNodes[0].Incarnation = 1
-	localNodes[0].State = stateAlive
+	localNodes[0].State = StateAlive
 	localNodes[1].Name = "Test 1"
 	localNodes[1].Addr = net.ParseIP(m.config.BindAddr)
 	localNodes[1].Port = uint16(m.config.BindPort)
 	localNodes[1].Incarnation = 1
-	localNodes[1].State = stateAlive
+	localNodes[1].State = StateAlive
 	localNodes[2].Name = "Test 2"
 	localNodes[2].Addr = net.ParseIP(m.config.BindAddr)
 	localNodes[2].Port = uint16(m.config.BindPort)
 	localNodes[2].Incarnation = 1
-	localNodes[2].State = stateAlive
+	localNodes[2].State = StateAlive
 
 	// Send our node state
 	header := pushPullHeader{Nodes: 3}
@@ -552,7 +552,7 @@ func TestTCPPushPull(t *testing.T) {
 	if n.Incarnation != 0 {
 		t.Fatal("bad incarnation")
 	}
-	if n.State != stateSuspect {
+	if n.State != StateSuspect {
 		t.Fatal("bad state")
 	}
 }

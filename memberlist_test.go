@@ -604,9 +604,9 @@ func TestMemberList_Members(t *testing.T) {
 
 	m := &Memberlist{}
 	nodes := []*nodeState{
-		&nodeState{Node: *n1, State: stateAlive},
-		&nodeState{Node: *n2, State: stateDead},
-		&nodeState{Node: *n3, State: stateSuspect},
+		&nodeState{Node: *n1, State: StateAlive},
+		&nodeState{Node: *n2, State: StateDead},
+		&nodeState{Node: *n3, State: StateSuspect},
 	}
 	m.nodes = nodes
 
@@ -992,7 +992,7 @@ func TestMemberlist_Leave(t *testing.T) {
 		t.Fatalf("should have 1 node")
 	}
 
-	if m2.nodeMap[c1.Name].State != stateLeft {
+	if m2.nodeMap[c1.Name].State != StateLeft {
 		t.Fatalf("bad state")
 	}
 }

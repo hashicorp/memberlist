@@ -71,7 +71,7 @@ func TestMemberList_Probe(t *testing.T) {
 
 	// Should not be marked suspect
 	n := m1.nodeMap[addr2.String()]
-	if n.State != stateAlive {
+	if n.State != StateAlive {
 		t.Fatalf("Expect node to be alive")
 	}
 
@@ -120,7 +120,7 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	m1.probeNode(n)
 
 	// Should be marked suspect.
-	if n.State != stateSuspect {
+	if n.State != StateSuspect {
 		t.Fatalf("Expect node to be suspect")
 	}
 	time.Sleep(10 * time.Millisecond)
@@ -192,7 +192,7 @@ func TestMemberList_ProbeNode_Suspect_Dogpile(t *testing.T) {
 			// Force a probe, which should start us into the suspect state.
 			m.probeNodeByAddr(badPeerAddr.String())
 
-			if m.getNodeState(badPeerAddr.String()) != stateSuspect {
+			if m.getNodeState(badPeerAddr.String()) != StateSuspect {
 				t.Fatalf("case %d: expected node to be suspect", i)
 			}
 
@@ -208,7 +208,7 @@ func TestMemberList_ProbeNode_Suspect_Dogpile(t *testing.T) {
 			fudge := 25 * time.Millisecond
 			time.Sleep(c.expected - fudge)
 
-			if m.getNodeState(badPeerAddr.String()) != stateSuspect {
+			if m.getNodeState(badPeerAddr.String()) != StateSuspect {
 				t.Fatalf("case %d: expected node to still be suspect", i)
 			}
 
@@ -216,7 +216,7 @@ func TestMemberList_ProbeNode_Suspect_Dogpile(t *testing.T) {
 			// timer fires.
 			time.Sleep(2 * fudge)
 
-			if m.getNodeState(badPeerAddr.String()) != stateDead {
+			if m.getNodeState(badPeerAddr.String()) != StateDead {
 				t.Fatalf("case %d: expected node to be dead", i)
 			}
 		})
@@ -606,7 +606,7 @@ func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
 	probeTime := time.Now().Sub(startProbe)
 
 	// Node should be reported suspect.
-	if n.State != stateSuspect {
+	if n.State != StateSuspect {
 		t.Fatalf("expect node to be suspect")
 	}
 
@@ -723,7 +723,7 @@ func TestMemberList_ProbeNode_Awareness_Improved(t *testing.T) {
 	m1.probeNode(n)
 
 	// Node should be reported alive.
-	if n.State != stateAlive {
+	if n.State != StateAlive {
 		t.Fatalf("expect node to be suspect")
 	}
 
@@ -784,7 +784,7 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 	probeTime := time.Now().Sub(startProbe)
 
 	// Node should be reported suspect.
-	if n.State != stateSuspect {
+	if n.State != StateSuspect {
 		t.Fatalf("expect node to be suspect")
 	}
 
@@ -858,7 +858,7 @@ func TestMemberList_ProbeNode_Awareness_OldProtocol(t *testing.T) {
 	probeTime := time.Now().Sub(startProbe)
 
 	// Node should be reported suspect.
-	if n.State != stateSuspect {
+	if n.State != StateSuspect {
 		t.Fatalf("expect node to be suspect")
 	}
 
@@ -909,7 +909,7 @@ func TestMemberList_ProbeNode_Buddy(t *testing.T) {
 	// Force the state to suspect so we piggyback a suspect message with the ping.
 	// We should see this get refuted later, and the ping will succeed.
 	n := m1.nodeMap[addr2.String()]
-	n.State = stateSuspect
+	n.State = StateSuspect
 	m1.probeNode(n)
 
 	// Make sure a ping was sent.
@@ -956,7 +956,7 @@ func TestMemberList_ProbeNode(t *testing.T) {
 	m1.probeNode(n)
 
 	// Should be marked alive
-	if n.State != stateAlive {
+	if n.State != StateAlive {
 		t.Fatalf("Expect node to be alive")
 	}
 
@@ -1217,7 +1217,7 @@ func TestMemberList_AliveNode_NewNode(t *testing.T) {
 	if state.Incarnation != 1 {
 		t.Fatalf("bad incarnation")
 	}
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("bad state")
 	}
 	if time.Now().Sub(state.StateChange) > time.Second {
@@ -1258,19 +1258,19 @@ func TestMemberList_AliveNode_SuspectNode(t *testing.T) {
 
 	// Make suspect
 	state := m.nodeMap["test"]
-	state.State = stateSuspect
+	state.State = StateSuspect
 	state.StateChange = state.StateChange.Add(-time.Hour)
 
 	// Old incarnation number, should not change
 	m.aliveNode(&a, nil, false)
-	if state.State != stateSuspect {
+	if state.State != StateSuspect {
 		t.Fatalf("update with old incarnation!")
 	}
 
 	// Should reset to alive now
 	a.Incarnation = 2
 	m.aliveNode(&a, nil, false)
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("no update with new incarnation!")
 	}
 
@@ -1314,7 +1314,7 @@ func TestMemberList_AliveNode_Idempotent(t *testing.T) {
 	// Should reset to alive now
 	a.Incarnation = 2
 	m.aliveNode(&a, nil, false)
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("non idempotent")
 	}
 
@@ -1453,7 +1453,7 @@ func TestMemberList_AliveNode_Refute(t *testing.T) {
 	m.aliveNode(&s, nil, false)
 
 	state := m.nodeMap[m.config.Name]
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("should still be alive")
 	}
 	if state.Meta != nil {
@@ -1497,7 +1497,7 @@ func TestMemberList_AliveNode_Conflict(t *testing.T) {
 	m.aliveNode(&s, nil, false)
 
 	state := m.nodeMap[nodeName]
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("should still be alive")
 	}
 	if state.Meta != nil {
@@ -1521,7 +1521,7 @@ func TestMemberList_AliveNode_Conflict(t *testing.T) {
 	m.broadcasts.Reset()
 
 	state = m.nodeMap[nodeName]
-	if state.State != stateDead {
+	if state.State != StateDead {
 		t.Fatalf("should be dead")
 	}
 
@@ -1539,7 +1539,7 @@ func TestMemberList_AliveNode_Conflict(t *testing.T) {
 	m.aliveNode(&s2, nil, false)
 
 	state = m.nodeMap[nodeName]
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("should still be alive")
 	}
 	if !bytes.Equal(state.Meta, []byte("foo")) {
@@ -1581,7 +1581,7 @@ func TestMemberList_SuspectNode(t *testing.T) {
 	s := suspect{Node: "test", Incarnation: 1}
 	m.suspectNode(&s)
 
-	if m.getNodeState("test") != stateSuspect {
+	if m.getNodeState("test") != StateSuspect {
 		t.Fatalf("Bad state")
 	}
 
@@ -1603,7 +1603,7 @@ func TestMemberList_SuspectNode(t *testing.T) {
 	// Wait for the timeout
 	time.Sleep(10 * time.Millisecond)
 
-	if m.getNodeState("test") != stateDead {
+	if m.getNodeState("test") != StateDead {
 		t.Fatalf("Bad state")
 	}
 
@@ -1639,7 +1639,7 @@ func TestMemberList_SuspectNode_DoubleSuspect(t *testing.T) {
 	s := suspect{Node: "test", Incarnation: 1}
 	m.suspectNode(&s)
 
-	if state.State != stateSuspect {
+	if state.State != StateSuspect {
 		t.Fatalf("Bad state")
 	}
 
@@ -1681,7 +1681,7 @@ func TestMemberList_SuspectNode_OldSuspect(t *testing.T) {
 	s := suspect{Node: "test", Incarnation: 1}
 	m.suspectNode(&s)
 
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("Bad state")
 	}
 
@@ -1710,7 +1710,7 @@ func TestMemberList_SuspectNode_Refute(t *testing.T) {
 	m.suspectNode(&s)
 
 	state := m.nodeMap[m.config.Name]
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("should still be alive")
 	}
 
@@ -1769,7 +1769,7 @@ func TestMemberList_DeadNodeLeft(t *testing.T) {
 	<-ch
 
 	state := m.nodeMap[nodeName]
-	if state.State != stateLeft {
+	if state.State != StateLeft {
 		t.Fatalf("Bad state")
 	}
 
@@ -1801,7 +1801,7 @@ func TestMemberList_DeadNodeLeft(t *testing.T) {
 	<-ch
 
 	state = m.nodeMap[nodeName]
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("should still be alive")
 	}
 	if !bytes.Equal(state.Meta, []byte("foo")) {
@@ -1835,7 +1835,7 @@ func TestMemberList_DeadNode(t *testing.T) {
 	d := dead{Node: "test", Incarnation: 1}
 	m.deadNode(&d)
 
-	if state.State != stateDead {
+	if state.State != StateDead {
 		t.Fatalf("Bad state")
 	}
 
@@ -1913,7 +1913,7 @@ func TestMemberList_DeadNode_OldDead(t *testing.T) {
 	d := dead{Node: "test", Incarnation: 1}
 	m.deadNode(&d)
 
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("Bad state")
 	}
 }
@@ -1933,7 +1933,7 @@ func TestMemberList_DeadNode_AliveReplay(t *testing.T) {
 
 	// Should remain dead
 	state, ok := m.nodeMap["test"]
-	if ok && state.State != stateDead {
+	if ok && state.State != StateDead {
 		t.Fatalf("Bad state")
 	}
 }
@@ -1957,7 +1957,7 @@ func TestMemberList_DeadNode_Refute(t *testing.T) {
 	m.deadNode(&d)
 
 	state := m.nodeMap[m.config.Name]
-	if state.State != stateAlive {
+	if state.State != StateAlive {
 		t.Fatalf("should still be alive")
 	}
 
@@ -1996,25 +1996,25 @@ func TestMemberList_MergeState(t *testing.T) {
 			Name:        "test1",
 			Addr:        []byte{127, 0, 0, 1},
 			Incarnation: 2,
-			State:       stateAlive,
+			State:       StateAlive,
 		},
 		pushNodeState{
 			Name:        "test2",
 			Addr:        []byte{127, 0, 0, 2},
 			Incarnation: 1,
-			State:       stateSuspect,
+			State:       StateSuspect,
 		},
 		pushNodeState{
 			Name:        "test3",
 			Addr:        []byte{127, 0, 0, 3},
 			Incarnation: 1,
-			State:       stateDead,
+			State:       StateDead,
 		},
 		pushNodeState{
 			Name:        "test4",
 			Addr:        []byte{127, 0, 0, 4},
 			Incarnation: 2,
-			State:       stateAlive,
+			State:       StateAlive,
 		},
 	}
 
@@ -2027,22 +2027,22 @@ func TestMemberList_MergeState(t *testing.T) {
 
 	// Check the states
 	state := m.nodeMap["test1"]
-	if state.State != stateAlive || state.Incarnation != 2 {
+	if state.State != StateAlive || state.Incarnation != 2 {
 		t.Fatalf("Bad state %v", state)
 	}
 
 	state = m.nodeMap["test2"]
-	if state.State != stateSuspect || state.Incarnation != 1 {
+	if state.State != StateSuspect || state.Incarnation != 1 {
 		t.Fatalf("Bad state %v", state)
 	}
 
 	state = m.nodeMap["test3"]
-	if state.State != stateSuspect {
+	if state.State != StateSuspect {
 		t.Fatalf("Bad state %v", state)
 	}
 
 	state = m.nodeMap["test4"]
-	if state.State != stateAlive || state.Incarnation != 2 {
+	if state.State != StateAlive || state.Incarnation != 2 {
 		t.Fatalf("Bad state %v", state)
 	}
 
@@ -2168,7 +2168,7 @@ func TestMemberlist_GossipToDead(t *testing.T) {
 	m1.aliveNode(&a2, nil, false)
 
 	// Shouldn't send anything to m2 here, node has been dead for 2x the GossipToTheDeadTime
-	m1.nodeMap[addr2.String()].State = stateDead
+	m1.nodeMap[addr2.String()].State = StateDead
 	m1.nodeMap[addr2.String()].StateChange = time.Now().Add(-200 * time.Millisecond)
 	m1.gossip()
 

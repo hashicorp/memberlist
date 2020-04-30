@@ -176,7 +176,7 @@ type pushNodeState struct {
 	Port        uint16
 	Meta        []byte
 	Incarnation uint32
-	State       nodeStateType
+	State       NodeStateType
 	Vsn         []uint8 // Protocol versions
 }
 
@@ -1148,16 +1148,17 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 		nodes := make([]*Node, len(remoteNodes))
 		for idx, n := range remoteNodes {
 			nodes[idx] = &Node{
-				Name: n.Name,
-				Addr: n.Addr,
-				Port: n.Port,
-				Meta: n.Meta,
-				PMin: n.Vsn[0],
-				PMax: n.Vsn[1],
-				PCur: n.Vsn[2],
-				DMin: n.Vsn[3],
-				DMax: n.Vsn[4],
-				DCur: n.Vsn[5],
+				Name:  n.Name,
+				Addr:  n.Addr,
+				Port:  n.Port,
+				Meta:  n.Meta,
+				State: n.State,
+				PMin:  n.Vsn[0],
+				PMax:  n.Vsn[1],
+				PCur:  n.Vsn[2],
+				DMin:  n.Vsn[3],
+				DMax:  n.Vsn[4],
+				DCur:  n.Vsn[5],
 			}
 		}
 		if err := m.config.Merge.NotifyMerge(nodes); err != nil {
