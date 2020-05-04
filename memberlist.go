@@ -736,7 +736,7 @@ func (m *Memberlist) hasLeft() bool {
 	return atomic.LoadInt32(&m.leave) == 1
 }
 
-func (m *Memberlist) getNodeState(addr string) nodeStateType {
+func (m *Memberlist) getNodeState(addr string) NodeStateType {
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
 

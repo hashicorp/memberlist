@@ -103,28 +103,28 @@ func TestRetransmitLimit(t *testing.T) {
 func TestShuffleNodes(t *testing.T) {
 	orig := []*nodeState{
 		&nodeState{
-			State: stateDead,
+			State: StateDead,
 		},
 		&nodeState{
-			State: stateAlive,
+			State: StateAlive,
 		},
 		&nodeState{
-			State: stateAlive,
+			State: StateAlive,
 		},
 		&nodeState{
-			State: stateDead,
+			State: StateDead,
 		},
 		&nodeState{
-			State: stateAlive,
+			State: StateAlive,
 		},
 		&nodeState{
-			State: stateAlive,
+			State: StateAlive,
 		},
 		&nodeState{
-			State: stateDead,
+			State: StateDead,
 		},
 		&nodeState{
-			State: stateAlive,
+			State: StateAlive,
 		},
 	}
 	nodes := make([]*nodeState, len(orig))
@@ -163,29 +163,29 @@ func TestPushPullScale(t *testing.T) {
 func TestMoveDeadNodes(t *testing.T) {
 	nodes := []*nodeState{
 		&nodeState{
-			State:       stateDead,
+			State:       StateDead,
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State:       stateAlive,
+			State:       StateAlive,
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		// This dead node should not be moved, as its state changed
 		// less than the specified GossipToTheDead time ago
 		&nodeState{
-			State:       stateDead,
+			State:       StateDead,
 			StateChange: time.Now().Add(-10 * time.Second),
 		},
 		&nodeState{
-			State:       stateAlive,
+			State:       StateAlive,
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State:       stateDead,
+			State:       StateDead,
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State:       stateAlive,
+			State:       StateAlive,
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 	}
@@ -199,17 +199,17 @@ func TestMoveDeadNodes(t *testing.T) {
 		case 2:
 			// Recently dead node remains at index 2,
 			// since nodes are swapped out to move to end.
-			if nodes[i].State != stateDead {
+			if nodes[i].State != StateDead {
 				t.Fatalf("Bad state %d", i)
 			}
 		default:
-			if nodes[i].State != stateAlive {
+			if nodes[i].State != StateAlive {
 				t.Fatalf("Bad state %d", i)
 			}
 		}
 	}
 	for i := idx; i < len(nodes); i++ {
-		if nodes[i].State != stateDead {
+		if nodes[i].State != StateDead {
 			t.Fatalf("Bad state %d", i)
 		}
 	}
@@ -219,14 +219,14 @@ func TestKRandomNodes(t *testing.T) {
 	nodes := []*nodeState{}
 	for i := 0; i < 90; i++ {
 		// Half the nodes are in a bad state
-		state := stateAlive
+		state := StateAlive
 		switch i % 3 {
 		case 0:
-			state = stateAlive
+			state = StateAlive
 		case 1:
-			state = stateSuspect
+			state = StateSuspect
 		case 2:
-			state = stateDead
+			state = StateDead
 		}
 		nodes = append(nodes, &nodeState{
 			Node: Node{
@@ -237,7 +237,7 @@ func TestKRandomNodes(t *testing.T) {
 	}
 
 	filterFunc := func(n *nodeState) bool {
-		if n.Name == "test0" || n.State != stateAlive {
+		if n.Name == "test0" || n.State != StateAlive {
 			return true
 		}
 		return false
@@ -265,7 +265,7 @@ func TestKRandomNodes(t *testing.T) {
 			if n.Name == "test0" {
 				t.Fatalf("Bad name")
 			}
-			if n.State != stateAlive {
+			if n.State != StateAlive {
 				t.Fatalf("Bad state")
 			}
 		}
