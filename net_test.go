@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -447,7 +448,7 @@ func TestTCPPushPull(t *testing.T) {
 		StateChange: time.Now().Add(-1 * time.Second),
 	})
 
-	addr := fmt.Sprintf("%s:%d", m.config.BindAddr, m.config.BindPort)
+	addr := net.JoinHostPort(m.config.BindAddr, strconv.Itoa(m.config.BindPort))
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
