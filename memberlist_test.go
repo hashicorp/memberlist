@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1362,7 +1363,7 @@ func TestMemberlist_Join_DeadNode(t *testing.T) {
 	// Create a second "node", which is just a TCP listener that
 	// does not ever respond. This is to test our deadlines
 	addr2 := getBindAddr()
-	list, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr2.String(), bindPort))
+	list, err := net.Listen("tcp", net.JoinHostPort(addr2.String(), strconv.Itoa(bindPort)))
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
