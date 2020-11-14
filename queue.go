@@ -285,6 +285,76 @@ func (q *TransmitLimitedQueue) getTransmitRange() (minTransmit, maxTransmit int)
 
 // GetBroadcasts is used to get a number of broadcasts, up to a byte limit
 // and applying a per-message overhead as provided.
+func (q *TransmitLimitedQueue) GetAvailableBroadcasts() []Broadcast {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	// Fast path the default case
+	if q.lenLocked() == 0 {
+		return nil
+	}
+
+	transmitLimit := retransmitLimit(q.RetransmitMult, q.NumNodes())
+
+	var (
+		toSend   []Broadcast
+		reinsert []*limitedBroadcast
+	)
+
+	// Visit fresher items first, but only look at stuff that will fit.
+	// We'll go tier by tier, grabbing the largest items first.
+	minTr, maxTr := q.getTransmitRange()
+	for transmits := minTr; transmits <= maxTr; /*do not advance automatically*/ {
+		// Search for the least element on a given tier (by transmit count) as
+		// defined in the limitedBroadcast.Less function that will fit into our
+		// remaining space.
+		greaterOrEqual := &limitedBroadcast{
+			transmits: transmits,
+			id:        math.MaxInt64,
+		}
+		lessThan := &limitedBroadcast{
+			transmits: transmits + 1,
+			id:        math.MaxInt64,
+		}
+		var keep *limitedBroadcast
+		q.tq.AscendRange(greaterOrEqual, lessThan, func(item btree.Item) bool {
+			cur := item.(*limitedBroadcast)
+			keep = cur
+			return false
+		})
+		if keep == nil {
+			// No more items of an appropriate size in the tier.
+			transmits++
+			continue
+		}
+
+		// Add to slice to send
+		toSend = append(toSend, keep.b)
+
+		// Check if we should stop transmission
+		q.deleteItem(keep)
+		if keep.transmits+1 >= transmitLimit {
+			keep.b.Finished()
+		} else {
+			// We need to bump this item down to another transmit tier, but
+			// because it would be in the same direction that we're walking the
+			// tiers, we will have to delay the reinsertion until we are
+			// finished our search. Otherwise we'll possibly re-add the message
+			// when we ascend to the next tier.
+			keep.transmits++
+			reinsert = append(reinsert, keep)
+		}
+	}
+
+	for _, cur := range reinsert {
+		q.addItem(cur)
+	}
+
+	return toSend
+}
+
+// GetBroadcasts is used to get a number of broadcasts, up to a byte limit
+// and applying a per-message overhead as provided.
 func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 	q.mu.Lock()
 	defer q.mu.Unlock()

@@ -2,6 +2,7 @@ package memberlist
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -264,6 +265,8 @@ func (m *Memberlist) probeNodeByAddr(addr string) {
 	m.probeNode(n)
 }
 
+var ErrFailedRemote = errors.New("failed remote")
+
 // failedRemote checks the error and decides if it indicates a failure on the
 // other end.
 func failedRemote(err error) bool {
@@ -276,7 +279,8 @@ func failedRemote(err error) bool {
 			}
 		}
 	}
-	return false
+
+	return errors.Is(err, ErrFailedRemote)
 }
 
 // probeNode handles a single round of failure checking on a node.
