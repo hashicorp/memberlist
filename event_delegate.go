@@ -42,6 +42,10 @@ const (
 	NodeUpdate
 )
 
+func (net NodeEventType) String() string {
+	return []string{"NodeJoin", "NodeLeave", "NodeUpdate"}[net]
+}
+
 // NodeEvent is a single event related to node activity in the memberlist.
 // The Node member of this struct must not be directly modified. It is passed
 // as a pointer to avoid unnecessary copies. If you wish to modify the node,
