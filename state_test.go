@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"reflect"
 	"strconv"
 	"sync"
 	"testing"
@@ -1420,8 +1421,8 @@ func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 		if e.Event != NodeUpdate {
 			t.Fatalf("bad event: %v", e)
 		}
-		if e.Node != &state.Node {
-			t.Fatalf("bad event: %v", e)
+		if !reflect.DeepEqual(*e.Node, state.Node) {
+			t.Fatalf("expected %v, got %v", *e.Node, state.Node)
 		}
 		if bytes.Compare(e.Node.Meta, a.Meta) != 0 {
 			t.Fatalf("meta did not update")
