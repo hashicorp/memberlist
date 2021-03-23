@@ -257,7 +257,7 @@ func TestKRandomNodes(t *testing.T) {
 		t.Fatalf("unexpected equal")
 	}
 
-	for _, s := range [][]*nodeState{s1, s2, s3} {
+	for _, s := range [][]Node{s1, s2, s3} {
 		if len(s) != 3 {
 			t.Fatalf("bad len")
 		}
