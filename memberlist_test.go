@@ -46,10 +46,8 @@ func testConfigNet(tb testing.TB, network byte) *Config {
 	config.BindAddr = getBindAddrNet(network).String()
 	config.Name = config.BindAddr
 	config.BindPort = 0 // choose free port
-	if tb != nil {
-		config.Logger = testLoggerWithName(tb, config.Name)
-	}
 	config.RequireNodeNames = true
+	config.Logger = log.New(os.Stderr, config.Name, log.LstdFlags)
 	return config
 }
 
@@ -186,7 +184,6 @@ func TestCreate_protocolVersion(t *testing.T) {
 			c := DefaultLANConfig()
 			c.BindAddr = getBindAddr().String()
 			c.ProtocolVersion = tc.version
-			c.Logger = testLogger(t)
 
 			m, err := Create(c)
 			if err == nil {
@@ -219,7 +216,6 @@ func TestCreate_secretKey(t *testing.T) {
 			c := DefaultLANConfig()
 			c.BindAddr = getBindAddr().String()
 			c.SecretKey = tc.key
-			c.Logger = testLogger(t)
 
 			m, err := Create(c)
 			if err == nil {
@@ -239,7 +235,6 @@ func TestCreate_secretKeyEmpty(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
 	c.SecretKey = make([]byte, 0)
-	c.Logger = testLogger(t)
 
 	m, err := Create(c)
 	require.NoError(t, err)
@@ -253,7 +248,6 @@ func TestCreate_secretKeyEmpty(t *testing.T) {
 func TestCreate_keyringOnly(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
-	c.Logger = testLogger(t)
 
 	keyring, err := NewKeyring(nil, make([]byte, 16))
 	require.NoError(t, err)
@@ -271,7 +265,6 @@ func TestCreate_keyringOnly(t *testing.T) {
 func TestCreate_keyringAndSecretKey(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
-	c.Logger = testLogger(t)
 
 	keyring, err := NewKeyring(nil, make([]byte, 16))
 	require.NoError(t, err)
@@ -1322,14 +1315,14 @@ func TestMemberlist_SendTo(t *testing.T) {
 
 	// Ensure we got the messages
 	if len(msgs1) != 1 {
-		t.Fatalf("should have 1 messages!")
+		t.Fatalf("expected 1 message, got %d", len(msgs1))
 	}
 	if !reflect.DeepEqual(msgs1[0], []byte("pong")) {
 		t.Fatalf("bad msg %v", msgs1[0])
 	}
 
 	if len(msgs2) != 1 {
-		t.Fatalf("should have 1 messages!")
+		t.Fatalf("should have 1 message, got %d", len(msgs2))
 	}
 	if !reflect.DeepEqual(msgs2[0], []byte("ping")) {
 		t.Fatalf("bad msg %v", msgs2[0])
@@ -1483,7 +1476,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	c1.Name = "A"
 	c1.BindAddr = "[::1]"
 	c1.BindPort = 0 // choose free
-	c1.Logger = testLoggerWithName(t, c1.Name)
+	c1.Logger = log.New(os.Stderr, c1.Name, log.LstdFlags)
 
 	m1, err := Create(c1)
 	require.NoError(t, err)
@@ -1494,7 +1487,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	c2.Name = "B"
 	c2.BindAddr = "[::1]"
 	c2.BindPort = 0 // choose free
-	c2.Logger = testLoggerWithName(t, c2.Name)
+	c2.Logger = log.New(os.Stderr, c2.Name, log.LstdFlags)
 
 	m2, err := Create(c2)
 	require.NoError(t, err)
@@ -1558,7 +1551,6 @@ func TestAdvertiseAddr(t *testing.T) {
 	c.BindAddr = bindAddr.String()
 	c.BindPort = bindPort
 	c.Name = c.BindAddr
-	c.Logger = testLoggerWithName(t, c.Name)
 
 	c.AdvertiseAddr = advertiseAddr.String()
 	c.AdvertisePort = advertisePort
@@ -1783,7 +1775,7 @@ func TestMemberlist_EncryptedGossipTransition(t *testing.T) {
 		// Set the gossip interval fast enough to get a reasonable test,
 		// but slow enough to avoid "sendto: operation not permitted"
 		conf.GossipInterval = 100 * time.Millisecond
-		conf.Logger = testLoggerWithName(t, shortName)
+		conf.Logger = log.New(os.Stderr, shortName, log.LstdFlags)
 
 		pretty[conf.Name] = shortName
 		return conf
