@@ -1198,9 +1198,14 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	min := suspicionTimeout(m.config.SuspicionMult, n, m.config.ProbeInterval)
 	max := time.Duration(m.config.SuspicionMaxTimeoutMult) * min
 	fn := func(numConfirmations int) {
+		var d *dead
+
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]
 		timeout := ok && state.State == StateSuspect && state.StateChange == changeTime
+		if timeout {
+			d = &dead{Incarnation: state.Incarnation, Node: state.Name, From: m.config.Name}
+		}
 		m.nodeLock.Unlock()
 
 		if timeout {
@@ -1210,8 +1215,8 @@ func (m *Memberlist) suspectNode(s *suspect) {
 
 			m.logger.Printf("[INFO] memberlist: Marking %s as failed, suspect timeout reached (%d peer confirmations)",
 				state.Name, numConfirmations)
-			d := dead{Incarnation: state.Incarnation, Node: state.Name, From: m.config.Name}
-			m.deadNode(&d)
+
+			m.deadNode(d)
 		}
 	}
 	m.nodeTimers[s.Node] = newSuspicion(s.From, k, min, max, fn)
