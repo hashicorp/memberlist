@@ -3,9 +3,13 @@ package memberlist
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"net"
+	"os"
+	"reflect"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,7 +24,7 @@ func HostMemberlist(host string, t *testing.T, f func(*Config)) *Memberlist {
 	c.Name = host
 	c.BindAddr = host
 	c.BindPort = 0 // choose a free port
-	c.Logger = testLoggerWithName(t, host)
+	c.Logger = log.New(os.Stderr, host, log.LstdFlags)
 	if f != nil {
 		f(c)
 	}
@@ -126,8 +130,8 @@ func TestMemberList_ProbeNode_Suspect(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// One of the peers should have attempted an indirect probe.
-	if m2.sequenceNum != 1 && m3.sequenceNum != 1 {
-		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
+	if s2, s3 := atomic.LoadUint32(&m2.sequenceNum), atomic.LoadUint32(&m3.sequenceNum); s2 != 1 && s3 != 1 {
+		t.Fatalf("bad seqnos, expected both to be 1: %v, %v", s2, s3)
 	}
 }
 
@@ -784,9 +788,12 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 	probeTime := time.Now().Sub(startProbe)
 
 	// Node should be reported suspect.
+
+	m1.nodeLock.Lock()
 	if n.State != StateSuspect {
 		t.Fatalf("expect node to be suspect")
 	}
+	m1.nodeLock.Unlock()
 
 	// Make sure we timed out approximately on time.
 	if probeTime > probeTimeMax {
@@ -1420,8 +1427,8 @@ func TestMemberList_AliveNode_ChangeMeta(t *testing.T) {
 		if e.Event != NodeUpdate {
 			t.Fatalf("bad event: %v", e)
 		}
-		if e.Node != &state.Node {
-			t.Fatalf("bad event: %v", e)
+		if !reflect.DeepEqual(*e.Node, state.Node) {
+			t.Fatalf("expected %v, got %v", *e.Node, state.Node)
 		}
 		if bytes.Compare(e.Node.Meta, a.Meta) != 0 {
 			t.Fatalf("meta did not update")
