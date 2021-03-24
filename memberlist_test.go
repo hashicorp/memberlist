@@ -1031,11 +1031,10 @@ func TestMemberlist_JoinShutdown(t *testing.T) {
 
 	require.NoError(t, m1.Shutdown())
 
-	time.Sleep(10 * time.Millisecond)
-
-	if len(m2.Members()) != 1 {
-		t.Fatalf("should have 1 nodes! %v", m2.Members())
-	}
+	waitForCondition(t, func() (bool, string) {
+		n := len(m2.Members())
+		return n == 1, fmt.Sprintf("expected 1 node, got %d", n)
+	})
 }
 
 func TestMemberlist_delegateMeta(t *testing.T) {
@@ -1307,26 +1306,39 @@ func TestMemberlist_SendTo(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 
-	// Wait for a little while
-	time.Sleep(3 * time.Millisecond)
+	waitForCondition(t, func() (bool, string) {
+		msgs := d1.getMessages()
+		return len(msgs) == 1, fmt.Sprintf("expected 1 message, got %d", len(msgs))
+	})
 
 	msgs1 := d1.getMessages()
-	msgs2 := d2.getMessages()
-
-	// Ensure we got the messages
-	if len(msgs1) != 1 {
-		t.Fatalf("expected 1 message, got %d", len(msgs1))
-	}
 	if !reflect.DeepEqual(msgs1[0], []byte("pong")) {
 		t.Fatalf("bad msg %v", msgs1[0])
 	}
 
-	if len(msgs2) != 1 {
-		t.Fatalf("should have 1 message, got %d", len(msgs2))
-	}
+	waitForCondition(t, func() (bool, string) {
+		msgs := d2.getMessages()
+		return len(msgs) == 1, fmt.Sprintf("expected 1 message, got %d", len(msgs))
+	})
+	msgs2 := d2.getMessages()
 	if !reflect.DeepEqual(msgs2[0], []byte("ping")) {
 		t.Fatalf("bad msg %v", msgs2[0])
 	}
+}
+
+func waitForCondition(t *testing.T, fn func() (bool, string)) {
+	start := time.Now()
+
+	var msg string
+	for time.Since(start) < 20*time.Second {
+		var done bool
+		done, msg = fn()
+		if done {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timeout waiting for condition: %v", msg)
 }
 
 func TestMemberlistProtocolVersion(t *testing.T) {
