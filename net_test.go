@@ -804,7 +804,11 @@ func TestIngestPacket_ExportedFunc_EmptyMessage(t *testing.T) {
 	logger := log.New(logs, "", 0)
 	m.logger = logger
 
-	err := m.transport.IngestPacket(emptyConn, udp.LocalAddr(), time.Now(), true)
+	type ingestionAwareTransport interface {
+		IngestPacket(conn net.Conn, addr net.Addr, now time.Time, shouldClose bool) error
+	}
+
+	err := m.transport.(ingestionAwareTransport).IngestPacket(emptyConn, udp.LocalAddr(), time.Now(), true)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "packet too short")
 }
