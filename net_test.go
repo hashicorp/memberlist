@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"reflect"
 	"strconv"
@@ -780,8 +779,7 @@ func TestIngestPacket_CRC(t *testing.T) {
 	in[1] <<= 1
 
 	logs := &bytes.Buffer{}
-	logger := log.New(logs, "", 0)
-	m.logger = logger
+	m.logger = newLoggerImpl(logs)
 	m.ingestPacket(in, udp.LocalAddr(), time.Now())
 
 	if !strings.Contains(logs.String(), "invalid checksum") {
@@ -801,8 +799,7 @@ func TestIngestPacket_ExportedFunc_EmptyMessage(t *testing.T) {
 	emptyConn := &emptyReadNetConn{}
 
 	logs := &bytes.Buffer{}
-	logger := log.New(logs, "", 0)
-	m.logger = logger
+	m.logger = newNamedFlagsLoggerImpl(logs, "", 0)
 
 	type ingestionAwareTransport interface {
 		IngestPacket(conn net.Conn, addr net.Addr, now time.Time, shouldClose bool) error

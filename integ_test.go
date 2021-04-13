@@ -2,7 +2,6 @@ package memberlist
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -42,7 +41,7 @@ func TestMemberlist_Integ(t *testing.T) {
 		c.GossipInterval = 20 * time.Millisecond
 		c.PushPullInterval = 200 * time.Millisecond
 		c.SecretKey = secret
-		c.Logger = log.New(os.Stderr, c.Name, log.LstdFlags)
+		c.Logger = newNamedLoggerImpl(os.Stderr, c.Name)
 
 		if i == 0 {
 			c.Events = &ChannelEventDelegate{eventCh}

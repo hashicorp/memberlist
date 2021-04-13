@@ -3,7 +3,6 @@ package memberlist
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"reflect"
@@ -24,7 +23,7 @@ func HostMemberlist(host string, t *testing.T, f func(*Config)) *Memberlist {
 	c.Name = host
 	c.BindAddr = host
 	c.BindPort = 0 // choose a free port
-	c.Logger = log.New(os.Stderr, host, log.LstdFlags)
+	c.Logger = newNamedLoggerImpl(os.Stderr, host)
 	if f != nil {
 		f(c)
 	}
