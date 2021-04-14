@@ -15,7 +15,7 @@ type Logger interface {
 	Errorf(format string, v ...interface{})
 }
 
-type loggerImpl struct{
+type loggerImpl struct {
 	logger *log.Logger
 }
 
@@ -38,19 +38,19 @@ func newNamedFlagsLoggerImpl(output io.Writer, name string, flags int) Logger {
 }
 
 func (l *loggerImpl) Debugf(format string, v ...interface{}) {
-	l.logger.Printf("[DEBUG] memberlist: " + format, v...)
+	l.logger.Printf("[DEBUG] memberlist: "+format, v...)
 }
 
 func (l *loggerImpl) Infof(format string, v ...interface{}) {
-	l.logger.Printf("[INFO] memberlist: " + format, v...)
+	l.logger.Printf("[INFO] memberlist: "+format, v...)
 }
 
 func (l *loggerImpl) Warnf(format string, v ...interface{}) {
-	l.logger.Printf("[WARN] memberlist: " + format, v...)
+	l.logger.Printf("[WARN] memberlist: "+format, v...)
 }
 
 func (l *loggerImpl) Errorf(format string, v ...interface{}) {
-	l.logger.Printf("[ERROR] memberlist: " + format, v...)
+	l.logger.Printf("[ERROR] memberlist: "+format, v...)
 }
 
 func LogAddress(addr net.Addr) string {
