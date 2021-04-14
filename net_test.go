@@ -779,9 +779,10 @@ func TestIngestPacket_CRC(t *testing.T) {
 	in[1] <<= 1
 
 	logs := &bytes.Buffer{}
-	m.logger = newLoggerImpl(logs)
+	m.logger = newNamedFlagsLoggerImpl(logs, "", 0)
 	m.ingestPacket(in, udp.LocalAddr(), time.Now())
 
+	fmt.Println("logs.String() == [" + logs.String() + "]")
 	if !strings.Contains(logs.String(), "invalid checksum") {
 		t.Fatalf("bad: %s", logs.String())
 	}

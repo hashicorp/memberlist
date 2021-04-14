@@ -30,9 +30,9 @@ func newNamedLoggerImpl(output io.Writer, name string) Logger {
 func newNamedFlagsLoggerImpl(output io.Writer, name string, flags int) Logger {
 	var logger *log.Logger
 	if output != nil {
-		logger = log.New(os.Stderr, name, flags)
-	} else {
 		logger = log.New(output, name, flags)
+	} else {
+		logger = log.New(os.Stderr, name, flags)
 	}
 	return &loggerImpl{logger}
 }
