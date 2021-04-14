@@ -126,7 +126,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 
 	logger := conf.Logger
 	if logger == nil {
-		logger = newLoggerImpl(logDest)
+		logger = newLogger(logDest)
 	}
 
 	// Set up a network transport by default if a custom one wasn't given

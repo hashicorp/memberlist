@@ -19,15 +19,15 @@ type loggerImpl struct {
 	logger *log.Logger
 }
 
-func newLoggerImpl(output io.Writer) Logger {
-	return newNamedLoggerImpl(output, "")
+func newLogger(output io.Writer) Logger {
+	return newNamedLogger(output, "")
 }
 
-func newNamedLoggerImpl(output io.Writer, name string) Logger {
-	return newNamedFlagsLoggerImpl(output, name, log.LstdFlags)
+func newNamedLogger(output io.Writer, name string) Logger {
+	return newNamedLoggerWithFlags(output, name, log.LstdFlags)
 }
 
-func newNamedFlagsLoggerImpl(output io.Writer, name string, flags int) Logger {
+func newNamedLoggerWithFlags(output io.Writer, name string, flags int) Logger {
 	var logger *log.Logger
 	if output != nil {
 		logger = log.New(output, name, flags)

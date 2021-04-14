@@ -159,7 +159,7 @@ func TestTransport_TcpListenBackoff(t *testing.T) {
 
 	var numCalls int32
 	countingWriter := testCountingWriter{t, &numCalls}
-	countingLogger := newNamedLoggerImpl(countingWriter, "test")
+	countingLogger := newNamedLogger(countingWriter, "test")
 	transport := NetTransport{
 		streamCh: make(chan net.Conn),
 		logger:   countingLogger,

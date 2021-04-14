@@ -41,7 +41,7 @@ func TestMemberlist_Integ(t *testing.T) {
 		c.GossipInterval = 20 * time.Millisecond
 		c.PushPullInterval = 200 * time.Millisecond
 		c.SecretKey = secret
-		c.Logger = newNamedLoggerImpl(os.Stderr, c.Name)
+		c.Logger = newNamedLogger(os.Stderr, c.Name)
 
 		if i == 0 {
 			c.Events = &ChannelEventDelegate{eventCh}

@@ -779,7 +779,7 @@ func TestIngestPacket_CRC(t *testing.T) {
 	in[1] <<= 1
 
 	logs := &bytes.Buffer{}
-	m.logger = newNamedFlagsLoggerImpl(logs, "", 0)
+	m.logger = newNamedLoggerWithFlags(logs, "", 0)
 	m.ingestPacket(in, udp.LocalAddr(), time.Now())
 
 	fmt.Println("logs.String() == [" + logs.String() + "]")
@@ -800,7 +800,7 @@ func TestIngestPacket_ExportedFunc_EmptyMessage(t *testing.T) {
 	emptyConn := &emptyReadNetConn{}
 
 	logs := &bytes.Buffer{}
-	m.logger = newNamedFlagsLoggerImpl(logs, "", 0)
+	m.logger = newNamedLoggerWithFlags(logs, "", 0)
 
 	type ingestionAwareTransport interface {
 		IngestPacket(conn net.Conn, addr net.Addr, now time.Time, shouldClose bool) error

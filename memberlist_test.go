@@ -46,7 +46,7 @@ func testConfigNet(tb testing.TB, network byte) *Config {
 	config.Name = config.BindAddr
 	config.BindPort = 0 // choose free port
 	config.RequireNodeNames = true
-	config.Logger = newNamedLoggerImpl(os.Stderr, config.Name)
+	config.Logger = newNamedLogger(os.Stderr, config.Name)
 	return config
 }
 
@@ -287,7 +287,7 @@ func TestCreate_keyringAndSecretKey(t *testing.T) {
 func TestCreate_invalidLoggerSettings(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
-	c.Logger = newLoggerImpl(ioutil.Discard)
+	c.Logger = newLogger(ioutil.Discard)
 	c.LogOutput = ioutil.Discard
 
 	m, err := Create(c)
@@ -1487,7 +1487,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	c1.Name = "A"
 	c1.BindAddr = "[::1]"
 	c1.BindPort = 0 // choose free
-	c1.Logger = newNamedLoggerImpl(os.Stderr, c1.Name)
+	c1.Logger = newNamedLogger(os.Stderr, c1.Name)
 
 	m1, err := Create(c1)
 	require.NoError(t, err)
@@ -1498,7 +1498,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	c2.Name = "B"
 	c2.BindAddr = "[::1]"
 	c2.BindPort = 0 // choose free
-	c2.Logger = newNamedLoggerImpl(os.Stderr, c2.Name)
+	c2.Logger = newNamedLogger(os.Stderr, c2.Name)
 
 	m2, err := Create(c2)
 	require.NoError(t, err)
@@ -1786,7 +1786,7 @@ func TestMemberlist_EncryptedGossipTransition(t *testing.T) {
 		// Set the gossip interval fast enough to get a reasonable test,
 		// but slow enough to avoid "sendto: operation not permitted"
 		conf.GossipInterval = 100 * time.Millisecond
-		conf.Logger = newNamedLoggerImpl(os.Stderr, shortName)
+		conf.Logger = newNamedLogger(os.Stderr, shortName)
 
 		pretty[conf.Name] = shortName
 		return conf
