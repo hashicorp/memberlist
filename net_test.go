@@ -866,3 +866,12 @@ func listenUDP(t *testing.T) *net.UDPConn {
 	}
 	return udp
 }
+
+func TestHandleCommand(t *testing.T) {
+	var buf bytes.Buffer
+	m := Memberlist{
+		logger: log.New(&buf, "", 0),
+	}
+	m.handleCommand(nil, &net.TCPAddr{Port: 12345}, time.Now())
+	require.Contains(t, buf.String(), "missing message type byte")
+}

@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestUtil_PortFunctions(t *testing.T) {
@@ -312,6 +314,13 @@ func TestDecodeCompoundMessage(t *testing.T) {
 			t.Fatalf("bad part len")
 		}
 	}
+}
+
+func TestDecodeCompoundMessage_NumberOfPartsOverflow(t *testing.T) {
+	buf := []byte{0x80}
+	_, _, err := decodeCompoundMessage(buf)
+	require.Error(t, err)
+	require.Equal(t, err.Error(), "truncated len slice")
 }
 
 func TestDecodeCompoundMessage_Trunc(t *testing.T) {
