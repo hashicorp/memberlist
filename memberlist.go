@@ -135,9 +135,10 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	transport := conf.Transport
 	if transport == nil {
 		nc := &NetTransportConfig{
-			BindAddrs: []string{conf.BindAddr},
-			BindPort:  conf.BindPort,
-			Logger:    logger,
+			BindAddrs:        []string{conf.BindAddr},
+			BindPort:         conf.BindPort,
+			UDPPacketBufSize: conf.UDPBufferSize,
+			Logger:           logger,
 		}
 
 		// See comment below for details about the retry in here.
