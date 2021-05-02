@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -34,7 +33,7 @@ type NetTransportConfig struct {
 	BindPort int
 
 	// Logger is a logger for operator messages.
-	Logger *log.Logger
+	Logger Logger
 }
 
 // NetTransport is a Transport implementation that uses connectionless UDP for
@@ -43,7 +42,7 @@ type NetTransport struct {
 	config       *NetTransportConfig
 	packetCh     chan *Packet
 	streamCh     chan net.Conn
-	logger       *log.Logger
+	logger       Logger
 	wg           sync.WaitGroup
 	tcpListeners []*net.TCPListener
 	udpListeners []*net.UDPConn
@@ -302,7 +301,7 @@ func (t *NetTransport) tcpListen(tcpLn *net.TCPListener) {
 				loopDelay = maxDelay
 			}
 
-			t.logger.Printf("[ERR] memberlist: Error accepting TCP connection: %v", err)
+			t.logger.Errorf("Error accepting TCP connection: %v", err)
 			time.Sleep(loopDelay)
 			continue
 		}
@@ -328,14 +327,14 @@ func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
 				break
 			}
 
-			t.logger.Printf("[ERR] memberlist: Error reading UDP packet: %v", err)
+			t.logger.Errorf("Error reading UDP packet: %v", err)
 			continue
 		}
 
 		// Check the length - it needs to have at least one byte to be a
 		// proper message.
 		if n < 1 {
-			t.logger.Printf("[ERR] memberlist: UDP packet too short (%d bytes) %s",
+			t.logger.Errorf("UDP packet too short (%d bytes) %s",
 				len(buf), LogAddress(addr))
 			continue
 		}
