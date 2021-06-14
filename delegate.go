@@ -7,6 +7,9 @@ type Delegate interface {
 	// NodeMeta is used to retrieve meta-data about the current node
 	// when broadcasting an alive message. It's length is limited to
 	// the given byte size. This metadata is available in the Node structure.
+	//
+	// Deprecated: set Config.Meta for initial node meta, and pass any updates to
+	// Memberlist.UpdateNodeMeta.
 	NodeMeta(limit int) []byte
 
 	// NotifyMsg is called when a user-data message is received.
