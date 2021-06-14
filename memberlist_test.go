@@ -1114,8 +1114,6 @@ func TestMemberlist_delegateMeta_Update(t *testing.T) {
 
 	c2 := testConfig(t)
 	c2.BindPort = bindPort
-	mock2 := &MockDelegate{meta: []byte("lb")}
-	c2.Delegate = mock2
 
 	m2, err := Create(c2)
 	require.NoError(t, err)
@@ -1126,13 +1124,10 @@ func TestMemberlist_delegateMeta_Update(t *testing.T) {
 
 	yield()
 
-	// Update the meta data roles
 	mock1.setMeta([]byte("api"))
-	mock2.setMeta([]byte("db"))
-
 	err = m1.UpdateNode(0)
 	require.NoError(t, err)
-	err = m2.UpdateNode(0)
+	err = m2.UpdateNodeMeta(0, []byte("db"))
 	require.NoError(t, err)
 
 	yield()
