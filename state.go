@@ -274,6 +274,11 @@ func failedRemote(err error) bool {
 			case "dial", "read", "write":
 				return true
 			}
+		} else if strings.HasPrefix(t.Net, "udp") {
+			switch t.Op {
+			case "write":
+				return true
+			}
 		}
 	}
 	return false
