@@ -16,6 +16,7 @@ import (
 
 	iretry "github.com/hashicorp/memberlist/internal/retry"
 	"github.com/miekg/dns"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -641,6 +642,90 @@ func TestMemberlist_Join(t *testing.T) {
 	if m2.estNumNodes() != 2 {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
 	}
+}
+
+func TestMemberlist_Join_with_Labels(t *testing.T) {
+	testMemberlist_Join_with_Labels(t, nil)
+}
+func TestMemberlist_Join_with_Labels_and_Encryption(t *testing.T) {
+	secretKey := TestKeys[0]
+	testMemberlist_Join_with_Labels(t, secretKey)
+}
+func testMemberlist_Join_with_Labels(t *testing.T, secretKey []byte) {
+	c1 := testConfig(t)
+	c1.Label = "blah"
+	c1.SecretKey = secretKey
+	m1, err := Create(c1)
+	require.NoError(t, err)
+	defer m1.Shutdown()
+
+	bindPort := m1.config.BindPort
+
+	// Create a second node
+	c2 := testConfig(t)
+	c2.Label = "blah"
+	c2.BindPort = bindPort
+	c2.SecretKey = secretKey
+	m2, err := Create(c2)
+	require.NoError(t, err)
+	defer m2.Shutdown()
+
+	checkHost := func(t *testing.T, m *Memberlist, expected int) {
+		assert.Equal(t, expected, len(m.Members()))
+		assert.Equal(t, expected, m.estNumNodes())
+	}
+
+	runStep(t, "same label can join", func(t *testing.T) {
+		num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
+		require.NoError(t, err)
+		require.Equal(t, 1, num)
+
+		// Check the hosts
+		checkHost(t, m2, 2)
+		checkHost(t, m1, 2)
+	})
+
+	// Create a third node that uses no label
+	c3 := testConfig(t)
+	c3.Label = ""
+	c3.BindPort = bindPort
+	c3.SecretKey = secretKey
+	m3, err := Create(c3)
+	require.NoError(t, err)
+	defer m3.Shutdown()
+
+	runStep(t, "no label cannot join", func(t *testing.T) {
+		_, err := m3.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
+		require.Error(t, err)
+
+		// Check the failed host
+		checkHost(t, m3, 1)
+		// Check the existing hosts
+		checkHost(t, m2, 2)
+		checkHost(t, m1, 2)
+	})
+
+	// Create a fourth node that uses a mismatched label
+	c4 := testConfig(t)
+	c4.Label = "not-blah"
+	c4.BindPort = bindPort
+	c4.SecretKey = secretKey
+	m4, err := Create(c4)
+	require.NoError(t, err)
+	defer m4.Shutdown()
+
+	runStep(t, "mismatched label cannot join", func(t *testing.T) {
+		_, err := m4.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
+		require.Error(t, err)
+
+		// Check the failed host
+		checkHost(t, m4, 1)
+		// Check the previous failed host
+		checkHost(t, m3, 1)
+		// Check the existing hosts
+		checkHost(t, m2, 2)
+		checkHost(t, m1, 2)
+	})
 }
 
 func TestMemberlist_JoinDifferentNetworksUniqueMask(t *testing.T) {
@@ -2071,3 +2156,10 @@ func TestMemberlist_EncryptedGossipTransition(t *testing.T) {
 //        t.Fatalf("bad role for %s: %s", c2.Name, r)
 //    }
 //}
+
+func runStep(t *testing.T, name string, fn func(t *testing.T)) {
+	t.Helper()
+	if !t.Run(name, fn) {
+		t.FailNow()
+	}
+}

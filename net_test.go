@@ -302,7 +302,7 @@ func TestTCPPing(t *testing.T) {
 		}
 		defer conn.Close()
 
-		msgType, _, dec, err := m.readStream(conn)
+		msgType, _, dec, err := m.readStream(conn, "")
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to read ping: %s", err)
 			return
@@ -336,7 +336,7 @@ func TestTCPPing(t *testing.T) {
 			return
 		}
 
-		err = m.rawSendMsgStream(conn, out.Bytes())
+		err = m.rawSendMsgStream(conn, out.Bytes(), "")
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to send ack: %s", err)
 			return
@@ -365,7 +365,7 @@ func TestTCPPing(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, _, dec, err := m.readStream(conn)
+		_, _, dec, err := m.readStream(conn, "")
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to read ping: %s", err)
 			return
@@ -384,7 +384,7 @@ func TestTCPPing(t *testing.T) {
 			return
 		}
 
-		err = m.rawSendMsgStream(conn, out.Bytes())
+		err = m.rawSendMsgStream(conn, out.Bytes(), "")
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to send ack: %s", err)
 			return
@@ -413,7 +413,7 @@ func TestTCPPing(t *testing.T) {
 		}
 		defer conn.Close()
 
-		_, _, _, err = m.readStream(conn)
+		_, _, _, err = m.readStream(conn, "")
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to read ping: %s", err)
 			return
@@ -426,7 +426,7 @@ func TestTCPPing(t *testing.T) {
 			return
 		}
 
-		err = m.rawSendMsgStream(conn, out.Bytes())
+		err = m.rawSendMsgStream(conn, out.Bytes(), "")
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to send bogus msg: %s", err)
 			return
@@ -697,7 +697,7 @@ func TestEncryptDecryptState(t *testing.T) {
 	}
 	defer m.Shutdown()
 
-	crypt, err := m.encryptLocalState(state)
+	crypt, err := m.encryptLocalState(state, "")
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -706,7 +706,7 @@ func TestEncryptDecryptState(t *testing.T) {
 	buf := bytes.NewReader(crypt)
 	buf.Seek(1, 0)
 
-	plain, err := m.decryptRemoteState(buf)
+	plain, err := m.decryptRemoteState(buf, "")
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
