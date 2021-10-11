@@ -292,46 +292,56 @@ func TestTCPPing(t *testing.T) {
 
 	// Do a normal round trip.
 	pingOut := ping{SeqNo: 23, Node: "mongo"}
+	pingErrCh := make(chan error, 1)
 	go func() {
 		tcp.SetDeadline(time.Now().Add(pingTimeMax))
 		conn, err := tcp.AcceptTCP()
 		if err != nil {
-			t.Fatalf("failed to connect: %s", err)
+			pingErrCh <- fmt.Errorf("failed to connect: %s", err)
+			return
 		}
 		defer conn.Close()
 
 		msgType, _, dec, err := m.readStream(conn)
 		if err != nil {
-			t.Fatalf("failed to read ping: %s", err)
+			pingErrCh <- fmt.Errorf("failed to read ping: %s", err)
+			return
 		}
 
 		if msgType != pingMsg {
-			t.Fatalf("expecting ping, got message type (%d)", msgType)
+			pingErrCh <- fmt.Errorf("expecting ping, got message type (%d)", msgType)
+			return
 		}
 
 		var pingIn ping
 		if err := dec.Decode(&pingIn); err != nil {
-			t.Fatalf("failed to decode ping: %s", err)
+			pingErrCh <- fmt.Errorf("failed to decode ping: %s", err)
+			return
 		}
 
 		if pingIn.SeqNo != pingOut.SeqNo {
-			t.Fatalf("sequence number isn't correct (%d) vs (%d)", pingIn.SeqNo, pingOut.SeqNo)
+			pingErrCh <- fmt.Errorf("sequence number isn't correct (%d) vs (%d)", pingIn.SeqNo, pingOut.SeqNo)
+			return
 		}
 
 		if pingIn.Node != pingOut.Node {
-			t.Fatalf("node name isn't correct (%s) vs (%s)", pingIn.Node, pingOut.Node)
+			pingErrCh <- fmt.Errorf("node name isn't correct (%s) vs (%s)", pingIn.Node, pingOut.Node)
+			return
 		}
 
 		ack := ackResp{pingIn.SeqNo, nil}
 		out, err := encode(ackRespMsg, &ack)
 		if err != nil {
-			t.Fatalf("failed to encode ack: %s", err)
+			pingErrCh <- fmt.Errorf("failed to encode ack: %s", err)
+			return
 		}
 
 		err = m.rawSendMsgStream(conn, out.Bytes())
 		if err != nil {
-			t.Fatalf("failed to send ack: %s", err)
+			pingErrCh <- fmt.Errorf("failed to send ack: %s", err)
+			return
 		}
+		pingErrCh <- nil
 	}()
 	deadline := time.Now().Add(pingTimeout)
 	didContact, err := m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
@@ -341,36 +351,45 @@ func TestTCPPing(t *testing.T) {
 	if !didContact {
 		t.Fatalf("expected successful ping")
 	}
+	if err = <-pingErrCh; err != nil {
+		t.Fatal(err)
+	}
 
 	// Make sure a mis-matched sequence number is caught.
 	go func() {
 		tcp.SetDeadline(time.Now().Add(pingTimeMax))
 		conn, err := tcp.AcceptTCP()
 		if err != nil {
-			t.Fatalf("failed to connect: %s", err)
+			pingErrCh <- fmt.Errorf("failed to connect: %s", err)
+			return
 		}
 		defer conn.Close()
 
 		_, _, dec, err := m.readStream(conn)
 		if err != nil {
-			t.Fatalf("failed to read ping: %s", err)
+			pingErrCh <- fmt.Errorf("failed to read ping: %s", err)
+			return
 		}
 
 		var pingIn ping
 		if err := dec.Decode(&pingIn); err != nil {
-			t.Fatalf("failed to decode ping: %s", err)
+			pingErrCh <- fmt.Errorf("failed to decode ping: %s", err)
+			return
 		}
 
 		ack := ackResp{pingIn.SeqNo + 1, nil}
 		out, err := encode(ackRespMsg, &ack)
 		if err != nil {
-			t.Fatalf("failed to encode ack: %s", err)
+			pingErrCh <- fmt.Errorf("failed to encode ack: %s", err)
+			return
 		}
 
 		err = m.rawSendMsgStream(conn, out.Bytes())
 		if err != nil {
-			t.Fatalf("failed to send ack: %s", err)
+			pingErrCh <- fmt.Errorf("failed to send ack: %s", err)
+			return
 		}
+		pingErrCh <- nil
 	}()
 	deadline = time.Now().Add(pingTimeout)
 	didContact, err = m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
@@ -380,31 +399,39 @@ func TestTCPPing(t *testing.T) {
 	if didContact {
 		t.Fatalf("expected failed ping")
 	}
+	if err = <-pingErrCh; err != nil {
+		t.Fatal(err)
+	}
 
 	// Make sure an unexpected message type is handled gracefully.
 	go func() {
 		tcp.SetDeadline(time.Now().Add(pingTimeMax))
 		conn, err := tcp.AcceptTCP()
 		if err != nil {
-			t.Fatalf("failed to connect: %s", err)
+			pingErrCh <- fmt.Errorf("failed to connect: %s", err)
+			return
 		}
 		defer conn.Close()
 
 		_, _, _, err = m.readStream(conn)
 		if err != nil {
-			t.Fatalf("failed to read ping: %s", err)
+			pingErrCh <- fmt.Errorf("failed to read ping: %s", err)
+			return
 		}
 
 		bogus := indirectPingReq{}
 		out, err := encode(indirectPingMsg, &bogus)
 		if err != nil {
-			t.Fatalf("failed to encode bogus msg: %s", err)
+			pingErrCh <- fmt.Errorf("failed to encode bogus msg: %s", err)
+			return
 		}
 
 		err = m.rawSendMsgStream(conn, out.Bytes())
 		if err != nil {
-			t.Fatalf("failed to send bogus msg: %s", err)
+			pingErrCh <- fmt.Errorf("failed to send bogus msg: %s", err)
+			return
 		}
+		pingErrCh <- nil
 	}()
 	deadline = time.Now().Add(pingTimeout)
 	didContact, err = m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
@@ -413,6 +440,9 @@ func TestTCPPing(t *testing.T) {
 	}
 	if didContact {
 		t.Fatalf("expected failed ping")
+	}
+	if err = <-pingErrCh; err != nil {
+		t.Fatal(err)
 	}
 
 	// Make sure failed I/O respects the deadline. In this case we try the
