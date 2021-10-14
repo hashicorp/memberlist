@@ -541,7 +541,7 @@ func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
-			t.Fatalf("err: %v", err)
+			t.Errorf("err: %v", err)
 		}
 	}()
 	wg.Wait()
