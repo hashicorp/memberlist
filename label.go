@@ -99,8 +99,10 @@ func RemoveLabelHeaderFromStream(conn net.Conn) (net.Conn, string, error) {
 	peeked, err := br.Peek(1)
 	if err != nil {
 		if err == io.EOF {
-			conn, err = newPeekedConnFromBufferedReader(conn, br, 0)
-			return conn, "", err
+			// It is safe to return the original net.Conn at this point because
+			// it never contained any data in the first place so we don't have
+			// to splice the buffer into the conn because both are empty.
+			return conn, "", nil
 		}
 		return nil, "", err
 	}
