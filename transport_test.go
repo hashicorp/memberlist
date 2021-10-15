@@ -1,7 +1,6 @@
 package memberlist
 
 import (
-	"log"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -141,7 +140,7 @@ type testCountingWriter struct {
 
 func (tw testCountingWriter) Write(p []byte) (n int, err error) {
 	atomic.AddInt32(tw.numCalls, 1)
-	if !strings.Contains(string(p), "memberlist: Error accepting TCP connection") {
+	if !strings.Contains(string(p), "Error accepting TCP connection") {
 		tw.t.Error("did not receive expected log message")
 	}
 	tw.t.Log("countingWriter:", string(p))
@@ -160,7 +159,7 @@ func TestTransport_TcpListenBackoff(t *testing.T) {
 
 	var numCalls int32
 	countingWriter := testCountingWriter{t, &numCalls}
-	countingLogger := log.New(countingWriter, "test", log.LstdFlags)
+	countingLogger := newNamedLogger(countingWriter, "test")
 	transport := NetTransport{
 		streamCh: make(chan net.Conn),
 		logger:   countingLogger,
