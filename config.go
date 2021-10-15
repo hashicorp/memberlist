@@ -16,6 +16,10 @@ type Config struct {
 	// The name of this node. This must be unique in the cluster.
 	Name string
 
+	// Meta data associated with the local node. The slice must have a length
+	// less than MetaMaxSize.
+	Meta []byte
+
 	// Transport is a hook for providing custom code to communicate with
 	// other nodes. If this is left nil, then memberlist will by default
 	// make a NetTransport using BindAddr and BindPort from this structure.

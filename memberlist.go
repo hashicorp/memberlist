@@ -187,6 +187,13 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		nodeAwareTransport = &shimNodeAwareTransport{transport}
 	}
 
+	if len(conf.Meta) == 0 && conf.Delegate != nil {
+		conf.Meta = conf.Delegate.NodeMeta(MetaMaxSize)
+	}
+	if len(conf.Meta) > MetaMaxSize {
+		return nil, fmt.Errorf("meta data (%d)  is longer than the limit (%d)", len(conf.Meta), MetaMaxSize)
+	}
+
 	m := &Memberlist{
 		config:               conf,
 		shutdownCh:           make(chan struct{}),
@@ -430,21 +437,12 @@ func (m *Memberlist) setAlive() error {
 		m.logger.Printf("[WARN] memberlist: Binding to public address without encryption!")
 	}
 
-	// Set any metadata from the delegate.
-	var meta []byte
-	if m.config.Delegate != nil {
-		meta = m.config.Delegate.NodeMeta(MetaMaxSize)
-		if len(meta) > MetaMaxSize {
-			panic("Node meta data provided is longer than the limit")
-		}
-	}
-
 	a := alive{
 		Incarnation: m.nextIncarnation(),
 		Node:        m.config.Name,
 		Addr:        addr,
 		Port:        uint16(port),
-		Meta:        meta,
+		Meta:        m.config.Meta,
 		Vsn:         m.config.BuildVsnArray(),
 	}
 	m.aliveNode(&a, nil, true)
@@ -488,20 +486,28 @@ func (m *Memberlist) LocalNode() *Node {
 // meta data.  This will block until the update message is successfully
 // broadcasted to a member of the cluster, if any exist or until a specified
 // timeout is reached.
+// Deprecated: use UpdateNodeMeta
 func (m *Memberlist) UpdateNode(timeout time.Duration) error {
-	// Get the node meta data
 	var meta []byte
 	if m.config.Delegate != nil {
 		meta = m.config.Delegate.NodeMeta(MetaMaxSize)
-		if len(meta) > MetaMaxSize {
-			panic("Node meta data provided is longer than the limit")
-		}
+	}
+	return m.UpdateNodeMeta(timeout, meta)
+}
+
+// UpdateNodeMeta is used to trigger re-advertising the local node. This is
+// primarily used with a Delegate to support dynamic updates to the local
+// meta data.  This will block until the update message is successfully
+// broadcasted to a member of the cluster, if any exist or until a specified
+// timeout is reached.
+func (m *Memberlist) UpdateNodeMeta(timeout time.Duration, meta []byte) error {
+	if len(meta) > MetaMaxSize {
+		panic("Node meta data provided is longer than the limit")
 	}
 
 	// Get the existing node
 	m.nodeLock.RLock()
 	state := m.nodeMap[m.config.Name]
-	m.nodeLock.RUnlock()
 
 	// Format a new alive message
 	a := alive{
@@ -512,6 +518,7 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 		Meta:        meta,
 		Vsn:         m.config.BuildVsnArray(),
 	}
+	m.nodeLock.RUnlock()
 	notifyCh := make(chan struct{})
 	m.aliveNode(&a, notifyCh, true)
 
