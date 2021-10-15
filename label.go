@@ -26,12 +26,7 @@ func AddLabelHeaderToPacket(buf []byte, label string) ([]byte, error) {
 		return nil, fmt.Errorf("label %q is too long", label)
 	}
 
-	newBuf := make([]byte, 2, 2+len(label)+len(buf))
-	newBuf[0] = byte(hasLabelMsg)
-	newBuf[1] = byte(len(label))
-	newBuf = append(newBuf, []byte(label)...)
-	newBuf = append(newBuf, []byte(buf)...)
-	return newBuf, nil
+	return makeLabelHeader(label, buf), nil
 }
 
 // RemoveLabelHeaderFromPacket removes any label header from the provided
@@ -48,7 +43,7 @@ func RemoveLabelHeaderFromPacket(buf []byte) (newBuf []byte, label string, err e
 		return buf, "", nil
 	}
 
-	if len(buf) < 3 {
+	if len(buf) < 2 {
 		return nil, "", fmt.Errorf("cannot decode label; packet has been truncated")
 	}
 
@@ -77,10 +72,7 @@ func AddLabelHeaderToStream(conn net.Conn, label string) error {
 		return fmt.Errorf("label %q is too long", label)
 	}
 
-	header := make([]byte, 2, 2+len(label))
-	header[0] = byte(hasLabelMsg)
-	header[1] = byte(len(label))
-	header = append(header, []byte(label)...)
+	header := makeLabelHeader(label, nil)
 
 	_, err := conn.Write(header)
 	return err
@@ -165,6 +157,17 @@ func newPeekedConnFromBufferedReader(conn net.Conn, br *bufio.Reader, offset int
 		Peeked: peeked[offset:],
 		Conn:   conn,
 	}, nil
+}
+
+func makeLabelHeader(label string, rest []byte) []byte {
+	newBuf := make([]byte, 2, 2+len(label)+len(rest))
+	newBuf[0] = byte(hasLabelMsg)
+	newBuf[1] = byte(len(label))
+	newBuf = append(newBuf, []byte(label)...)
+	if len(rest) > 0 {
+		newBuf = append(newBuf, []byte(rest)...)
+	}
+	return newBuf
 }
 
 func labelOverhead(label string) int {
