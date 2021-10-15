@@ -37,7 +37,7 @@ func AddLabelHeaderToPacket(buf []byte, label string) ([]byte, error) {
 // RemoveLabelHeaderFromPacket removes any label header from the provided
 // packet and returns it along with the remaining packet contents.
 func RemoveLabelHeaderFromPacket(buf []byte) (newBuf []byte, label string, err error) {
-	if len(buf) < 1 {
+	if len(buf) == 0 {
 		return buf, "", nil // can't possibly be labeled
 	}
 
