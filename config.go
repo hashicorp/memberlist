@@ -28,6 +28,10 @@ type Config struct {
 	// authenticated data.
 	Label string
 
+	// SkipInboundLabelCheck skips the check that inbound packets and gossip
+	// streams need to be label prefixed.
+	SkipInboundLabelCheck bool
+
 	// Configuration related to what address to bind to and ports to
 	// listen on. The port is used for both UDP and TCP gossip. It is
 	// assumed other nodes are running on this port, but they do not need
