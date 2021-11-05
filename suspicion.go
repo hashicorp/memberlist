@@ -2,6 +2,7 @@ package memberlist
 
 import (
 	"math"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -39,7 +40,8 @@ type suspicion struct {
 
 	// confirmations is a map of "from" nodes that have confirmed a given
 	// node is suspect. This prevents double counting.
-	confirmations map[string]struct{}
+	confirmations   map[string]struct{}
+	confirmationsMu sync.Mutex
 }
 
 // newSuspicion returns a timer started with the max time, and that will drive
@@ -107,10 +109,9 @@ func (s *suspicion) Confirm(from string) bool {
 	}
 
 	// Only allow one confirmation from each possible peer.
-	if _, ok := s.confirmations[from]; ok {
+	if !s.addNewConfirmation(from) {
 		return false
 	}
-	s.confirmations[from] = struct{}{}
 
 	// Compute the new timeout given the current number of confirmations and
 	// adjust the timer. If the timeout becomes negative *and* we can cleanly
@@ -126,5 +127,21 @@ func (s *suspicion) Confirm(from string) bool {
 			go s.timeoutFn()
 		}
 	}
+	return true
+}
+
+// addNewConfirmation registers a new confirmation.
+// It returns true if this confirmation has not been registered before,
+// and false otherwise.
+func (s *suspicion) addNewConfirmation(from string) bool {
+	s.confirmationsMu.Lock()
+	defer s.confirmationsMu.Unlock()
+
+	if _, ok := s.confirmations[from]; ok {
+		return false
+	}
+
+	s.confirmations[from] = struct{}{}
+
 	return true
 }
