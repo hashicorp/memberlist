@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -363,5 +364,87 @@ func TestCompressDecompressPayload(t *testing.T) {
 
 	if !reflect.DeepEqual(decomp, []byte("testing")) {
 		t.Fatalf("bad payload: %v", decomp)
+	}
+}
+
+func TestMakeCompoundMessages(t *testing.T) {
+	// Generate some fixtures.
+	smallMessages := make([][]byte, 300)
+	for i := 0; i < len(smallMessages); i++ {
+		smallMessages[i] = []byte{byte(i)}
+	}
+
+	bigMessages := make([][]byte, 3)
+	for i := 0; i < len(bigMessages); i++ {
+		bigMessages[i] = []byte{70000: byte(i)}
+		assert.Len(t, bigMessages[i], 70001)
+	}
+
+	tests := map[string]struct {
+		input    [][]byte
+		expected [][]byte
+	}{
+		"no input": {
+			input:    [][]byte{},
+			expected: [][]byte{},
+		},
+		"one small message": {
+			input:    smallMessages[0:1],
+			expected: [][]byte{makeCompoundMessage(smallMessages[0:1]).Bytes()},
+		},
+		"few small messages": {
+			input:    smallMessages[0:3],
+			expected: [][]byte{makeCompoundMessage(smallMessages[0:3]).Bytes()},
+		},
+		"many small messages (more than 255)": {
+			input: smallMessages[0:300],
+			expected: [][]byte{
+				makeCompoundMessage(smallMessages[0:255]).Bytes(),
+				makeCompoundMessage(smallMessages[255:300]).Bytes(),
+			},
+		},
+		"one big message": {
+			input:    bigMessages[0:1],
+			expected: bigMessages[0:1],
+		},
+		"few big messages": {
+			input:    bigMessages[0:3],
+			expected: bigMessages[0:3],
+		},
+		"mix of many small and big messages": {
+			input: func() [][]byte {
+				var out [][]byte
+
+				out = append(out, bigMessages[0])
+				out = append(out, smallMessages[0:20]...)
+				out = append(out, bigMessages[1])
+				out = append(out, smallMessages[20:260]...)
+				out = append(out, bigMessages[2])
+				out = append(out, smallMessages[260:300]...)
+
+				return out
+			}(),
+			expected: [][]byte{
+				bigMessages[0],
+				bigMessages[1],
+				bigMessages[2],
+				makeCompoundMessage(smallMessages[0:255]).Bytes(),
+				makeCompoundMessage(smallMessages[255:300]).Bytes(),
+			},
+		},
+	}
+
+	for testName, testData := range tests {
+		t.Run(testName, func(t *testing.T) {
+			actual := makeCompoundMessages(testData.input)
+
+			// Get the actual []byte of each message.
+			actualBytes := make([][]byte, 0, len(actual))
+			for _, data := range actual {
+				actualBytes = append(actualBytes, data.Bytes())
+			}
+
+			assert.Equal(t, testData.expected, actualBytes)
+		})
 	}
 }
