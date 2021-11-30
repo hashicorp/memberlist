@@ -368,16 +368,33 @@ func TestCompressDecompressPayload(t *testing.T) {
 }
 
 func TestMakeCompoundMessages(t *testing.T) {
+	const (
+		smallMsgSeqNo         = uint32(1)
+		smallMsgPayloadLength = 1
+		bigMsgSeqNo           = uint32(2)
+		bigMsgPayloadLength   = 70000
+	)
+
 	// Generate some fixtures.
 	smallMessages := make([][]byte, 300)
 	for i := 0; i < len(smallMessages); i++ {
-		smallMessages[i] = []byte{byte(i)}
+		msg := &ackResp{SeqNo: smallMsgSeqNo, Payload: []byte{byte(i)}}
+		encoded, err := encode(ackRespMsg, msg)
+		require.NoError(t, err)
+
+		smallMessages[i] = encoded.Bytes()
 	}
 
 	bigMessages := make([][]byte, 3)
 	for i := 0; i < len(bigMessages); i++ {
-		bigMessages[i] = []byte{70000: byte(i)}
-		assert.Len(t, bigMessages[i], 70001)
+		payload := []byte{bigMsgPayloadLength - 1: byte(i)}
+		require.Len(t, payload, bigMsgPayloadLength)
+
+		msg := &ackResp{SeqNo: bigMsgSeqNo, Payload: payload}
+		encoded, err := encode(ackRespMsg, msg)
+		require.NoError(t, err)
+
+		bigMessages[i] = encoded.Bytes()
 	}
 
 	tests := map[string]struct {
@@ -445,6 +462,41 @@ func TestMakeCompoundMessages(t *testing.T) {
 			}
 
 			assert.Equal(t, testData.expected, actualBytes)
+
+			// Ensure we can successfully decode every message.
+			for i := 0; i < len(actual); i++ {
+				msg := actualBytes[i]
+				typ := messageType(msg[0])
+
+				switch typ {
+				case ackRespMsg:
+					var got ackResp
+					require.NoError(t, decode(msg[1:], &got))
+
+					if got.SeqNo == smallMsgSeqNo {
+						assert.Len(t, got.Payload, smallMsgPayloadLength)
+					} else if got.SeqNo == bigMsgSeqNo {
+						assert.Len(t, got.Payload, bigMsgPayloadLength)
+					} else {
+						require.Fail(t, "unexpected seq no")
+					}
+				case compoundMsg:
+					trunc, parts, err := decodeCompoundMessage(msg[1:])
+					require.NoError(t, err)
+					require.Equal(t, 0, trunc)
+
+					for _, part := range parts {
+						require.Equal(t, ackRespMsg, messageType(part[0]))
+
+						var got ackResp
+						require.NoError(t, decode(part[1:], &got))
+						assert.Equal(t, smallMsgSeqNo, got.SeqNo)
+						assert.Len(t, got.Payload, smallMsgPayloadLength)
+					}
+				default:
+					require.Fail(t, "unexpected message")
+				}
+			}
 		})
 	}
 }
