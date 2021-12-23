@@ -1091,9 +1091,10 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader, streamLabel string) (
 		return nil, fmt.Errorf("Remote node state is larger than limit (%d)", moreBytes)
 
 	}
+	
 	//Start reporting the size before you cross the limit
 	if moreBytes > .6 * maxPushStateBytes {
-		m.logger.Printf("[WARN] memberlist: Remote node state size is %d approaching limit (%d)",moreBytes,maxPushStateBytes )
+		m.logger.Printf("[WARN] memberlist: Remote node state size is %d approaching limit (%d)", moreBytes, maxPushStateBytes )
 	}
 
 	// Read in the rest of the payload
