@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"math"
 	"net"
 	"sync/atomic"
 	"time"
@@ -1093,8 +1094,8 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader, streamLabel string) (
 	}
 
 	//Start reporting the size before you cross the limit
-	if moreBytes > .6*maxPushStateBytes {
-		m.logger.Printf("[WARN] memberlist: Remote node state size is %d approaching limit (%d)", moreBytes, maxPushStateBytes)
+	if moreBytes > uint32(math.Floor(.06*maxPushStateBytes)) {
+		m.logger.Printf("[INFO] memberlist: Remote node state size is %d  limit is (%d)", moreBytes, maxPushStateBytes)
 	}
 
 	// Read in the rest of the payload
