@@ -230,7 +230,7 @@ func TestMoveDeadNodes(t *testing.T) {
 		}
 	}
 	for i := idx; i < len(nodes); i++ {
-		if !nodes[i].DeadOrLeft(){
+		if !nodes[i].DeadOrLeft() {
 			t.Fatalf("Bad state %d", i)
 		}
 	}
