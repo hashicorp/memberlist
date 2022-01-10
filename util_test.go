@@ -178,6 +178,16 @@ func TestMoveDeadNodes(t *testing.T) {
 			State:       StateDead,
 			StateChange: time.Now().Add(-10 * time.Second),
 		},
+		// This left node should not be moved, as its state changed
+		// less than the specified GossipToTheDead time ago
+		&nodeState{
+			State:       StateLeft,
+			StateChange: time.Now().Add(-10 * time.Second),
+		},
+		&nodeState{
+			State:       StateLeft,
+			StateChange: time.Now().Add(-20 * time.Second),
+		},
 		&nodeState{
 			State:       StateAlive,
 			StateChange: time.Now().Add(-20 * time.Second),
@@ -190,10 +200,14 @@ func TestMoveDeadNodes(t *testing.T) {
 			State:       StateAlive,
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
+		&nodeState{
+			State:       StateLeft,
+			StateChange: time.Now().Add(-20 * time.Second),
+		},
 	}
 
 	idx := moveDeadNodes(nodes, (15 * time.Second))
-	if idx != 4 {
+	if idx != 5 {
 		t.Fatalf("bad index")
 	}
 	for i := 0; i < idx; i++ {
@@ -204,6 +218,11 @@ func TestMoveDeadNodes(t *testing.T) {
 			if nodes[i].State != StateDead {
 				t.Fatalf("Bad state %d", i)
 			}
+		case 3:
+			//Recently left node should remain at 3
+			if nodes[i].State != StateLeft {
+				t.Fatalf("Bad State #{i}")
+			}
 		default:
 			if nodes[i].State != StateAlive {
 				t.Fatalf("Bad state %d", i)
@@ -211,7 +230,7 @@ func TestMoveDeadNodes(t *testing.T) {
 		}
 	}
 	for i := idx; i < len(nodes); i++ {
-		if nodes[i].State != StateDead {
+		if !nodes[i].DeadOrLeft(){
 			t.Fatalf("Bad state %d", i)
 		}
 	}
