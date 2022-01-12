@@ -221,7 +221,7 @@ func TestMoveDeadNodes(t *testing.T) {
 		case 3:
 			//Recently left node should remain at 3
 			if nodes[i].State != StateLeft {
-				t.Fatalf("Bad State #{i}")
+				t.Fatalf("Bad State %d", i)
 			}
 		default:
 			if nodes[i].State != StateAlive {
