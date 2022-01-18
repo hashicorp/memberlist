@@ -682,6 +682,48 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 	return nil
 }
 
+func (m *Memberlist) LeaveAndNotify(notifyCh chan<- struct{}) error {
+	m.leaveLock.Lock()
+	defer m.leaveLock.Unlock()
+
+	if m.hasShutdown() {
+		panic("leave after shutdown")
+	}
+
+	if !m.hasLeft() {
+		atomic.StoreInt32(&m.leave, 1)
+
+		m.nodeLock.Lock()
+		state, ok := m.nodeMap[m.config.Name]
+		m.nodeLock.Unlock()
+		if !ok {
+			m.logger.Printf("[WARN] memberlist: Leave but we're not in the node map.")
+			return nil
+		}
+
+		// This dead message is special, because Node and From are the
+		// same. This helps other nodes figure out that a node left
+		// intentionally. When Node equals From, other nodes know for
+		// sure this node is gone.
+		d := dead{
+			Incarnation: state.Incarnation,
+			Node:        state.Name,
+			From:        state.Name,
+		}
+		m.deadNode(&d)
+
+		// Block until the broadcast goes out
+		if m.anyAlive() {
+			select {
+			case <-m.leaveBroadcast:
+				notifyCh <- struct{}{}
+			}
+		}
+	}
+
+	return nil
+}
+
 // Check for any other alive node.
 func (m *Memberlist) anyAlive() bool {
 	m.nodeLock.RLock()
