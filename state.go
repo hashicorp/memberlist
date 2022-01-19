@@ -449,7 +449,11 @@ HANDLE_REMOTE_FAILURE:
 			defer close(fallbackCh)
 			didContact, err := m.sendPingAndWaitForAck(node.FullAddress(), ping, deadline)
 			if err != nil {
-				m.logger.Printf("[ERR] memberlist: Failed fallback ping: %s", err)
+				var to string
+				if ne, ok := err.(net.Error); ok && ne.Timeout() {
+					to = fmt.Sprintf("timeout %s: ", probeInterval)
+				}
+				m.logger.Printf("[ERR] memberlist: Failed fallback ping: %s%s", to, err)
 			} else {
 				fallbackCh <- didContact
 			}
