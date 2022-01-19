@@ -640,7 +640,7 @@ func (m *Memberlist) Leave(timeout time.Duration) error {
 	defer m.leaveLock.Unlock()
 
 	if m.hasShutdown() {
-		panic("leave after shutdown")
+		return fmt.Errorf("leave after shutdown")
 	}
 
 	if !m.hasLeft() {
