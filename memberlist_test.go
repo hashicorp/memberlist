@@ -1285,9 +1285,9 @@ func TestMemberlist_UserData(t *testing.T) {
 
 	bindPort := m1.config.BindPort
 
-	bcasts := [][]byte{
-		[]byte("test"),
-		[]byte("foobar"),
+	bcasts := make([][]byte, 256)
+	for i := range bcasts {
+		bcasts[i] = []byte(fmt.Sprintf("%d", i))
 	}
 
 	// Create a second node
