@@ -3,14 +3,14 @@ package memberlist
 import (
 	"bytes"
 	"fmt"
+	"github.com/armon/go-metrics"
+	sockaddr "github.com/hashicorp/go-sockaddr"
 	"io"
 	"log"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
-	"github.com/armon/go-metrics"
-	sockaddr "github.com/hashicorp/go-sockaddr"
 )
 
 const (
