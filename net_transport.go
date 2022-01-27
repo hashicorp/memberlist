@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/armon/go-metrics"
 	sockaddr "github.com/hashicorp/go-sockaddr"
 )
 
@@ -355,12 +354,9 @@ func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
 // the read buffer can be set.
 func setUDPRecvBuf(c *net.UDPConn) error {
 	size := udpRecvBufSize
-	var err error
-	for size > 0 {
-		if err = c.SetReadBuffer(size); err == nil {
-			return nil
-		}
-		size = size / 2
+	err := c.SetReadBuffer(size)
+	if err == nil {
+		return nil
 	}
 	return err
 }
