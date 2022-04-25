@@ -2218,6 +2218,8 @@ func TestMemberlist_FailedRemote(t *testing.T) {
 		{"net.OpError for tcp with dial", &net.OpError{Net: "tcp", Op: "dial"}, true},
 		{"net.OpError for tcp with write", &net.OpError{Net: "tcp", Op: "write"}, true},
 		{"net.OpError for tcp with read", &net.OpError{Net: "tcp", Op: "read"}, true},
+		{"net.OpError for udp with write", &net.OpError{Net: "udp", Op: "write"}, true},
+		{"net.OpError for udp with read", &net.OpError{Net: "udp", Op: "read"}, false},
 	}
 
 	for _, test := range tests {
