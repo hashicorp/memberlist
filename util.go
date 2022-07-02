@@ -168,21 +168,17 @@ func makeCompoundMessages(msgs [][]byte) []*bytes.Buffer {
 
 	// Do not add to a compound message any message bigger than the max message length
 	// we can store.
-	r, w := 0, 0
-	for r < len(msgs) {
-		if len(msgs[r]) <= maxMsgLength {
+	smallMsgs := msgs[:0]
+	for _, msg := range msgs {
+		if len(msg) <= maxMsgLength {
 			// Keep it.
-			msgs[w] = msgs[r]
-			r++
-			w++
-			continue
+			smallMsgs = append(smallMsgs, msg)
+		} else {
+			// This message is a large one, so we send it alone.
+			bufs = append(bufs, bytes.NewBuffer(msg))
 		}
-
-		// This message is a large one, so we send it alone.
-		bufs = append(bufs, bytes.NewBuffer(msgs[r]))
-		r++
 	}
-	msgs = msgs[:w]
+	msgs = smallMsgs
 
 	// Group remaining messages in compound message(s).
 	for ; len(msgs) > maxMsgs; msgs = msgs[maxMsgs:] {
