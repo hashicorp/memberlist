@@ -365,10 +365,6 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time
 	}
 
 	if m.config.SkipInboundLabelCheck {
-		if packetLabel != "" {
-			m.logger.Printf("[ERR] memberlist: unexpected double packet label header: %s", LogAddress(from))
-			return
-		}
 		// Set this from config so that the auth data assertions work below.
 		packetLabel = m.config.Label
 	}
