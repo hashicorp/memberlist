@@ -249,10 +249,6 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 	}
 
 	if m.config.SkipInboundLabelCheck {
-		if streamLabel != "" {
-			m.logger.Printf("[ERR] memberlist: unexpected double stream label header: %s", LogConn(conn))
-			return
-		}
 		// Set this from config so that the auth data assertions work below.
 		streamLabel = m.config.Label
 	}
