@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/armon/go-metrics"
 	multierror "github.com/hashicorp/go-multierror"
 )
 
@@ -248,6 +249,9 @@ type Config struct {
 	// allowed to connect (you must specify IPv6/IPv4 separately)
 	// Using [] will block all connections.
 	CIDRsAllowed []net.IPNet
+
+	// MetricsLabels will be added to all metrics emitted as extra labels.
+	MetricsLabels []metrics.Label
 }
 
 // ParseCIDRs return a possible empty list of all Network that have been parsed
@@ -317,6 +321,7 @@ func DefaultLANConfig() *Config {
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
 		CIDRsAllowed:      nil, // same as allow all
+		MetricsLabels:     make([]metrics.Label, 0),
 	}
 }
 

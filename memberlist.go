@@ -135,9 +135,10 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	transport := conf.Transport
 	if transport == nil {
 		nc := &NetTransportConfig{
-			BindAddrs: []string{conf.BindAddr},
-			BindPort:  conf.BindPort,
-			Logger:    logger,
+			BindAddrs:     []string{conf.BindAddr},
+			BindPort:      conf.BindPort,
+			Logger:        logger,
+			MetricsLabels: conf.MetricsLabels,
 		}
 
 		// See comment below for details about the retry in here.
@@ -208,7 +209,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		lowPriorityMsgQueue:  list.New(),
 		nodeMap:              make(map[string]*nodeState),
 		nodeTimers:           make(map[string]*suspicion),
-		awareness:            newAwareness(conf.AwarenessMaxMultiplier),
+		awareness:            newAwareness(conf.AwarenessMaxMultiplier, conf.MetricsLabels),
 		ackHandlers:          make(map[uint32]*ackHandler),
 		broadcasts:           &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
 		logger:               logger,

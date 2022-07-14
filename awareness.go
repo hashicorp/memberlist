@@ -21,13 +21,17 @@ type awareness struct {
 	// score is the current awareness score. Lower values are healthier and
 	// zero is the minimum value.
 	score int
+
+	// metricsLabels will be added to all metrics emitted as extra labels.
+	metricsLabels []metrics.Label
 }
 
 // newAwareness returns a new awareness object.
-func newAwareness(max int) *awareness {
+func newAwareness(max int, labels []metrics.Label) *awareness {
 	return &awareness{
-		max:   max,
-		score: 0,
+		max:           max,
+		score:         0,
+		metricsLabels: labels,
 	}
 }
 
@@ -47,7 +51,7 @@ func (a *awareness) ApplyDelta(delta int) {
 	a.Unlock()
 
 	if initial != final {
-		metrics.SetGauge([]string{"memberlist", "health", "score"}, float32(final))
+		metrics.SetGaugeWithLabels([]string{"memberlist", "health", "score"}, float32(final), a.metricsLabels)
 	}
 }
 

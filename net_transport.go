@@ -35,6 +35,9 @@ type NetTransportConfig struct {
 
 	// Logger is a logger for operator messages.
 	Logger *log.Logger
+
+	// MetricsLabels will be added to all metrics emitted as extra labels.
+	MetricsLabels []metrics.Label
 }
 
 // NetTransport is a Transport implementation that uses connectionless UDP for
@@ -341,7 +344,7 @@ func (t *NetTransport) udpListen(udpLn *net.UDPConn) {
 		}
 
 		// Ingest the packet.
-		metrics.IncrCounter([]string{"memberlist", "udp", "received"}, float32(n))
+		metrics.IncrCounterWithLabels([]string{"memberlist", "udp", "received"}, float32(n), t.config.MetricsLabels)
 		t.packetCh <- &Packet{
 			Buf:       buf[:n],
 			From:      addr,
