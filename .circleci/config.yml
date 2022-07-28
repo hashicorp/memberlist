@@ -46,11 +46,11 @@ jobs:
       - store_artifacts:
           path: /tmp/test-results
 
-workflows:
-  version: 2
-  go-tests:
-    jobs:
-      - go-fmt-and-vet
-      - go-tests:
-          requires:
-            - go-fmt-and-vet
+# workflows:
+#   version: 2
+#   go-tests:
+#     jobs:
+#       - go-fmt-and-vet
+#       - go-tests:
+#           requires:
+#             - go-fmt-and-vet
