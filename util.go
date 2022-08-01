@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	metrics "github.com/armon/go-metrics"
 	"github.com/hashicorp/go-msgpack/codec"
 	"github.com/sean-/seed"
 )
@@ -306,4 +307,18 @@ func ensurePort(s string, port int) string {
 	s = strings.Trim(s, "[]")
 	s = net.JoinHostPort(s, strconv.Itoa(port))
 	return s
+}
+
+func mapToLabels(m map[string]string) []metrics.Label {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]metrics.Label, 0, len(m))
+	for k, v := range m {
+		out = append(out, metrics.Label{
+			Name:  k,
+			Value: v,
+		})
+	}
+	return out
 }

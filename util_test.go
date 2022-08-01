@@ -384,3 +384,30 @@ func TestCompressDecompressPayload(t *testing.T) {
 		t.Fatalf("bad payload: %v", decomp)
 	}
 }
+
+func TestUtil_MapToLabels(t *testing.T) {
+	tests := []struct {
+		name   string
+		labels map[string]string
+	}{
+		{"empty labels", nil},
+		{
+			name: "multiple labels",
+			labels: map[string]string{
+				"name1": "value1",
+				"name2": "value2",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mapToLabels(tt.labels)
+			countLabels := 0
+			for _, kv := range got {
+				require.Equal(t, tt.labels[kv.Name], kv.Value)
+				countLabels++
+			}
+			require.Equal(t, len(tt.labels), countLabels)
+		})
+	}
+}
