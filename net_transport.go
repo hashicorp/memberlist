@@ -38,7 +38,7 @@ type NetTransportConfig struct {
 
 	// MetricLabels is a map of optional labels to apply to all metrics
 	// emitted by this transport.
-	MetricLabels map[string]string
+	MetricLabels []metrics.Label
 }
 
 // NetTransport is a Transport implementation that uses connectionless UDP for
@@ -74,7 +74,7 @@ func NewNetTransport(config *NetTransportConfig) (*NetTransport, error) {
 		packetCh:     make(chan *Packet),
 		streamCh:     make(chan net.Conn),
 		logger:       config.Logger,
-		metricLabels: mapToLabels(config.MetricLabels),
+		metricLabels: config.MetricLabels,
 	}
 
 	// Clean up listeners if there's an error.

@@ -203,7 +203,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		}
 	}
 
-	metricLabels := mapToLabels(conf.MetricLabels)
+	metricLabels := conf.MetricLabels
 
 	m := &Memberlist{
 		config:               conf,

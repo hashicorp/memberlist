@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/armon/go-metrics"
 	multierror "github.com/hashicorp/go-multierror"
 )
 
@@ -251,7 +252,7 @@ type Config struct {
 	CIDRsAllowed []net.IPNet
 
 	// MetricLabels is a map of optional labels to apply to all metrics emitted.
-	MetricLabels map[string]string
+	MetricLabels []metrics.Label
 }
 
 // ParseCIDRs return a possible empty list of all Network that have been parsed
