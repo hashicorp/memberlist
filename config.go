@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/armon/go-metrics"
 	multierror "github.com/hashicorp/go-multierror"
 )
 
@@ -244,10 +245,14 @@ type Config struct {
 	// RequireNodeNames controls if the name of a node is required when sending
 	// a message to that node.
 	RequireNodeNames bool
+
 	// CIDRsAllowed If nil, allow any connection (default), otherwise specify all networks
 	// allowed to connect (you must specify IPv6/IPv4 separately)
 	// Using [] will block all connections.
 	CIDRsAllowed []net.IPNet
+
+	// MetricLabels is a map of optional labels to apply to all metrics emitted.
+	MetricLabels []metrics.Label
 }
 
 // ParseCIDRs return a possible empty list of all Network that have been parsed

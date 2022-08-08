@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/armon/go-metrics"
 	multierror "github.com/hashicorp/go-multierror"
 	sockaddr "github.com/hashicorp/go-sockaddr"
 	"github.com/miekg/dns"
@@ -77,6 +78,9 @@ type Memberlist struct {
 	broadcasts *TransmitLimitedQueue
 
 	logger *log.Logger
+
+	// metricLabels is the slice of labels to put on all emitted metrics
+	metricLabels []metrics.Label
 }
 
 // BuildVsnArray creates the array of Vsn
@@ -135,9 +139,10 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	transport := conf.Transport
 	if transport == nil {
 		nc := &NetTransportConfig{
-			BindAddrs: []string{conf.BindAddr},
-			BindPort:  conf.BindPort,
-			Logger:    logger,
+			BindAddrs:    []string{conf.BindAddr},
+			BindPort:     conf.BindPort,
+			Logger:       logger,
+			MetricLabels: conf.MetricLabels,
 		}
 
 		// See comment below for details about the retry in here.
@@ -208,10 +213,11 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		lowPriorityMsgQueue:  list.New(),
 		nodeMap:              make(map[string]*nodeState),
 		nodeTimers:           make(map[string]*suspicion),
-		awareness:            newAwareness(conf.AwarenessMaxMultiplier),
+		awareness:            newAwareness(conf.AwarenessMaxMultiplier, conf.MetricLabels),
 		ackHandlers:          make(map[uint32]*ackHandler),
 		broadcasts:           &TransmitLimitedQueue{RetransmitMult: conf.RetransmitMult},
 		logger:               logger,
+		metricLabels:         conf.MetricLabels,
 	}
 	m.broadcasts.NumNodes = func() int {
 		return m.estNumNodes()

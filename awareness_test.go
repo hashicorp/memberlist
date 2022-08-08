@@ -27,7 +27,7 @@ func TestAwareness(t *testing.T) {
 		{-1, 0, 1 * time.Second},
 	}
 
-	a := newAwareness(8)
+	a := newAwareness(8, nil)
 	for i, c := range cases {
 		a.ApplyDelta(c.delta)
 		if a.GetHealthScore() != c.score {
