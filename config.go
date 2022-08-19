@@ -253,6 +253,10 @@ type Config struct {
 
 	// MetricLabels is a map of optional labels to apply to all metrics emitted.
 	MetricLabels []metrics.Label
+
+	// QueueCheckInterval is the interval at which we check the message
+	// queue to apply the warning and max depth.
+	QueueCheckInterval time.Duration
 }
 
 // ParseCIDRs return a possible empty list of all Network that have been parsed
@@ -322,6 +326,8 @@ func DefaultLANConfig() *Config {
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
 		CIDRsAllowed:      nil, // same as allow all
+
+		QueueCheckInterval: 30 * time.Second,
 	}
 }
 

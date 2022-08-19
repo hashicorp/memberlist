@@ -233,6 +233,7 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 	go m.streamListen()
 	go m.packetListen()
 	go m.packetHandler()
+	go m.checkQueueDepth("Intent", m.broadcasts)
 	return m, nil
 }
 
@@ -775,4 +776,18 @@ func (m *Memberlist) changeNode(addr string, f func(*nodeState)) {
 
 	n := m.nodeMap[addr]
 	f(n)
+}
+
+// checkQueueDepth periodically checks the size of a queue to see if
+// it is too large
+func (m *Memberlist) checkQueueDepth(name string, queue *TransmitLimitedQueue) {
+	for {
+		select {
+		case <-time.After(m.config.QueueCheckInterval):
+			numq := queue.NumQueued()
+			metrics.AddSampleWithLabels([]string{"memberlist", "queue", name}, float32(numq), m.metricLabels)
+		case <-m.shutdownCh:
+			return
+		}
+	}
 }
