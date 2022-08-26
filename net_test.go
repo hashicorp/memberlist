@@ -691,6 +691,8 @@ func TestEncryptDecryptState(t *testing.T) {
 		ProtocolVersion: ProtocolVersionMax,
 	}
 
+	sink := registerInMemorySink(t)
+
 	m, err := Create(config)
 	if err != nil {
 		t.Fatalf("err: %s", err)
@@ -713,6 +715,15 @@ func TestEncryptDecryptState(t *testing.T) {
 
 	if !reflect.DeepEqual(state, plain) {
 		t.Fatalf("Decrypt failed: %v", plain)
+	}
+
+	intv := getIntervalMetrics(t, sink)
+
+	sampleName := "consul.usage.test.memberlist.size.remote"
+	actualSample := intv.Samples[sampleName]
+
+	if actualSample.Count == 0 {
+		t.Fatalf("memberlist.size.remote sample not taken")
 	}
 }
 
