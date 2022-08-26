@@ -18,6 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const healthScoreMetricGaugeName = "consul.usage.test.memberlist.health.score"
+
 func HostMemberlist(host string, t *testing.T, f func(*Config)) *Memberlist {
 	t.Helper()
 
@@ -559,6 +561,8 @@ func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
 	ip3 := []byte(addr3)
 	ip4 := []byte(addr4)
 
+	sink := registerInMemorySink(t)
+
 	var probeTimeMin time.Duration
 	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.ProbeTimeout = 10 * time.Millisecond
@@ -604,6 +608,18 @@ func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
 		t.Fatalf("bad: %d", score)
 	}
 
+	intv := getIntervalMetrics(t, sink)
+
+	expectedGauge := metrics.GaugeValue{
+		Name:  healthScoreMetricGaugeName,
+		Value: 1,
+	}
+	actualGauge := intv.Gauges[healthScoreMetricGaugeName]
+
+	if !reflect.DeepEqual(expectedGauge, actualGauge) {
+		t.Fatalf("gauges do not match")
+	}
+
 	// Have node m1 probe m4.
 	n := m1.nodeMap[addr4.String()]
 	startProbe := time.Now()
@@ -642,6 +658,8 @@ func TestMemberList_ProbeNode_Wrong_VSN(t *testing.T) {
 	ip2 := []byte(addr2)
 	ip3 := []byte(addr3)
 	ip4 := []byte(addr4)
+
+	sink := registerInMemorySink(t)
 
 	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.ProbeTimeout = 10 * time.Millisecond
@@ -686,6 +704,18 @@ func TestMemberList_ProbeNode_Wrong_VSN(t *testing.T) {
 		t.Fatalf("bad: %d", score)
 	}
 
+	intv := getIntervalMetrics(t, sink)
+
+	expectedGauge := metrics.GaugeValue{
+		Name:  healthScoreMetricGaugeName,
+		Value: 1,
+	}
+	actualGauge := intv.Gauges[healthScoreMetricGaugeName]
+
+	if !reflect.DeepEqual(expectedGauge, actualGauge) {
+		t.Fatalf("gauges do not match")
+	}
+
 	// Have node m1 probe m4.
 	n, ok := m1.nodeMap[addr4.String()]
 	if ok || n != nil {
@@ -698,6 +728,8 @@ func TestMemberList_ProbeNode_Awareness_Improved(t *testing.T) {
 	addr2 := getBindAddr()
 	ip1 := []byte(addr1)
 	ip2 := []byte(addr2)
+
+	sink := registerInMemorySink(t)
 
 	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
 		c.ProbeTimeout = 10 * time.Millisecond
@@ -721,6 +753,18 @@ func TestMemberList_ProbeNode_Awareness_Improved(t *testing.T) {
 	m1.awareness.ApplyDelta(1)
 	if score := m1.GetHealthScore(); score != 1 {
 		t.Fatalf("bad: %d", score)
+	}
+
+	intv := getIntervalMetrics(t, sink)
+
+	expectedGauge := metrics.GaugeValue{
+		Name:  healthScoreMetricGaugeName,
+		Value: 1,
+	}
+	actualGauge := intv.Gauges[healthScoreMetricGaugeName]
+
+	if !reflect.DeepEqual(expectedGauge, actualGauge) {
+		t.Fatalf("gauges do not match")
 	}
 
 	// Have node m1 probe m2.
