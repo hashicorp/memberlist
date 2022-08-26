@@ -785,7 +785,7 @@ func (m *Memberlist) checkBroadcastQueueDepth() {
 		select {
 		case <-time.After(m.config.QueueCheckInterval):
 			numq := m.broadcasts.NumQueued()
-			metrics.AddSampleWithLabels([]string{"memberlist", "queue", "broadcast"}, float32(numq), m.metricLabels)
+			metrics.AddSampleWithLabels([]string{"memberlist", "queue", "broadcasts"}, float32(numq), m.metricLabels)
 		case <-m.shutdownCh:
 			return
 		}
