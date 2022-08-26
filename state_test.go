@@ -2283,6 +2283,8 @@ func TestMemberlist_PushPull(t *testing.T) {
 	ip1 := []byte(addr1)
 	ip2 := []byte(addr2)
 
+	sink := registerInMemorySink(t)
+
 	ch := make(chan NodeEvent, 3)
 
 	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
@@ -2313,6 +2315,15 @@ func TestMemberlist_PushPull(t *testing.T) {
 
 		if len(ch) < 2 {
 			failf("expected 2 messages from pushPull")
+		}
+
+		intv := getIntervalMetrics(t, sink)
+
+		sampleName := "consul.usage.test.memberlist.size.local"
+		actualSample := intv.Samples[sampleName]
+
+		if actualSample.Count == 0 {
+			t.Fatalf("memberlist.size.local sample not taken")
 		}
 	})
 }
