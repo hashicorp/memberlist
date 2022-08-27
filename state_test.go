@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/armon/go-metrics"
 	iretry "github.com/hashicorp/memberlist/internal/retry"
 	"github.com/stretchr/testify/require"
 )
@@ -2392,4 +2393,22 @@ func testVerifyProtocolSingle(t *testing.T, A [][6]uint8, B [][6]uint8, expect b
 	if (err == nil) != expect {
 		t.Fatalf("bad:\nA: %v\nB: %v\nErr: %s", A, B, err)
 	}
+}
+
+func registerInMemorySink(t *testing.T) *metrics.InmemSink {
+	t.Helper()
+	// Only have a single interval for the test
+	sink := metrics.NewInmemSink(1*time.Minute, 1*time.Minute)
+	cfg := metrics.DefaultConfig("consul.usage.test")
+	cfg.EnableHostname = false
+	metrics.NewGlobal(cfg, sink)
+	return sink
+}
+
+func getIntervalMetrics(t *testing.T, sink *metrics.InmemSink) *metrics.IntervalMetrics {
+	t.Helper()
+	intervals := sink.Data()
+	require.Len(t, intervals, 1)
+	intv := intervals[0]
+	return intv
 }
