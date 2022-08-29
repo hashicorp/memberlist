@@ -246,6 +246,28 @@ func TestCreate_secretKeyEmpty(t *testing.T) {
 	}
 }
 
+func TestCreate_checkBroadcastQueueMetrics(t *testing.T) {
+	sink := registerInMemorySink(t)
+	c := DefaultLANConfig()
+	c.QueueCheckInterval = 1 * time.Second
+	c.BindAddr = getBindAddr().String()
+	c.SecretKey = make([]byte, 0)
+
+	m, err := Create(c)
+	require.NoError(t, err)
+	defer m.Shutdown()
+
+	time.Sleep(3 * time.Second)
+
+	intv := getIntervalMetrics(t, sink)
+	sampleName := "consul.usage.test.memberlist.queue.broadcasts"
+	actualSample := intv.Samples[sampleName]
+
+	if actualSample.Count == 0 {
+		t.Fatalf("%s sample not taken", sampleName)
+	}
+}
+
 func TestCreate_keyringOnly(t *testing.T) {
 	c := DefaultLANConfig()
 	c.BindAddr = getBindAddr().String()
