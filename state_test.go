@@ -2319,11 +2319,11 @@ func TestMemberlist_PushPull(t *testing.T) {
 
 		intv := getIntervalMetrics(t, sink)
 
-		sampleName := "consul.usage.test.memberlist.size.local"
-		actualSample := intv.Samples[sampleName]
+		gaugeName := "consul.usage.test.memberlist.size.local"
+		actualGauge := intv.Gauges[gaugeName]
 
-		if actualSample.Count == 0 {
-			t.Fatalf("memberlist.size.local sample not taken")
+		if actualGauge.Value == 0 {
+			t.Fatalf("memberlist.size.local gauge not emitted")
 		}
 	})
 }

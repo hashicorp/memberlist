@@ -719,10 +719,10 @@ func TestEncryptDecryptState(t *testing.T) {
 
 	intv := getIntervalMetrics(t, sink)
 
-	sampleName := "consul.usage.test.memberlist.size.remote"
-	actualSample := intv.Samples[sampleName]
+	gaugeName := "consul.usage.test.memberlist.size.remote"
+	actualGauge := intv.Gauges[gaugeName]
 
-	if actualSample.Count == 0 {
+	if actualGauge.Value == 0 {
 		t.Fatalf("memberlist.size.remote sample not taken")
 	}
 }

@@ -1043,7 +1043,7 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool, streamLabel string
 	}
 
 	moreBytes := binary.BigEndian.Uint32(bufConn.Bytes()[1:5])
-	metrics.AddSampleWithLabels([]string{"memberlist", "size", "local"}, float32(moreBytes), m.metricLabels)
+	metrics.SetGaugeWithLabels([]string{"memberlist", "size", "local"}, float32(moreBytes), m.metricLabels)
 
 	// Get the send buffer
 	return m.rawSendMsgStream(conn, bufConn.Bytes(), streamLabel)
@@ -1091,7 +1091,7 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader, streamLabel string) (
 	// Ensure we aren't asked to download too much. This is to guard against
 	// an attack vector where a huge amount of state is sent
 	moreBytes := binary.BigEndian.Uint32(cipherText.Bytes()[1:5])
-	metrics.AddSampleWithLabels([]string{"memberlist", "size", "remote"}, float32(moreBytes), m.metricLabels)
+	metrics.SetGaugeWithLabels([]string{"memberlist", "size", "remote"}, float32(moreBytes), m.metricLabels)
 
 	if moreBytes > maxPushStateBytes {
 		return nil, fmt.Errorf("Remote node state is larger than limit (%d)", moreBytes)
