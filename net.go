@@ -87,6 +87,13 @@ const (
 	maxPushPullRequests    = 128 // Maximum number of concurrent push/pull requests
 )
 
+const (
+	nodeStateAlive   = "alive"
+	nodeStateDead    = "dead"
+	nodeStateLeft    = "left"
+	nodeStateSuspect = "suspect"
+)
+
 // ping request sent directly to node
 type ping struct {
 	SeqNo uint32
@@ -1006,6 +1013,29 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool, streamLabel string
 		}
 	}
 	m.nodeLock.RUnlock()
+
+	nodeStateCounts := make(map[string]int)
+	nodeStateCounts[nodeStateAlive] = 0
+	nodeStateCounts[nodeStateLeft] = 0
+	nodeStateCounts[nodeStateDead] = 0
+	nodeStateCounts[nodeStateSuspect] = 0
+
+	for _, n := range localNodes {
+		switch n.State {
+		case StateAlive:
+			nodeStateCounts[nodeStateAlive]++
+		case StateDead:
+			nodeStateCounts[nodeStateDead]++
+		case StateSuspect:
+			nodeStateCounts[nodeStateSuspect]++
+		case StateLeft:
+			nodeStateCounts[nodeStateLeft]++
+		}
+	}
+
+	for nodeState, cnt := range nodeStateCounts {
+		metrics.SetGaugeWithLabels([]string{"memberlist", "nodes", nodeState}, float32(cnt), m.metricLabels)
+	}
 
 	// Get the delegate state
 	var userData []byte

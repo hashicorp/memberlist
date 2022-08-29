@@ -2317,14 +2317,11 @@ func TestMemberlist_PushPull(t *testing.T) {
 			failf("expected 2 messages from pushPull")
 		}
 
-		intv := getIntervalMetrics(t, sink)
-
-		gaugeName := "consul.usage.test.memberlist.size.local"
-		actualGauge := intv.Gauges[gaugeName]
-
-		if actualGauge.Value == 0 {
-			t.Fatalf("memberlist.size.local gauge not emitted")
-		}
+		verifyGaugeExists(t, "consul.usage.test.memberlist.size.local", sink)
+		verifyGaugeExists(t, "consul.usage.test.memberlist.nodes.alive", sink)
+		verifyGaugeExists(t, "consul.usage.test.memberlist.nodes.suspect", sink)
+		verifyGaugeExists(t, "consul.usage.test.memberlist.nodes.left", sink)
+		verifyGaugeExists(t, "consul.usage.test.memberlist.nodes.dead", sink)
 	})
 }
 
@@ -2466,4 +2463,11 @@ func getIntervalMetrics(t *testing.T, sink *metrics.InmemSink) *metrics.Interval
 	require.Len(t, intervals, 1)
 	intv := intervals[0]
 	return intv
+}
+
+func verifyGaugeExists(t *testing.T, name string, sink *metrics.InmemSink) {
+	interval := getIntervalMetrics(t, sink)
+	if _, ok := interval.Gauges[name]; !ok {
+		t.Fatalf("%s gauge not emmited", name)
+	}
 }
