@@ -260,7 +260,7 @@ func TestCreate_checkBroadcastQueueMetrics(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	sampleName := "consul.usage.test.memberlist.queue.broadcasts"
-	verifySampleExists(t, sampleName, sink)
+	verifySamplesExists(t, []string{sampleName}, sink)
 }
 
 func TestCreate_keyringOnly(t *testing.T) {

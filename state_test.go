@@ -2273,11 +2273,13 @@ func TestMemberlist_PushPull(t *testing.T) {
 			failf("expected 2 messages from pushPull")
 		}
 
-		verifyGaugeExists(t, "consul.usage.test.memberlist.size.local", sink)
-		verifyGaugeExists(t, "consul.usage.test.memberlist.nodes.alive", sink)
-		verifyGaugeExists(t, "consul.usage.test.memberlist.nodes.suspect", sink)
-		verifyGaugeExists(t, "consul.usage.test.memberlist.nodes.left", sink)
-		verifyGaugeExists(t, "consul.usage.test.memberlist.nodes.dead", sink)
+		instancesMetricName := "consul.usage.test.memberlist.node.instances"
+		verifyGaugesExists(t, []string{"consul.usage.test.memberlist.size.local",
+			fmt.Sprintf("%s;node_state=%s", instancesMetricName, nodeStateAlive),
+			fmt.Sprintf("%s;node_state=%s", instancesMetricName, nodeStateDead),
+			fmt.Sprintf("%s;node_state=%s", instancesMetricName, nodeStateLeft),
+			fmt.Sprintf("%s;node_state=%s", instancesMetricName, nodeStateSuspect)},
+			sink)
 	})
 }
 
@@ -2421,20 +2423,24 @@ func getIntervalMetrics(t *testing.T, sink *metrics.InmemSink) *metrics.Interval
 	return intv
 }
 
-func verifyGaugeExists(t *testing.T, name string, sink *metrics.InmemSink) {
+func verifyGaugesExists(t *testing.T, names []string, sink *metrics.InmemSink) {
 	interval := getIntervalMetrics(t, sink)
 	interval.RLock()
 	defer interval.RUnlock()
-	if _, ok := interval.Gauges[name]; !ok {
-		t.Fatalf("%s gauge not emmited", name)
+	for _, name := range names {
+		if _, ok := interval.Gauges[name]; !ok {
+			t.Fatalf("%s gauge not emmited", name)
+		}
 	}
 }
 
-func verifySampleExists(t *testing.T, name string, sink *metrics.InmemSink) {
+func verifySamplesExists(t *testing.T, names []string, sink *metrics.InmemSink) {
 	interval := getIntervalMetrics(t, sink)
 	interval.RLock()
 	defer interval.RUnlock()
-	if _, ok := interval.Samples[name]; !ok {
-		t.Fatalf("%s sample not emmited", name)
+	for _, name := range names {
+		if _, ok := interval.Samples[name]; !ok {
+			t.Fatalf("%s sample not emmited", name)
+		}
 	}
 }

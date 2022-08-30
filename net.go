@@ -1034,7 +1034,9 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool, streamLabel string
 	}
 
 	for nodeState, cnt := range nodeStateCounts {
-		metrics.SetGaugeWithLabels([]string{"memberlist", "nodes", nodeState}, float32(cnt), m.metricLabels)
+		metrics.SetGaugeWithLabels([]string{"memberlist", "node", "instances"},
+			float32(cnt),
+			append(m.metricLabels, metrics.Label{Name: "node_state", Value: nodeState}))
 	}
 
 	// Get the delegate state
