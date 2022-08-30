@@ -87,13 +87,6 @@ const (
 	maxPushPullRequests    = 128 // Maximum number of concurrent push/pull requests
 )
 
-const (
-	nodeStateAlive   = "alive"
-	nodeStateDead    = "dead"
-	nodeStateLeft    = "left"
-	nodeStateSuspect = "suspect"
-)
-
 // ping request sent directly to node
 type ping struct {
 	SeqNo uint32
@@ -1015,22 +1008,13 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool, streamLabel string
 	m.nodeLock.RUnlock()
 
 	nodeStateCounts := make(map[string]int)
-	nodeStateCounts[nodeStateAlive] = 0
-	nodeStateCounts[nodeStateLeft] = 0
-	nodeStateCounts[nodeStateDead] = 0
-	nodeStateCounts[nodeStateSuspect] = 0
+	nodeStateCounts[StateAlive.metricsString()] = 0
+	nodeStateCounts[StateLeft.metricsString()] = 0
+	nodeStateCounts[StateDead.metricsString()] = 0
+	nodeStateCounts[StateSuspect.metricsString()] = 0
 
 	for _, n := range localNodes {
-		switch n.State {
-		case StateAlive:
-			nodeStateCounts[nodeStateAlive]++
-		case StateDead:
-			nodeStateCounts[nodeStateDead]++
-		case StateSuspect:
-			nodeStateCounts[nodeStateSuspect]++
-		case StateLeft:
-			nodeStateCounts[nodeStateLeft]++
-		}
+		nodeStateCounts[n.State.metricsString()]++
 	}
 
 	for nodeState, cnt := range nodeStateCounts {

@@ -2275,10 +2275,10 @@ func TestMemberlist_PushPull(t *testing.T) {
 
 		instancesMetricName := "consul.usage.test.memberlist.node.instances"
 		verifyGaugeExists(t, "consul.usage.test.memberlist.size.local", sink)
-		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, nodeStateAlive), sink)
-		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, nodeStateDead), sink)
-		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, nodeStateLeft), sink)
-		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, nodeStateSuspect), sink)
+		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateAlive.metricsString()), sink)
+		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateDead.metricsString()), sink)
+		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateLeft.metricsString()), sink)
+		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateSuspect.metricsString()), sink)
 	})
 }
 

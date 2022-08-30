@@ -15,6 +15,21 @@ import (
 
 type NodeStateType int
 
+func (t NodeStateType) metricsString() string {
+	switch t {
+	case StateAlive:
+		return "alive"
+	case StateDead:
+		return "dead"
+	case StateSuspect:
+		return "suspect"
+	case StateLeft:
+		return "left"
+	default:
+		return ""
+	}
+}
+
 const (
 	StateAlive NodeStateType = iota
 	StateSuspect
