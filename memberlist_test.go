@@ -259,13 +259,8 @@ func TestCreate_checkBroadcastQueueMetrics(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	intv := getIntervalMetrics(t, sink)
 	sampleName := "consul.usage.test.memberlist.queue.broadcasts"
-	actualSample := intv.Samples[sampleName]
-
-	if actualSample.Count == 0 {
-		t.Fatalf("%s sample not taken", sampleName)
-	}
+	verifySampleExists(t, sampleName, sink)
 }
 
 func TestCreate_keyringOnly(t *testing.T) {

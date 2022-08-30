@@ -2423,7 +2423,18 @@ func getIntervalMetrics(t *testing.T, sink *metrics.InmemSink) *metrics.Interval
 
 func verifyGaugeExists(t *testing.T, name string, sink *metrics.InmemSink) {
 	interval := getIntervalMetrics(t, sink)
+	interval.RLock()
+	defer interval.RUnlock()
 	if _, ok := interval.Gauges[name]; !ok {
 		t.Fatalf("%s gauge not emmited", name)
+	}
+}
+
+func verifySampleExists(t *testing.T, name string, sink *metrics.InmemSink) {
+	interval := getIntervalMetrics(t, sink)
+	interval.RLock()
+	defer interval.RUnlock()
+	if _, ok := interval.Samples[name]; !ok {
+		t.Fatalf("%s sample not emmited", name)
 	}
 }
