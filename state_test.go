@@ -2423,6 +2423,7 @@ func getIntervalMetrics(t *testing.T, sink *metrics.InmemSink) *metrics.Interval
 }
 
 func verifyGaugeExists(t *testing.T, name string, sink *metrics.InmemSink) {
+	t.Helper()
 	interval := getIntervalMetrics(t, sink)
 	interval.RLock()
 	defer interval.RUnlock()
@@ -2432,6 +2433,7 @@ func verifyGaugeExists(t *testing.T, name string, sink *metrics.InmemSink) {
 }
 
 func verifySampleExists(t *testing.T, name string, sink *metrics.InmemSink) {
+	t.Helper()
 	interval := getIntervalMetrics(t, sink)
 	interval.RLock()
 	defer interval.RUnlock()
