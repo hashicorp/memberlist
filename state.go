@@ -26,7 +26,7 @@ func (t NodeStateType) metricsString() string {
 	case StateLeft:
 		return "left"
 	default:
-		return ""
+		return fmt.Sprintf("unhandled-value-%d", t)
 	}
 }
 
