@@ -690,6 +690,7 @@ func TestEncryptDecryptState(t *testing.T) {
 		SecretKey:       []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 		ProtocolVersion: ProtocolVersionMax,
 	}
+	sink := registerInMemorySink(t)
 
 	m, err := Create(config)
 	if err != nil {
@@ -710,6 +711,7 @@ func TestEncryptDecryptState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
+	verifySampleExists(t, "consul.usage.test.memberlist.size.remote", sink)
 
 	if !reflect.DeepEqual(state, plain) {
 		t.Fatalf("Decrypt failed: %v", plain)
