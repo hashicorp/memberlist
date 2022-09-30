@@ -616,13 +616,12 @@ func (m *Memberlist) gossip() {
 		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
 
+	msgs := m.getBroadcasts(compoundOverhead, bytesAvail)
+	if len(msgs) == 0 {
+		return
+	}
 	for _, node := range kNodes {
 		// Get any pending broadcasts
-		msgs := m.getBroadcasts(compoundOverhead, bytesAvail)
-		if len(msgs) == 0 {
-			return
-		}
-
 		addr := node.Address()
 		if len(msgs) == 1 {
 			// Send single message as is
