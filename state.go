@@ -619,24 +619,29 @@ func (m *Memberlist) gossip() {
 	msgs := m.getBroadcasts(compoundOverhead, bytesAvail)
 	if len(msgs) == 0 {
 		return
-	}
-	for _, node := range kNodes {
-		// Get any pending broadcasts
-		addr := node.Address()
-		if len(msgs) == 1 {
-			// Send single message as is
-			if err := m.rawSendMsgPacket(node.FullAddress(), &node, msgs[0]); err != nil {
-				m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", addr, err)
-			}
-		} else {
-			// Otherwise create and send one or more compound messages
-			compounds := makeCompoundMessages(msgs)
-			for _, compound := range compounds {
-				if err := m.rawSendMsgPacket(node.FullAddress(), &node, compound.Bytes()); err != nil {
-					m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", addr, err)
-				}
+	} else if len(msgs) == 1 {
+		// Send single message as is to each node.
+		for _, node := range kNodes {
+			// Get any pending broadcasts
+			m.rawSendMsgPacketToNode(node, msgs[0])
+		}
+	} else {
+		// Otherwise create and send one or more compound messages to each node.
+		// Get any pending broadcasts.
+		compounds := makeCompoundMessages(msgs)
+		for _, compound := range compounds {
+			// avoid rebuilding compound messages. send same to each node.
+			for _, node := range kNodes {
+				m.rawSendMsgPacketToNode(node, compound.Bytes())
 			}
 		}
+	}
+}
+
+func (m *Memberlist) rawSendMsgPacketToNode(node Node, message []byte) {
+	addr := node.Address()
+	if err := m.rawSendMsgPacket(node.FullAddress(), &node, message); err != nil {
+		m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", addr, err)
 	}
 }
 
