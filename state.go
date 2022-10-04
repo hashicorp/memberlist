@@ -622,7 +622,6 @@ func (m *Memberlist) gossip() {
 	} else if len(msgs) == 1 {
 		// Send single message as is to each node.
 		for _, node := range kNodes {
-			// Get any pending broadcasts
 			m.rawSendMsgPacketToNode(node, msgs[0])
 		}
 	} else {
