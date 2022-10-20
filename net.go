@@ -788,7 +788,7 @@ func (m *Memberlist) sendMsg(a Address, msg []byte) error {
 	if m.config.EncryptionEnabled() && m.config.GossipVerifyOutgoing {
 		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
-	extra := m.getBroadcasts(compoundOverhead, bytesAvail)
+	extra := m.getBroadcasts(compoundOverhead, bytesAvail, 1)
 
 	// Fast path if nothing to piggypack
 	if len(extra) == 0 {

@@ -131,13 +131,13 @@ type Broadcast interface {
 // You shoud ensure that Invalidates() checks the same uniqueness as the
 // example below:
 //
-// func (b *foo) Invalidates(other Broadcast) bool {
-// 	nb, ok := other.(NamedBroadcast)
-// 	if !ok {
-// 		return false
-// 	}
-// 	return b.Name() == nb.Name()
-// }
+//	func (b *foo) Invalidates(other Broadcast) bool {
+//		nb, ok := other.(NamedBroadcast)
+//		if !ok {
+//			return false
+//		}
+//		return b.Name() == nb.Name()
+//	}
 //
 // Invalidates() isn't currently used for NamedBroadcasts, but that may change
 // in the future.
@@ -285,7 +285,7 @@ func (q *TransmitLimitedQueue) getTransmitRange() (minTransmit, maxTransmit int)
 
 // GetBroadcasts is used to get a number of broadcasts, up to a byte limit
 // and applying a per-message overhead as provided.
-func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
+func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit, transmissionCount int) [][]byte {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -352,7 +352,7 @@ func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 
 		// Check if we should stop transmission
 		q.deleteItem(keep)
-		if keep.transmits+1 >= transmitLimit {
+		if keep.transmits+transmissionCount >= transmitLimit {
 			keep.b.Finished()
 		} else {
 			// We need to bump this item down to another transmit tier, but
@@ -360,7 +360,7 @@ func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 			// tiers, we will have to delay the reinsertion until we are
 			// finished our search. Otherwise we'll possibly re-add the message
 			// when we ascend to the next tier.
-			keep.transmits++
+			keep.transmits += transmissionCount
 			reinsert = append(reinsert, keep)
 		}
 	}

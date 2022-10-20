@@ -616,7 +616,7 @@ func (m *Memberlist) gossip() {
 		bytesAvail -= encryptOverhead(m.encryptionVersion())
 	}
 
-	msgs := m.getBroadcasts(compoundOverhead, bytesAvail)
+	msgs := m.getBroadcasts(compoundOverhead, bytesAvail, len(kNodes))
 	if len(msgs) == 0 {
 		return
 	} else if len(msgs) == 1 {

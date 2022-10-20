@@ -102,11 +102,11 @@ func TestTransmitLimited_GetBroadcasts(t *testing.T) {
 	q.QueueBroadcast(&memberlistBroadcast{"baz", []byte("4. this is a test."), nil})
 
 	// 2 byte overhead per message, should get all 4 messages
-	all := q.GetBroadcasts(2, 80)
+	all := q.GetBroadcasts(2, 80, 1)
 	require.Equal(t, 4, len(all), "missing messages: %v", prettyPrintMessages(all))
 
 	// 3 byte overhead, should only get 3 messages back
-	partial := q.GetBroadcasts(3, 80)
+	partial := q.GetBroadcasts(3, 80, 1)
 	require.Equal(t, 3, len(partial), "missing messages: %v", prettyPrintMessages(partial))
 }
 
@@ -125,24 +125,24 @@ func TestTransmitLimited_GetBroadcasts_Limit(t *testing.T) {
 	require.Equal(t, int64(4), q.idGen, "we handed out 4 IDs")
 
 	// 3 byte overhead, should only get 3 messages back
-	partial1 := q.GetBroadcasts(3, 80)
+	partial1 := q.GetBroadcasts(3, 80, 1)
 	require.Equal(t, 3, len(partial1), "missing messages: %v", prettyPrintMessages(partial1))
 
 	require.Equal(t, int64(4), q.idGen, "id generator doesn't reset until empty")
 
-	partial2 := q.GetBroadcasts(3, 80)
+	partial2 := q.GetBroadcasts(3, 80, 1)
 	require.Equal(t, 3, len(partial2), "missing messages: %v", prettyPrintMessages(partial2))
 
 	require.Equal(t, int64(4), q.idGen, "id generator doesn't reset until empty")
 
 	// Only two not expired
-	partial3 := q.GetBroadcasts(3, 80)
+	partial3 := q.GetBroadcasts(3, 80, 1)
 	require.Equal(t, 2, len(partial3), "missing messages: %v", prettyPrintMessages(partial3))
 
 	require.Equal(t, int64(0), q.idGen, "id generator resets on empty")
 
 	// Should get nothing
-	partial5 := q.GetBroadcasts(3, 80)
+	partial5 := q.GetBroadcasts(3, 80, 1)
 	require.Equal(t, 0, len(partial5), "missing messages: %v", prettyPrintMessages(partial5))
 
 	require.Equal(t, int64(0), q.idGen, "id generator resets on empty")
