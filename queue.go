@@ -320,7 +320,7 @@ func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit, transmissionCount 
 			id:        math.MaxInt64,
 		}
 		lessThan := &limitedBroadcast{
-			transmits: transmits + 1,
+			transmits: transmits + transmissionCount,
 			msgLen:    math.MaxInt64,
 			id:        math.MaxInt64,
 		}
