@@ -80,7 +80,7 @@ type Memberlist struct {
 
 	broadcasts *TransmitLimitedQueue
 
-	logger *log.Logger
+	logger Logger
 
 	// metricLabels is the slice of labels to put on all emitted metrics
 	metricLabels []metrics.Label
