@@ -31,8 +31,8 @@ import (
 	"time"
 
 	"github.com/armon/go-metrics"
-	multierror "github.com/hashicorp/go-multierror"
-	sockaddr "github.com/hashicorp/go-sockaddr"
+	"github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/go-sockaddr"
 	"github.com/miekg/dns"
 )
 

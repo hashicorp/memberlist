@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/armon/go-metrics"
-	multierror "github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/go-multierror"
 )
 
 type Config struct {
@@ -260,6 +260,12 @@ type Config struct {
 	// QueueCheckInterval is the interval at which we check the message
 	// queue to apply the warning and max depth.
 	QueueCheckInterval time.Duration
+
+	// MsgpackUseNewTimeFormat is used to force the underlying msgpack codec to
+	// use the newer format of time.Time when encoding, used in versions <=0.5.5
+	// by default. Decoding is not affected, as all decoders know how to decode
+	// both formats.
+	MsgpackUseNewTimeFormat bool
 }
 
 // ParseCIDRs return a possible empty list of all Network that have been parsed
