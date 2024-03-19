@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        GO_VERSION: [ "1.16","1.17","1.18","1.19","1.20","1.21"" ]
+        GO_VERSION: [ "1.20","1.21"" ]
     steps:
       - name: "Fetch source code"
         uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
