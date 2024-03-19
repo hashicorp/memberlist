@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-msgpack/codec"
+	"github.com/hashicorp/go-msgpack/v2/codec"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,7 +43,7 @@ func TestHandleCompoundPing(t *testing.T) {
 		SourcePort: uint16(udpAddr.Port),
 		SourceNode: "test",
 	}
-	buf, err := encode(pingMsg, ping)
+	buf, err := encode(pingMsg, ping, m.config.MsgpackUseNewTimeFormat)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -112,7 +112,7 @@ func TestHandlePing(t *testing.T) {
 		SourcePort: uint16(udpAddr.Port),
 		SourceNode: "test",
 	}
-	buf, err := encode(pingMsg, ping)
+	buf, err := encode(pingMsg, ping, m.config.MsgpackUseNewTimeFormat)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -177,7 +177,7 @@ func TestHandlePing_WrongNode(t *testing.T) {
 		SourcePort: uint16(udpAddr.Port),
 		SourceNode: "test",
 	}
-	buf, err := encode(pingMsg, ping)
+	buf, err := encode(pingMsg, ping, m.config.MsgpackUseNewTimeFormat)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -221,7 +221,7 @@ func TestHandleIndirectPing(t *testing.T) {
 		SourcePort: uint16(udpAddr.Port),
 		SourceNode: "test",
 	}
-	buf, err := encode(indirectPingMsg, &ind)
+	buf, err := encode(indirectPingMsg, &ind, m.config.MsgpackUseNewTimeFormat)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
@@ -333,7 +333,7 @@ func TestTCPPing(t *testing.T) {
 		}
 
 		ack := ackResp{pingIn.SeqNo, nil}
-		out, err := encode(ackRespMsg, &ack)
+		out, err := encode(ackRespMsg, &ack, m.config.MsgpackUseNewTimeFormat)
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to encode ack: %s", err)
 			return
@@ -381,7 +381,7 @@ func TestTCPPing(t *testing.T) {
 		}
 
 		ack := ackResp{pingIn.SeqNo + 1, nil}
-		out, err := encode(ackRespMsg, &ack)
+		out, err := encode(ackRespMsg, &ack, m.config.MsgpackUseNewTimeFormat)
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to encode ack: %s", err)
 			return
@@ -423,7 +423,7 @@ func TestTCPPing(t *testing.T) {
 		}
 
 		bogus := indirectPingReq{}
-		out, err := encode(indirectPingMsg, &bogus)
+		out, err := encode(indirectPingMsg, &bogus, m.config.MsgpackUseNewTimeFormat)
 		if err != nil {
 			pingErrCh <- fmt.Errorf("failed to encode bogus msg: %s", err)
 			return
@@ -507,7 +507,11 @@ func TestTCPPushPull(t *testing.T) {
 
 	// Send our node state
 	header := pushPullHeader{Nodes: 3}
-	hd := codec.MsgpackHandle{}
+	hd := codec.MsgpackHandle{
+		BasicHandle: codec.BasicHandle{
+			TimeNotBuiltin: !m.config.MsgpackUseNewTimeFormat,
+		},
+	}
 	enc := codec.NewEncoder(conn, &hd)
 
 	// Send the push/pull indicator
@@ -529,7 +533,11 @@ func TestTCPPushPull(t *testing.T) {
 	}
 
 	var bufConn io.Reader = conn
-	msghd := codec.MsgpackHandle{}
+	msghd := codec.MsgpackHandle{
+		BasicHandle: codec.BasicHandle{
+			TimeNotBuiltin: !m.config.MsgpackUseNewTimeFormat,
+		},
+	}
 	dec := codec.NewDecoder(bufConn, &msghd)
 
 	// Check if we have a compressed message
@@ -620,7 +628,7 @@ func TestSendMsg_Piggyback(t *testing.T) {
 		SourcePort: uint16(udpAddr.Port),
 		SourceNode: "test",
 	}
-	buf, err := encode(pingMsg, ping)
+	buf, err := encode(pingMsg, ping, m.config.MsgpackUseNewTimeFormat)
 	if err != nil {
 		t.Fatalf("unexpected err %s", err)
 	}
