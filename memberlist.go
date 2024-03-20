@@ -19,7 +19,8 @@ package memberlist
 
 import (
 	"container/list"
-	"errors"
+
+	
 	"fmt"
 	"log"
 	"net"
