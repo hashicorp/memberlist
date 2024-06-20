@@ -2275,14 +2275,13 @@ func TestMemberlist_PushPull(t *testing.T) {
 		if len(ch) < 2 {
 			failf("expected 2 messages from pushPull")
 		}
-
-		instancesMetricName := "consul.usage.test.memberlist.node.instances"
-		verifyGaugeExists(t, "consul.usage.test.memberlist.size.local", sink)
-		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateAlive.metricsString()), sink)
-		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateDead.metricsString()), sink)
-		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateLeft.metricsString()), sink)
-		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateSuspect.metricsString()), sink)
 	})
+	instancesMetricName := "consul.usage.test.memberlist.node.instances"
+	verifyGaugeExists(t, "consul.usage.test.memberlist.size.local", sink)
+	verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateAlive.metricsString()), sink)
+	verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateDead.metricsString()), sink)
+	verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateLeft.metricsString()), sink)
+	verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateSuspect.metricsString()), sink)
 }
 
 func TestVerifyProtocol(t *testing.T) {
