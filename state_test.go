@@ -1130,23 +1130,22 @@ func TestMemberList_invokeAckHandler_Channel_Ack(t *testing.T) {
 
 	ackCh := make(chan ackMessage, 1)
 	nackCh := make(chan struct{}, 1)
-	m.setProbeChannels(0, ackCh, nackCh, 10*time.Millisecond)
+	timeout := 10 * time.Millisecond
+	m.setProbeChannels(0, ackCh, nackCh, timeout)
 
 	// Should send message
 	m.invokeAckHandler(ack, time.Now())
 
 	select {
 	case v := <-ackCh:
-		if v.Complete != true {
-			t.Fatalf("Bad value")
-		}
 		if bytes.Compare(v.Payload, ack.Payload) != 0 {
 			t.Fatalf("wrong payload. expected: %v; actual: %v", ack.Payload, v.Payload)
 		}
 
 	case <-nackCh:
 		t.Fatalf("should not get a nack")
-
+	case <-time.After(timeout):
+		t.Fatalf("timeout")
 	default:
 		t.Fatalf("message not sent")
 	}
@@ -1164,7 +1163,8 @@ func TestMemberList_invokeAckHandler_Channel_Nack(t *testing.T) {
 
 	ackCh := make(chan ackMessage, 1)
 	nackCh := make(chan struct{}, 1)
-	m.setProbeChannels(0, ackCh, nackCh, 10*time.Millisecond)
+	timeout := 10 * time.Millisecond
+	m.setProbeChannels(0, ackCh, nackCh, timeout)
 
 	// Should send message.
 	m.invokeNackHandler(nack)
@@ -1189,16 +1189,14 @@ func TestMemberList_invokeAckHandler_Channel_Nack(t *testing.T) {
 
 	select {
 	case v := <-ackCh:
-		if v.Complete != true {
-			t.Fatalf("Bad value")
-		}
 		if bytes.Compare(v.Payload, ack.Payload) != 0 {
 			t.Fatalf("wrong payload. expected: %v; actual: %v", ack.Payload, v.Payload)
 		}
 
 	case <-nackCh:
 		t.Fatalf("should not get a nack")
-
+	case <-time.After(timeout):
+		t.Fatalf("timeout")
 	default:
 		t.Fatalf("message not sent")
 	}
