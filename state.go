@@ -570,7 +570,7 @@ func (m *Memberlist) resetNodes() {
 	defer m.nodeLock.Unlock()
 
 	// Move dead nodes, but respect gossip to the dead interval
-	deadIdx := moveDeadNodes(m.nodes, m.config.GossipToTheDeadTime)
+	deadIdx := moveDeadNodes(m.nodes, m.config.DeadNodeReclaimTime, m.config.GossipToTheDeadTime)
 
 	// Deregister the dead nodes
 	for i := deadIdx; i < len(m.nodes); i++ {
