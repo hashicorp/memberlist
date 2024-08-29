@@ -252,10 +252,6 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 	}
 
 	if m.config.SkipInboundLabelCheck {
-		if streamLabel != "" {
-			m.logger.Printf("[ERR] memberlist: unexpected double stream label header: %s", LogConn(conn))
-			return
-		}
 		// Set this from config so that the auth data assertions work below.
 		streamLabel = m.config.Label
 	}
@@ -372,10 +368,6 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time
 	}
 
 	if m.config.SkipInboundLabelCheck {
-		if packetLabel != "" {
-			m.logger.Printf("[ERR] memberlist: unexpected double packet label header: %s", LogAddress(from))
-			return
-		}
 		// Set this from config so that the auth data assertions work below.
 		packetLabel = m.config.Label
 	}
@@ -1118,10 +1110,9 @@ func (m *Memberlist) decryptRemoteState(bufConn io.Reader, streamLabel string) (
 
 	if moreBytes > maxPushStateBytes {
 		return nil, fmt.Errorf("Remote node state is larger than limit (%d)", moreBytes)
-
 	}
 
-	//Start reporting the size before you cross the limit
+	// Start reporting the size before you cross the limit
 	if moreBytes > uint32(math.Floor(.6*maxPushStateBytes)) {
 		m.logger.Printf("[WARN] memberlist: Remote node state size is (%d) limit is (%d)", moreBytes, maxPushStateBytes)
 	}
