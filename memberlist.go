@@ -611,6 +611,7 @@ func (m *Memberlist) Members() []*Node {
 	nodes := make([]*Node, 0, len(m.nodes))
 	for _, n := range m.nodes {
 		if !n.DeadOrLeft() {
+			n.Node.State = n.State
 			nodes = append(nodes, &n.Node)
 		}
 	}
