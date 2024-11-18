@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,18 +24,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var bindLock sync.Mutex
-var bindNum byte = 10
+var bindNum0 uint32 = 9
+var bindNum1 uint32 = 9
+var bindNum2 uint32 = 9
+
+func getBindNum(bindNum *uint32, max uint32) uint32 {
+	atomic.AddUint32(bindNum, 1)
+	if *bindNum > max {
+		atomic.StoreUint32(bindNum, 10)
+	}
+	return *bindNum
+}
 
 func getBindAddrNet(network byte) net.IP {
-	bindLock.Lock()
-	defer bindLock.Unlock()
-
-	result := net.IPv4(127, 0, network, bindNum)
-	bindNum++
-	if bindNum > 255 {
-		bindNum = 10
+	var bind uint32
+	switch network {
+	case 0:
+		bind = getBindNum(&bindNum0, 255)
+	case 1:
+		bind = getBindNum(&bindNum1, 14)
+	case 2:
+		bind = getBindNum(&bindNum2, 14)
 	}
+	result := net.IPv4(127, 0, network, byte(bind))
 
 	return result
 }
@@ -1586,8 +1598,6 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 	}
 	// Since this binds to all interfaces we need to exclude other tests
 	// from grabbing an interface.
-	bindLock.Lock()
-	defer bindLock.Unlock()
 
 	c1 := DefaultLANConfig()
 	c1.Name = "A"
