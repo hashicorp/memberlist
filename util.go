@@ -105,7 +105,7 @@ func pushPullScale(interval time.Duration, n int) time.Duration {
 
 // moveDeadNodes moves dead and left nodes that that have not changed during the gossipToTheDeadTime interval
 // to the end of the slice and returns the index of the first moved node.
-func moveDeadNodes(nodes []*nodeState, gossipToTheDeadTime time.Duration) int {
+func moveDeadNodes(nodes []*nodeState, deadNodeReclaimTime, gossipToTheDeadTime time.Duration) int {
 	numDead := 0
 	n := len(nodes)
 	for i := 0; i < n-numDead; i++ {
@@ -113,8 +113,18 @@ func moveDeadNodes(nodes []*nodeState, gossipToTheDeadTime time.Duration) int {
 			continue
 		}
 
-		// Respect the gossip to the dead interval
-		if time.Since(nodes[i].StateChange) <= gossipToTheDeadTime {
+		if nodes[i].State == StateDead && deadNodeReclaimTime == 0 {
+			// If deadNodeReclaimTime is 0, we don't reclaim dead nodes
+			continue
+		}
+
+		reclaimTime := deadNodeReclaimTime
+		if gossipToTheDeadTime > reclaimTime {
+			reclaimTime = gossipToTheDeadTime
+		}
+
+		// Respect the gossip to the dead interval and the dead node reclaim time
+		if time.Since(nodes[i].StateChange) <= reclaimTime {
 			continue
 		}
 
