@@ -55,7 +55,6 @@ func TestTransport_Join(t *testing.T) {
 	if m2.estNumNodes() != 2 {
 		t.Fatalf("bad: %v", m2.Members())
 	}
-
 }
 
 func TestTransport_Send(t *testing.T) {
@@ -155,7 +154,6 @@ func (tw testCountingWriter) Write(p []byte) (n int, err error) {
 // do not result in a tight loop and spam the log. We verify this here by counting the number
 // of entries logged in a given time period.
 func TestTransport_TcpListenBackoff(t *testing.T) {
-
 	// testTime is the amount of time we will allow NetTransport#tcpListen() to run
 	// This needs to be long enough that to verify that maxDelay is in force,
 	// but not so long as to be obnoxious when running the test suite.
@@ -205,4 +203,59 @@ func TestTransport_TcpListenBackoff(t *testing.T) {
 
 	// no connections should have been accepted and sent to the channel
 	require.Equal(t, len(transport.streamCh), 0)
+}
+
+func TestTransport_LabelsAndSkip(t *testing.T) {
+	net := &MockNetwork{}
+
+	tests := []struct {
+		label1        string
+		label2        string
+		skip1         bool
+		skip2         bool
+		expectSuccess bool
+	}{
+		{label1: "label1", label2: "label2"},
+		{label1: "label1", label2: "label1", expectSuccess: true},
+		{label1: "label1", label2: "label2", skip1: true, skip2: true, expectSuccess: true},
+		{label1: "label1", label2: "label1", skip1: true, skip2: true, expectSuccess: true},
+	}
+	for _, test := range tests {
+		t1 := net.NewTransport("node1")
+		c1 := DefaultLANConfig()
+		c1.Name = "node1"
+		c1.Label = test.label1
+		c1.SkipInboundLabelCheck = test.skip1
+		c1.Transport = t1
+		m1, err := Create(c1)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		m1.setAlive()
+		m1.schedule()
+
+		c2 := DefaultLANConfig()
+		c2.Name = "node2"
+		c2.Label = test.label2
+		c2.SkipInboundLabelCheck = test.skip2
+		c2.Transport = net.NewTransport("node2")
+		m2, err := Create(c2)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		m2.setAlive()
+		m2.schedule()
+
+		_, err = m2.Join([]string{c1.Name + "/" + t1.addr.String()})
+		// First shutdown everything so that the next iteration can set it up again
+		m1.Shutdown()
+		m2.Shutdown()
+
+		// Then check if we expected success or not
+		if test.expectSuccess && err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		} else if !test.expectSuccess && err == nil {
+			t.Fatalf("expected an error")
+		}
+	}
 }
