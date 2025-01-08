@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c
-	github.com/hashicorp/go-metrics v0.5.4-0.20241111182750-ceaacca141e7
+	github.com/hashicorp/go-metrics v0.5.4
 	github.com/hashicorp/go-msgpack/v2 v2.1.1
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/hashicorp/go-sockaddr v1.0.0
