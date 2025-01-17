@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package memberlist
 
 import (
@@ -244,6 +247,23 @@ func TestCreate_secretKeyEmpty(t *testing.T) {
 	if m.config.EncryptionEnabled() {
 		t.Fatalf("Expected encryption to be disabled")
 	}
+}
+
+func TestCreate_checkBroadcastQueueMetrics(t *testing.T) {
+	sink := registerInMemorySink(t)
+	c := DefaultLANConfig()
+	c.QueueCheckInterval = 1 * time.Second
+	c.BindAddr = getBindAddr().String()
+	c.SecretKey = make([]byte, 0)
+
+	m, err := Create(c)
+	require.NoError(t, err)
+	defer m.Shutdown()
+
+	time.Sleep(3 * time.Second)
+
+	sampleName := "consul.usage.test.memberlist.queue.broadcasts"
+	verifySampleExists(t, sampleName, sink)
 }
 
 func TestCreate_keyringOnly(t *testing.T) {

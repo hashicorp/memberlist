@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package memberlist
 
 import (
@@ -40,7 +43,7 @@ func TestUtil_PortFunctions(t *testing.T) {
 
 func TestEncodeDecode(t *testing.T) {
 	msg := &ping{SeqNo: 100}
-	buf, err := encode(pingMsg, msg)
+	buf, err := encode(pingMsg, msg, false)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
@@ -296,7 +299,7 @@ func TestKRandomNodes(t *testing.T) {
 
 func TestMakeCompoundMessage(t *testing.T) {
 	msg := &ping{SeqNo: 100}
-	buf, err := encode(pingMsg, msg)
+	buf, err := encode(pingMsg, msg, false)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
@@ -311,7 +314,7 @@ func TestMakeCompoundMessage(t *testing.T) {
 
 func TestDecodeCompoundMessage(t *testing.T) {
 	msg := &ping{SeqNo: 100}
-	buf, err := encode(pingMsg, msg)
+	buf, err := encode(pingMsg, msg, false)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
@@ -345,7 +348,7 @@ func TestDecodeCompoundMessage_NumberOfPartsOverflow(t *testing.T) {
 
 func TestDecodeCompoundMessage_Trunc(t *testing.T) {
 	msg := &ping{SeqNo: 100}
-	buf, err := encode(pingMsg, msg)
+	buf, err := encode(pingMsg, msg, false)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
@@ -371,7 +374,7 @@ func TestDecodeCompoundMessage_Trunc(t *testing.T) {
 }
 
 func TestCompressDecompressPayload(t *testing.T) {
-	buf, err := compressPayload([]byte("testing"))
+	buf, err := compressPayload([]byte("testing"), false)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}

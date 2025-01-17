@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package memberlist
 
 import (
@@ -13,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-metrics/compat"
 	iretry "github.com/hashicorp/memberlist/internal/retry"
 	"github.com/stretchr/testify/require"
 )
@@ -2238,6 +2242,8 @@ func TestMemberlist_PushPull(t *testing.T) {
 	ip1 := []byte(addr1)
 	ip2 := []byte(addr2)
 
+	sink := registerInMemorySink(t)
+
 	ch := make(chan NodeEvent, 3)
 
 	m1 := HostMemberlist(addr1.String(), t, func(c *Config) {
@@ -2269,6 +2275,13 @@ func TestMemberlist_PushPull(t *testing.T) {
 		if len(ch) < 2 {
 			failf("expected 2 messages from pushPull")
 		}
+
+		instancesMetricName := "consul.usage.test.memberlist.node.instances"
+		verifyGaugeExists(t, "consul.usage.test.memberlist.size.local", sink)
+		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateAlive.metricsString()), sink)
+		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateDead.metricsString()), sink)
+		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateLeft.metricsString()), sink)
+		verifyGaugeExists(t, fmt.Sprintf("%s;node_state=%s", instancesMetricName, StateSuspect.metricsString()), sink)
 	})
 }
 
@@ -2391,5 +2404,44 @@ func testVerifyProtocolSingle(t *testing.T, A [][6]uint8, B [][6]uint8, expect b
 	err := m.verifyProtocol(remote)
 	if (err == nil) != expect {
 		t.Fatalf("bad:\nA: %v\nB: %v\nErr: %s", A, B, err)
+	}
+}
+
+func registerInMemorySink(t *testing.T) *metrics.InmemSink {
+	t.Helper()
+	// Only have a single interval for the test
+	sink := metrics.NewInmemSink(1*time.Minute, 1*time.Minute)
+	cfg := metrics.DefaultConfig("consul.usage.test")
+	cfg.EnableHostname = false
+	metrics.NewGlobal(cfg, sink)
+	return sink
+}
+
+func getIntervalMetrics(t *testing.T, sink *metrics.InmemSink) *metrics.IntervalMetrics {
+	t.Helper()
+	intervals := sink.Data()
+	require.Len(t, intervals, 1)
+	intv := intervals[0]
+	return intv
+}
+
+func verifyGaugeExists(t *testing.T, name string, sink *metrics.InmemSink) {
+	t.Helper()
+	interval := getIntervalMetrics(t, sink)
+	interval.RLock()
+	defer interval.RUnlock()
+	if _, ok := interval.Gauges[name]; !ok {
+		t.Fatalf("%s gauge not emmited", name)
+	}
+}
+
+func verifySampleExists(t *testing.T, name string, sink *metrics.InmemSink) {
+	t.Helper()
+	interval := getIntervalMetrics(t, sink)
+	interval.RLock()
+	defer interval.RUnlock()
+
+	if _, ok := interval.Samples[name]; !ok {
+		t.Fatalf("%s sample not emmited", name)
 	}
 }
