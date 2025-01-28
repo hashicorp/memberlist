@@ -1,7 +1,6 @@
 name: Checks
 
 on:
-  push:
   pull_request:
 
 # This workflow runs for not-yet-reviewed external contributions and so it
