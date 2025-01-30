@@ -255,13 +255,14 @@ func TestKRandomNodes(t *testing.T) {
 		nodes = append(nodes, &nodeState{
 			Node: Node{
 				Name: fmt.Sprintf("test%d", i),
+				State: state,
 			},
 			State: state,
 		})
 	}
 
 	filterFunc := func(n *nodeState) bool {
-		if n.Name == "test0" || n.State != StateAlive {
+		if n.Name == "test0" || n.Node.State != StateAlive {
 			return true
 		}
 		return false
