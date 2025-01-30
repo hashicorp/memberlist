@@ -325,6 +325,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	}
 	ackCh := make(chan ackMessage, m.config.IndirectChecks+1)
 	nackCh := make(chan struct{}, m.config.IndirectChecks+1)
+	start := time.Now()
 	m.setProbeChannels(ping.SeqNo, ackCh, nackCh, probeInterval)
 
 	// Mark the sent time here, which should be after any pre-processing but
@@ -391,19 +392,11 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	// Wait for response or round-trip-time.
 	select {
 	case v := <-ackCh:
-		if v.Complete == true {
-			if m.config.Ping != nil {
-				rtt := v.Timestamp.Sub(sent)
-				m.config.Ping.NotifyPingComplete(&node.Node, rtt, v.Payload)
-			}
-			return
+		if m.config.Ping != nil {
+			rtt := v.Timestamp.Sub(sent)
+			m.config.Ping.NotifyPingComplete(&node.Node, rtt, v.Payload)
 		}
-
-		// As an edge case, if we get a timeout, we need to re-enqueue it
-		// here to break out of the select below.
-		if v.Complete == false {
-			ackCh <- v
-		}
+		return
 	case <-time.After(m.config.ProbeTimeout):
 		// Note that we don't scale this timeout based on awareness and
 		// the health score. That's because we don't really expect waiting
@@ -484,11 +477,12 @@ HANDLE_REMOTE_FAILURE:
 	// channel here because we want to issue a warning below if that's the
 	// *only* way we hear back from the peer, so we have to let this time
 	// out first to allow the normal UDP-based acks to come in.
+	remaining := time.Until(start.Add(probeInterval))
 	select {
-	case v := <-ackCh:
-		if v.Complete == true {
-			return
-		}
+	case <-ackCh:
+		return
+	case <-time.After(remaining):
+		m.logger.Printf("[DEBUG] memberlist: ackHandler timeout for node %s", node.Name)
 	}
 
 	// Finally, poll the fallback channel. The timeouts are set such that
@@ -552,9 +546,7 @@ func (m *Memberlist) Ping(node string, addr net.Addr) (time.Duration, error) {
 	// Wait for response or timeout.
 	select {
 	case v := <-ackCh:
-		if v.Complete == true {
-			return v.Timestamp.Sub(sent), nil
-		}
+		return v.Timestamp.Sub(sent), nil
 	case <-time.After(m.config.ProbeTimeout):
 		// Timeout, return an error below.
 	}
@@ -825,7 +817,6 @@ func (m *Memberlist) estNumNodes() int {
 }
 
 type ackMessage struct {
-	Complete  bool
 	Payload   []byte
 	Timestamp time.Time
 }
@@ -838,7 +829,7 @@ func (m *Memberlist) setProbeChannels(seqNo uint32, ackCh chan ackMessage, nackC
 	// Create handler functions for acks and nacks
 	ackFn := func(payload []byte, timestamp time.Time) {
 		select {
-		case ackCh <- ackMessage{true, payload, timestamp}:
+		case ackCh <- ackMessage{payload, timestamp}:
 		default:
 		}
 	}
@@ -860,10 +851,6 @@ func (m *Memberlist) setProbeChannels(seqNo uint32, ackCh chan ackMessage, nackC
 		m.ackLock.Lock()
 		delete(m.ackHandlers, seqNo)
 		m.ackLock.Unlock()
-		select {
-		case ackCh <- ackMessage{false, nil, time.Now()}:
-		default:
-		}
 	})
 }
 
