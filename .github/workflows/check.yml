@@ -1,7 +1,8 @@
 name: Checks
 
 on:
-  pull_request:
+  pull_request: 
+    branches: [master]
 
 # This workflow runs for not-yet-reviewed external contributions and so it
 # intentionally has no write access and only limited read access to the
