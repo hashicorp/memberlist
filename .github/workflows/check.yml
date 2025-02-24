@@ -1,8 +1,7 @@
 name: Checks
 
 on:
-  push:
-    branches: [build-test]
+  pull_request:
 
 # This workflow runs for not-yet-reviewed external contributions and so it
 # intentionally has no write access and only limited read access to the
@@ -76,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
          path: coverage.out
-         name: Coverage-report
+         name: Coverage-report-${{matrix.GO_VERSION}}
       - name: Display Coverage report
         run: go tool cover -func=coverage.out
 
