@@ -1,7 +1,8 @@
 name: Checks
 
 on:
-  pull_request:
+  pull_request: 
+    branches: [master]
 
 # This workflow runs for not-yet-reviewed external contributions and so it
 # intentionally has no write access and only limited read access to the
@@ -67,9 +68,17 @@ jobs:
           key: go-mod-${{ matrix.GO_VERSION }}-${{ hashFiles('go.sum') }}
           restore-keys: |
             go-mod-${{ matrix.GO_VERSION }}
-      - name: "Unit tests"
+      - name: "Unit tests and generate coverage report"
         run: |
           go test ./...
+          make cov
+      - name: Upload coveragee report
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+         path: coverage.out
+         name: Coverage-report-${{matrix.GO_VERSION}}
+      - name: Display Coverage report
+        run: go tool cover -func=coverage.out
 
   unit-tests-race:
     name: "Unit Tests Race"
