@@ -79,6 +79,8 @@ jobs:
          name: Coverage-report-${{matrix.GO_VERSION}}
       - name: Display Coverage report
         run: go tool cover -func=coverage.out
+      - name: Build go
+        run: go build ./...
 
   unit-tests-race:
     name: "Unit Tests Race"
@@ -110,6 +112,8 @@ jobs:
       - name: "Race Unit tests"
         run: |
           go test -race ./...
+      - name: Race Build
+        run: go build -race ./...
 
   consistency-checks:
     name: "Code Consistency Checks"
