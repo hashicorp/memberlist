@@ -29,10 +29,21 @@ case $OSTYPE in
         ;;
 esac
 
-# Setup loopback
-for j in 0 1 2
+# first loopback, use intensively
+for ((i=10;i<256;i++))
+  do
+      if [ "$action" = "up" ]
+      then
+        sudo ifconfig lo0 alias 127.0.0.$i up
+      else
+        sudo ifconfig lo0 127.0.0.$i delete
+     fi
+  done
+
+# Not use much, only need a few
+for j in 1 2
 do
-  for ((i=2;i<256;i++))
+  for ((i=10;i<15;i++))
   do
       if [ "$action" = "up" ]
       then
@@ -42,3 +53,4 @@ do
      fi
   done
 done
+
