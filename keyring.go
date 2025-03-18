@@ -84,13 +84,14 @@ func (k *Keyring) AddKey(key []byte) error {
 	}
 
 	// No-op if key is already installed
-	for _, installedKey := range k.keys {
-		if bytes.Equal(installedKey, key) {
-			return nil
-		}
-	}
+    keys := k.GetKeys()
+    for _, installedKey := range keys {
+        if bytes.Equal(installedKey, key) {
+            return nil
+        }
+    }
 
-	keys := append(k.keys, key)
+	keys = append(keys, key)
 	primaryKey := k.GetPrimaryKey()
 	if primaryKey == nil {
 		primaryKey = key
@@ -102,9 +103,10 @@ func (k *Keyring) AddKey(key []byte) error {
 // UseKey changes the key used to encrypt messages. This is the only key used to
 // encrypt messages, so peers should know this key before this method is called.
 func (k *Keyring) UseKey(key []byte) error {
-	for _, installedKey := range k.keys {
+    keys := k.GetKeys()
+	for _, installedKey := range keys {
 		if bytes.Equal(key, installedKey) {
-			k.installKeys(k.keys, key)
+			k.installKeys(keys, key)
 			return nil
 		}
 	}
@@ -114,13 +116,16 @@ func (k *Keyring) UseKey(key []byte) error {
 // RemoveKey drops a key from the keyring. This will return an error if the key
 // requested for removal is currently at position 0 (primary key).
 func (k *Keyring) RemoveKey(key []byte) error {
-	if bytes.Equal(key, k.keys[0]) {
+	primaryKey := k.GetPrimaryKey()
+	if bytes.Equal(key, primaryKey) {
 		return fmt.Errorf("Removing the primary key is not allowed")
 	}
-	for i, installedKey := range k.keys {
+
+    keys := k.GetKeys()
+	for i, installedKey := range keys {
 		if bytes.Equal(key, installedKey) {
-			keys := append(k.keys[:i], k.keys[i+1:]...)
-			k.installKeys(keys, k.keys[0])
+			keys := append(keys[:i], keys[i+1:]...)
+			k.installKeys(keys, primaryKey)
 		}
 	}
 	return nil
