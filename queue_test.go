@@ -4,6 +4,7 @@
 package memberlist
 
 import (
+	"math"
 	"testing"
 
 	"github.com/google/btree"
@@ -92,6 +93,42 @@ func TestTransmitLimited_Queue(t *testing.T) {
 	}
 	if dump[2].b.(*memberlistBroadcast).node != "test" {
 		t.Fatalf("missing test")
+	}
+}
+
+func TestTransmitLimited_Queue_calls_Finished_on_collision(t *testing.T) {
+	q := &TransmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 1 }}
+
+	ch1 := make(chan struct{}, 10)
+	ch2 := make(chan struct{}, 10)
+
+	q.QueueBroadcast(&memberlistBroadcast{"foo", nil, ch1})
+	select {
+	case <-ch1:
+		t.Fatalf("unexpected call to Finished() on first broadcast")
+	default:
+	}
+
+	// Simulate an id-generator rollover so that the next message is
+	// assigned the same id as the previous, forcing a B-tree collision that
+	// is highly unlikely but not impossible to occur in the wild.
+	q.idGen = math.MaxInt64
+	q.QueueBroadcast(&memberlistBroadcast{"bar", nil, ch2})
+
+	select {
+	case <-ch1:
+	default:
+		t.Fatalf("expected Finished() to be called on first broadcast")
+	}
+	select {
+	case <-ch1:
+		t.Fatalf("expected Finished() to be called only once on first broadcast")
+	default:
+	}
+	select {
+	case <-ch2:
+		t.Fatalf("unexpected call to Finished() on second broadcast")
+	default:
 	}
 }
 
