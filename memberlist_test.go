@@ -613,17 +613,15 @@ func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
 }
 
 func TestMemberList_Members(t *testing.T) {
-	n1 := &Node{Name: "test"}
-	n2 := &Node{Name: "test2"}
-	n3 := &Node{Name: "test3"}
+	n1 := &Node{Name: "test", State: StateAlive}
+	n2 := &Node{Name: "test2", State: StateDead}
+	n3 := &Node{Name: "test3", State: StateSuspect}
 
-	m := &Memberlist{}
-	nodes := []*nodeState{
-		&nodeState{Node: *n1, State: StateAlive},
-		&nodeState{Node: *n2, State: StateDead},
-		&nodeState{Node: *n3, State: StateSuspect},
-	}
-	m.nodes = nodes
+	m := &Memberlist{nodes: []*nodeState{
+		{Node: *n1},
+		{Node: *n2},
+		{Node: *n3},
+	}}
 
 	members := m.Members()
 	if !reflect.DeepEqual(members, []*Node{n1, n3}) {
