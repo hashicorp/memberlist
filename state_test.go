@@ -1777,7 +1777,17 @@ func TestMemberList_DeadNodeLeft(t *testing.T) {
 	m.deadNode(&d)
 
 	// Read the dead event
-	<-ch
+	select {
+	case leave := <-ch:
+		if leave.Event != NodeLeave {
+			t.Fatalf("unexpected event: %v", leave.Event)
+		}
+		if leave.Node.State != StateLeft {
+			t.Fatalf("bad state in node leave event: got %v, want %v", leave.Node.State.metricsString(), StateLeft.metricsString())
+		}
+	default:
+		t.Fatalf("no leave message")
+	}
 
 	state := m.nodeMap[nodeName]
 	if state.State != StateLeft {
@@ -1859,6 +1869,9 @@ func TestMemberList_DeadNode(t *testing.T) {
 	case leave := <-ch:
 		if leave.Event != NodeLeave || leave.Node.Name != "test" {
 			t.Fatalf("bad node name")
+		}
+		if leave.Node.State != StateDead {
+			t.Fatalf("bad state: got %v, want %v", leave.Node.State.metricsString(), StateDead.metricsString())
 		}
 	default:
 		t.Fatalf("no leave message")
