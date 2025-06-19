@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: MPL-2.0
 
 version: "2"
-issues:
-  
 
 linters:
   enable:
