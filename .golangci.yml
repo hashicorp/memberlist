@@ -1,10 +1,11 @@
 # Copyright (c) HashiCorp, Inc.
 # SPDX-License-Identifier: MPL-2.0
 
-version: 2
+version: "2"
+issues:
+  
 
 linters:
-  disable-all: true
   enable:
     # (TODO) uncomment after fixing the lint issues
     # - gofmt
@@ -16,6 +17,8 @@ linters:
     - forbidigo
 
 issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
   # Disable the default exclude list so that all excludes are explicitly
   # defined in this file.
   exclude-use-default: false
