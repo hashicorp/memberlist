@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -33,7 +34,9 @@ const (
 )
 
 func init() {
-	seed.Init()
+	if _, err := seed.Init(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // Decode reverses the encode operation on a byte slice input
@@ -48,11 +51,9 @@ func decode(buf []byte, out interface{}) error {
 func encode(msgType messageType, in interface{}, msgpackUseNewTimeFormat bool) (*bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
 	buf.WriteByte(uint8(msgType))
-	hd := codec.MsgpackHandle{
-		BasicHandle: codec.BasicHandle{
-			TimeNotBuiltin: !msgpackUseNewTimeFormat,
-		},
-	}
+	hd := codec.MsgpackHandle{}
+	hd.TimeNotBuiltin = !msgpackUseNewTimeFormat
+
 	enc := codec.NewEncoder(buf, &hd)
 	err := enc.Encode(in)
 	return buf, err
@@ -148,7 +149,7 @@ OUTER:
 
 		// Check if we have this node already
 		for j := 0; j < len(kNodes); j++ {
-			if state.Node.Name == kNodes[j].Name {
+			if state.Name == kNodes[j].Name {
 				continue OUTER
 			}
 		}
@@ -190,7 +191,9 @@ func makeCompoundMessage(msgs [][]byte) *bytes.Buffer {
 
 	// Add the message lengths
 	for _, m := range msgs {
-		binary.Write(buf, binary.BigEndian, uint16(len(m)))
+		if err := binary.Write(buf, binary.BigEndian, uint16(len(m))); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// Append the messages
@@ -280,12 +283,16 @@ func decompressPayload(msg []byte) ([]byte, error) {
 func decompressBuffer(c *compress) ([]byte, error) {
 	// Verify the algorithm
 	if c.Algo != lzwAlgo {
-		return nil, fmt.Errorf("Cannot decompress unknown algorithm %d", c.Algo)
+		return nil, fmt.Errorf("cannot decompress unknown algorithm %d", c.Algo)
 	}
 
 	// Create a uncompressor
 	uncomp := lzw.NewReader(bytes.NewReader(c.Buf), lzw.LSB, lzwLitWidth)
-	defer uncomp.Close()
+	defer func() {
+		if err := uncomp.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	// Read all the data
 	var b bytes.Buffer

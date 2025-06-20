@@ -115,7 +115,10 @@ func encryptPayload(vsn encryptionVersion, key []byte, msg []byte, data []byte, 
 
 	// Ensure we are correctly padded (only version 0)
 	if vsn == 0 {
-		io.Copy(dst, bytes.NewReader(msg))
+		_, err = io.Copy(dst, bytes.NewReader(msg))
+		if err != nil {
+			return err
+		}
 		pkcs7encode(dst, offset+versionSize+nonceSize, aes.BlockSize)
 	}
 
@@ -172,18 +175,18 @@ func decryptMessage(key, msg []byte, data []byte) ([]byte, error) {
 func decryptPayload(keys [][]byte, msg []byte, data []byte) ([]byte, error) {
 	// Ensure we have at least one byte
 	if len(msg) == 0 {
-		return nil, fmt.Errorf("Cannot decrypt empty payload")
+		return nil, fmt.Errorf("cannot decrypt empty payload")
 	}
 
 	// Verify the version
 	vsn := encryptionVersion(msg[0])
 	if vsn > maxEncryptionVersion {
-		return nil, fmt.Errorf("Unsupported encryption version %d", msg[0])
+		return nil, fmt.Errorf("unsupported encryption version %d", msg[0])
 	}
 
 	// Ensure the length is sane
 	if len(msg) < encryptedLength(vsn, 0) {
-		return nil, fmt.Errorf("Payload is too small to decrypt: %d", len(msg))
+		return nil, fmt.Errorf("payload is too small to decrypt: %d", len(msg))
 	}
 
 	for _, key := range keys {
@@ -198,7 +201,7 @@ func decryptPayload(keys [][]byte, msg []byte, data []byte) ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("No installed keys could decrypt the message")
+	return nil, fmt.Errorf("no installed keys could decrypt the message")
 }
 
 func appendBytes(first []byte, second []byte) []byte {

@@ -166,8 +166,12 @@ func TestAddLabelHeaderToStream(t *testing.T) {
 
 	run := func(t *testing.T, tc testcase) {
 		server, client := net.Pipe()
-		defer server.Close()
-		defer client.Close()
+		defer func() {
+			_ = server.Close()
+		}()
+		defer func() {
+			_ = client.Close()
+		}()
 
 		var (
 			dataCh = make(chan []byte, 1)
@@ -190,8 +194,8 @@ func TestAddLabelHeaderToStream(t *testing.T) {
 		}
 		require.NoError(t, err)
 
-		client.Write([]byte(suffixData))
-		client.Close()
+		_, _ = client.Write([]byte(suffixData))
+		_ = client.Close()
 
 		expect := make([]byte, 0, len(suffixData)+len(tc.expectData))
 		expect = append(expect, tc.expectData...)
@@ -243,8 +247,12 @@ func TestRemoveLabelHeaderFromStream(t *testing.T) {
 
 	run := func(t *testing.T, tc testcase) {
 		server, client := net.Pipe()
-		defer server.Close()
-		defer client.Close()
+		defer func() {
+			_ = server.Close()
+		}()
+		defer func() {
+			_ = client.Close()
+		}()
 
 		var (
 			errCh = make(chan error, 1)
@@ -254,7 +262,7 @@ func TestRemoveLabelHeaderFromStream(t *testing.T) {
 			if err != nil {
 				errCh <- err
 			}
-			server.Close()
+			_ = server.Close()
 		}()
 
 		newConn, gotLabel, err := RemoveLabelHeaderFromStream(client)

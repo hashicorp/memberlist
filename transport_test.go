@@ -26,9 +26,15 @@ func TestTransport_Join(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	m1.setAlive()
+	if err := m1.setAlive(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
 	m1.schedule()
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+	}()
 
 	c2 := DefaultLANConfig()
 	c2.Name = "node2"
@@ -37,9 +43,15 @@ func TestTransport_Join(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	m2.setAlive()
+	if err := m2.setAlive(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
 	m2.schedule()
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+	}()
 
 	num, err := m2.Join([]string{c1.Name + "/" + t1.addr.String()})
 	if num != 1 {
@@ -72,9 +84,15 @@ func TestTransport_Send(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	m1.setAlive()
+	if err := m1.setAlive(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
 	m1.schedule()
-	defer m1.Shutdown()
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+	}()
 
 	c2 := DefaultLANConfig()
 	c2.Name = "node2"
@@ -83,9 +101,15 @@ func TestTransport_Send(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	m2.setAlive()
+	if err := m2.setAlive(); err != nil {
+		t.Fatalf("err: %v", err)
+	}
 	m2.schedule()
-	defer m2.Shutdown()
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+	}()
 
 	num, err := m2.Join([]string{c1.Name + "/" + t1.addr.String()})
 	if num != 1 {
@@ -172,7 +196,9 @@ func TestTransport_TcpListenBackoff(t *testing.T) {
 
 	// create a listener that will cause AcceptTCP calls to fail
 	listener, _ := net.ListenTCP("tcp", nil)
-	listener.Close()
+	if err := listener.Close(); err != nil {
+		t.Fatalf("not able to close the listener: %v", err)
+	}
 	go transport.tcpListen(listener)
 
 	// sleep (+yield) for testTime seconds before asking the accept loop to shut down

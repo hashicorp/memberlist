@@ -41,7 +41,9 @@ func TestLogging_Conn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	s = LogConn(conn)
 	if s != fmt.Sprintf("from=%s", conn.RemoteAddr().String()) {
