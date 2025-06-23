@@ -1370,7 +1370,8 @@ func (m *Memberlist) sendPingAndWaitForAck(a Address, ping ping, deadline time.T
 	}
 
 	if msgType != ackRespMsg {
-		return false, fmt.Errorf("unexpected msgType (%d) from ping %s", msgType, LogConn(conn))
+		//nolint: staticcheck
+		return false, fmt.Errorf("Unexpected msgType (%d) from ping %s", msgType, LogConn(conn))
 	}
 
 	var ack ackResp
