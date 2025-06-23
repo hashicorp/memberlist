@@ -929,8 +929,7 @@ func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 	}()
 
 	// This time, the node should not even see itself, so 2 expected nodes
-	//nolint: ineffassign
-	err = joinAndTestMemberShip(t, m4, []string{m1.config.BindAddr, m2.config.BindAddr}, 2)
+	_ = joinAndTestMemberShip(t, m4, []string{m1.config.BindAddr, m2.config.BindAddr}, 2)
 	// m1 and m2 should not see newcomer however
 	if len(m1.Members()) != 2 {
 		t.Fatalf("m1 should have 2 nodes! %v", m1.Members())

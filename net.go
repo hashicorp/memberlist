@@ -1341,8 +1341,7 @@ func (m *Memberlist) sendPingAndWaitForAck(a Address, ping ping, deadline time.T
 		return false, errNodeNamesAreRequired
 	}
 
-	//nolint: staticcheck
-	conn, err := m.transport.DialAddressTimeout(a, deadline.Sub(time.Now()))
+	conn, err := m.transport.DialAddressTimeout(a, time.Until(deadline))
 	if err != nil {
 		// If the node is actually dead we expect this to fail, so we
 		// shouldn't spam the logs with it. After this point, errors
