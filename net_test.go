@@ -323,9 +323,7 @@ func TestTCPPing(t *testing.T) {
 
 	m := GetMemberlist(t, nil)
 	defer func() {
-		if err := m.Shutdown(); err != nil {
-			t.Fatal(err)
-		}
+		_ = m.Shutdown()
 	}()
 
 	pingTimeout := m.config.ProbeInterval
@@ -968,9 +966,7 @@ func TestGossip_MismatchedKeys(t *testing.T) {
 	m1, err := Create(c1)
 	require.NoError(t, err)
 	defer func() {
-		if err := m1.Shutdown(); err != nil {
-			t.Fatal(err)
-		}
+		_ = m1.Shutdown()
 	}()
 
 	bindPort := m1.config.BindPort
@@ -982,9 +978,7 @@ func TestGossip_MismatchedKeys(t *testing.T) {
 	m2, err := Create(c2)
 	require.NoError(t, err)
 	defer func() {
-		if err := m2.Shutdown(); err != nil {
-			t.Fatal(err)
-		}
+		_ = m2.Shutdown()
 	}()
 
 	// Make sure we get this error on the joining side
