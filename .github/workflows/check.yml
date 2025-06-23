@@ -1,7 +1,8 @@
 name: Checks
 
 on:
-  push:
+  pull_request: 
+    branches: [master]
 
 # This workflow runs for not-yet-reviewed external contributions and so it
 # intentionally has no write access and only limited read access to the
@@ -67,7 +68,7 @@ jobs:
         run: |
           go test ./...
           make cov
-      - name: Upload coveragee report
+      - name: Upload coverage report
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
          path: coverage.out
