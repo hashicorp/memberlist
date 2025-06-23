@@ -447,10 +447,7 @@ func (m *Memberlist) setAlive() error {
 			SockAddr: ipAddr,
 		},
 	}
-	_, publicIfs, err := sockaddr.IfByRFC("6890", ifAddrs)
-	if err != nil {
-		m.logger.Printf("err: %v", err)
-	}
+	_, publicIfs, _ := sockaddr.IfByRFC("6890", ifAddrs)
 
 	if len(publicIfs) > 0 && !m.config.EncryptionEnabled() {
 		m.logger.Printf("[WARN] memberlist: Binding to public address without encryption!")
