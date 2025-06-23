@@ -201,7 +201,8 @@ func decryptPayload(keys [][]byte, msg []byte, data []byte) ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no installed keys could decrypt the message")
+	//nolint: staticcheck
+	return nil, fmt.Errorf("No installed keys could decrypt the message")
 }
 
 func appendBytes(first []byte, second []byte) []byte {
