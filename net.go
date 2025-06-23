@@ -1341,7 +1341,8 @@ func (m *Memberlist) sendPingAndWaitForAck(a Address, ping ping, deadline time.T
 		return false, errNodeNamesAreRequired
 	}
 
-	conn, err := m.transport.DialAddressTimeout(a, time.Until(deadline))
+	//nolint: staticcheck
+	conn, err := m.transport.DialAddressTimeout(a, deadline.Sub(time.Now()))
 	if err != nil {
 		// If the node is actually dead we expect this to fail, so we
 		// shouldn't spam the logs with it. After this point, errors
@@ -1378,7 +1379,8 @@ func (m *Memberlist) sendPingAndWaitForAck(a Address, ping ping, deadline time.T
 	}
 
 	if ack.SeqNo != ping.SeqNo {
-		return false, fmt.Errorf("sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo)
+		//nolint: staticcheck
+		return false, fmt.Errorf("Sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo)
 	}
 
 	return true, nil
