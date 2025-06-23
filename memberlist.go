@@ -283,7 +283,8 @@ func (m *Memberlist) Join(existing []string) (int, error) {
 			hp := joinHostPort(addr.ip.String(), addr.port)
 			a := Address{Addr: hp, Name: addr.nodeName}
 			if err := m.pushPullNode(a, true); err != nil {
-				err = fmt.Errorf("failed to join %s: %v", a.Addr, err)
+				//nolint: staticcheck
+				err = fmt.Errorf("Failed to join %s: %v", a.Addr, err)
 				errs = multierror.Append(errs, err)
 				m.logger.Printf("[DEBUG] memberlist: %v", err)
 				continue
