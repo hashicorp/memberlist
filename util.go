@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -34,9 +33,7 @@ const (
 )
 
 func init() {
-	if _, err := seed.Init(); err != nil {
-		log.Fatal(err)
-	}
+	_, _ = seed.Init()
 }
 
 // Decode reverses the encode operation on a byte slice input
@@ -191,9 +188,7 @@ func makeCompoundMessage(msgs [][]byte) *bytes.Buffer {
 
 	// Add the message lengths
 	for _, m := range msgs {
-		if err := binary.Write(buf, binary.BigEndian, uint16(len(m))); err != nil {
-			log.Fatal(err)
-		}
+		_ = binary.Write(buf, binary.BigEndian, uint16(len(m)))
 	}
 
 	// Append the messages
@@ -289,9 +284,7 @@ func decompressBuffer(c *compress) ([]byte, error) {
 	// Create a uncompressor
 	uncomp := lzw.NewReader(bytes.NewReader(c.Buf), lzw.LSB, lzwLitWidth)
 	defer func() {
-		if err := uncomp.Close(); err != nil {
-			log.Fatal(err)
-		}
+		_ = uncomp.Close()
 	}()
 
 	// Read all the data

@@ -32,7 +32,7 @@ func getBindAddrNet(network byte) net.IP {
 
 	result := net.IPv4(127, 0, network, bindNum)
 	bindNum++
-	//nolint: staticcheck
+	//nolint:staticcheck // SA4003: no value of type byte is greater than math.MaxUint8
 	if bindNum > 255 {
 		bindNum = 10
 	}
@@ -861,7 +861,9 @@ func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 	m1, err := Create(c1)
 	require.NoError(t, err)
 	defer func() {
-		_ = m1.Shutdown()
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	bindPort := m1.config.BindPort
@@ -874,7 +876,9 @@ func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 	m2, err := Create(c2)
 	require.NoError(t, err)
 	defer func() {
-		_ = m2.Shutdown()
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	err = joinAndTestMemberShip(t, m2, []string{m1.config.Name + "/" + m1.config.BindAddr}, 2)
@@ -891,7 +895,9 @@ func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 	m3, err := Create(c3)
 	require.NoError(t, err)
 	defer func() {
-		_ = m3.Shutdown()
+		if err := m3.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 	// The rogue can see others, but others cannot see it
 	err = joinAndTestMemberShip(t, m3, []string{m1.config.Name + "/" + m1.config.BindAddr}, 3)
@@ -925,7 +931,9 @@ func TestMemberlist_JoinDifferentNetworksMultiMasks(t *testing.T) {
 	m4, err := Create(c4)
 	require.NoError(t, err)
 	defer func() {
-		_ = m4.Shutdown()
+		if err := m4.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// This time, the node should not even see itself, so 2 expected nodes

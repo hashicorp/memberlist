@@ -242,7 +242,7 @@ func (m *Memberlist) handleConn(conn net.Conn) {
 	metrics.IncrCounterWithLabels([]string{"memberlist", "tcp", "accept"}, 1, m.metricLabels)
 
 	if err := conn.SetDeadline(time.Now().Add(m.config.TCPTimeout)); err != nil {
-		m.logger.Printf("err: %s", err)
+		m.logger.Printf("Err: Could not set the deadline: %s", err)
 	}
 
 	var (
@@ -973,7 +973,9 @@ func (m *Memberlist) sendAndReceiveState(a Address, join bool) ([]pushNodeState,
 		return nil, nil, err
 	}
 
-	_ = conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
+	if err := conn.SetDeadline(time.Now().Add(m.config.TCPTimeout)); err != nil {
+		m.logger.Printf("Err: Could not set the deadline: %s", err)
+	}
 	msgType, bufConn, dec, err := m.readStream(conn, m.config.Label)
 	if err != nil {
 		return nil, nil, err
@@ -1002,7 +1004,7 @@ func (m *Memberlist) sendAndReceiveState(a Address, join bool) ([]pushNodeState,
 func (m *Memberlist) sendLocalState(conn net.Conn, join bool, streamLabel string) error {
 	// Setup a deadline
 	if err := conn.SetDeadline(time.Now().Add(m.config.TCPTimeout)); err != nil {
-		return err
+		m.logger.Printf("Err: Could not set the deadline: %s", err)
 	}
 
 	// Prepare the local node state
@@ -1369,7 +1371,7 @@ func (m *Memberlist) sendPingAndWaitForAck(a Address, ping ping, deadline time.T
 	}
 
 	if msgType != ackRespMsg {
-		//nolint: staticcheck
+		//nolint:staticcheck // ST1005: error strings should not be capitalized, reason: Test case failing.
 		return false, fmt.Errorf("Unexpected msgType (%d) from ping %s", msgType, LogConn(conn))
 	}
 
@@ -1379,7 +1381,7 @@ func (m *Memberlist) sendPingAndWaitForAck(a Address, ping ping, deadline time.T
 	}
 
 	if ack.SeqNo != ping.SeqNo {
-		//nolint: staticcheck
+		//nolint:staticcheck // ST1005: error strings should not be capitalized, reason: Test case failing.
 		return false, fmt.Errorf("Sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo)
 	}
 

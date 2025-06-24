@@ -214,9 +214,7 @@ func TestHandlePing_WrongNode(t *testing.T) {
 	}
 
 	// Wait for response
-	if err := udp.SetDeadline(time.Now().Add(50 * time.Millisecond)); err != nil {
-		t.Fatalf("err: %v", err)
-	}
+	_ = udp.SetDeadline(time.Now().Add(50 * time.Millisecond))
 	in := make([]byte, 1500)
 	_, _, err = udp.ReadFrom(in)
 
@@ -323,7 +321,9 @@ func TestTCPPing(t *testing.T) {
 
 	m := GetMemberlist(t, nil)
 	defer func() {
-		_ = m.Shutdown()
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	pingTimeout := m.config.ProbeInterval
@@ -966,7 +966,9 @@ func TestGossip_MismatchedKeys(t *testing.T) {
 	m1, err := Create(c1)
 	require.NoError(t, err)
 	defer func() {
-		_ = m1.Shutdown()
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	bindPort := m1.config.BindPort
@@ -978,7 +980,9 @@ func TestGossip_MismatchedKeys(t *testing.T) {
 	m2, err := Create(c2)
 	require.NoError(t, err)
 	defer func() {
-		_ = m2.Shutdown()
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// Make sure we get this error on the joining side

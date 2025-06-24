@@ -115,10 +115,7 @@ func encryptPayload(vsn encryptionVersion, key []byte, msg []byte, data []byte, 
 
 	// Ensure we are correctly padded (only version 0)
 	if vsn == 0 {
-		_, err = io.Copy(dst, bytes.NewReader(msg))
-		if err != nil {
-			return err
-		}
+		_, _ = io.Copy(dst, bytes.NewReader(msg))
 		pkcs7encode(dst, offset+versionSize+nonceSize, aes.BlockSize)
 	}
 
@@ -201,7 +198,7 @@ func decryptPayload(keys [][]byte, msg []byte, data []byte) ([]byte, error) {
 		}
 	}
 
-	//nolint: staticcheck
+	//nolint:staticcheck // ST1005: error strings should not be capitalized, reason: Test case failing
 	return nil, fmt.Errorf("No installed keys could decrypt the message")
 }
 
