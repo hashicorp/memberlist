@@ -32,10 +32,6 @@ func getBindAddrNet(network byte) net.IP {
 
 	result := net.IPv4(127, 0, network, bindNum)
 	bindNum++
-	//nolint:staticcheck // SA4003: no value of type byte is greater than math.MaxUint8
-	if bindNum > 255 {
-		bindNum = 10
-	}
 
 	return result
 }

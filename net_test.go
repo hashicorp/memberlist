@@ -436,7 +436,7 @@ func TestTCPPing(t *testing.T) {
 	}()
 	deadline = time.Now().Add(pingTimeout)
 	didContact, err = m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
-	if err == nil || !strings.Contains(err.Error(), "Sequence number") {
+	if err == nil || !strings.Contains(err.Error(), "sequence number") {
 		t.Fatalf("expected an error from mis-matched sequence number")
 	}
 	if didContact {
@@ -480,7 +480,7 @@ func TestTCPPing(t *testing.T) {
 	}()
 	deadline = time.Now().Add(pingTimeout)
 	didContact, err = m.sendPingAndWaitForAck(tcpAddr2, pingOut, deadline)
-	if err == nil || !strings.Contains(err.Error(), "Unexpected msgType") {
+	if err == nil || !strings.Contains(err.Error(), "unexpected msgType") {
 		t.Fatalf("expected an error from bogus message")
 	}
 	if didContact {

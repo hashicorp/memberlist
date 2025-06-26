@@ -1371,8 +1371,7 @@ func (m *Memberlist) sendPingAndWaitForAck(a Address, ping ping, deadline time.T
 	}
 
 	if msgType != ackRespMsg {
-		//nolint:staticcheck // ST1005: error strings should not be capitalized, reason: Test case failing.
-		return false, fmt.Errorf("Unexpected msgType (%d) from ping %s", msgType, LogConn(conn))
+		return false, fmt.Errorf("unexpected msgType (%d) from ping %s", msgType, LogConn(conn))
 	}
 
 	var ack ackResp
@@ -1381,8 +1380,7 @@ func (m *Memberlist) sendPingAndWaitForAck(a Address, ping ping, deadline time.T
 	}
 
 	if ack.SeqNo != ping.SeqNo {
-		//nolint:staticcheck // ST1005: error strings should not be capitalized, reason: Test case failing.
-		return false, fmt.Errorf("Sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo)
+		return false, fmt.Errorf("sequence number from ack (%d) doesn't match ping (%d)", ack.SeqNo, ping.SeqNo)
 	}
 
 	return true, nil
