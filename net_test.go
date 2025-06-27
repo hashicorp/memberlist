@@ -987,7 +987,7 @@ func TestGossip_MismatchedKeys(t *testing.T) {
 
 	// Make sure we get this error on the joining side
 	_, err = m2.Join([]string{c1.Name + "/" + c1.BindAddr})
-	if err == nil || !strings.Contains(err.Error(), "No installed keys could decrypt the message") {
+	if err == nil || !strings.Contains(err.Error(), "no installed keys could decrypt the message") {
 		t.Fatalf("bad: %s", err)
 	}
 }

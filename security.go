@@ -198,8 +198,7 @@ func decryptPayload(keys [][]byte, msg []byte, data []byte) ([]byte, error) {
 		}
 	}
 
-	//nolint:staticcheck // ST1005: error strings should not be capitalized, reason: Test case failing
-	return nil, fmt.Errorf("No installed keys could decrypt the message")
+	return nil, fmt.Errorf("no installed keys could decrypt the message")
 }
 
 func appendBytes(first []byte, second []byte) []byte {
