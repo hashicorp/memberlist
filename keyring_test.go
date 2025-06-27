@@ -150,7 +150,7 @@ func TestKeyRing_MultiKeyEncryptDecrypt(t *testing.T) {
 		t.Fatalf("err: %s", err)
 	}
 
-	msg, err = decryptPayload(keyring.GetKeys(), buf.Bytes(), extra)
+	_, err = decryptPayload(keyring.GetKeys(), buf.Bytes(), extra)
 	if err == nil {
 		t.Fatalf("Expected no keys to decrypt message")
 	}

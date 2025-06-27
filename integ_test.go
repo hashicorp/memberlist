@@ -55,7 +55,11 @@ func TestMemberlist_Integ(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected err: %s", err)
 		}
-		defer m.Shutdown()
+		defer func() {
+			if err := m.Shutdown(); err != nil {
+				t.Fatal(err)
+			}
+		}()
 
 		members = append(members, m)
 
