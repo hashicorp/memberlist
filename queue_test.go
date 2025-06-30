@@ -60,6 +60,8 @@ func TestLimitedBroadcastLess(t *testing.T) {
 func TestTransmitLimited_Queue(t *testing.T) {
 	q := &TransmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 1 }}
 	q.QueueBroadcast(&memberlistBroadcast{"test", nil, nil})
+	// Should invalidate and replace the only message in the queue
+	q.QueueBroadcast(&memberlistBroadcast{"test", nil, nil})
 	q.QueueBroadcast(&memberlistBroadcast{"foo", nil, nil})
 	q.QueueBroadcast(&memberlistBroadcast{"bar", nil, nil})
 
