@@ -55,7 +55,6 @@ type Memberlist struct {
 	leaveBroadcast chan struct{}
 
 	shutdownLock sync.Mutex // Serializes calls to Shutdown
-	leaveLock    sync.Mutex // Serializes calls to Leave
 
 	transport NodeAwareTransport
 
@@ -647,8 +646,6 @@ func (m *Memberlist) NumMembers() (alive int) {
 // This method is safe to call multiple times, but must not be called
 // after the cluster is already shut down.
 func (m *Memberlist) Leave(timeout time.Duration) error {
-	m.leaveLock.Lock()
-	defer m.leaveLock.Unlock()
 
 	if m.hasShutdown() {
 		panic("leave after shutdown")
