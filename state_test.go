@@ -2588,6 +2588,131 @@ func TestVerifyProtocol(t *testing.T) {
 	}
 }
 
+func TestMemberList_Validation_BothPingsDisabled(t *testing.T) {
+	c := DefaultLANConfig()
+	c.Name = "test"
+	c.DisableTcpPings = true
+	c.DisableUdpPings = true
+
+	_, err := Create(c)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot disable both TCP and UDP pings")
+}
+
+func TestMemberList_DisableUdpPings_Functional(t *testing.T) {
+	net := &MockNetwork{}
+
+	// Create memberlist with UDP pings disabled
+	c1 := DefaultLANConfig()
+	c1.Name = "node1"
+	c1.Transport = net.NewTransport("node1")
+	c1.DisableUdpPings = true
+	c1.ProbeTimeout = 10 * time.Millisecond
+	c1.ProbeInterval = 50 * time.Millisecond
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// Create a second memberlist
+	c2 := DefaultLANConfig()
+	c2.Name = "node2"
+	c2.Transport = net.NewTransport("node2")
+	c2.ProbeTimeout = 10 * time.Millisecond
+	c2.ProbeInterval = 50 * time.Millisecond
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	num, err := m2.Join([]string{c1.Name + "/" + c1.Transport.(*MockTransport).addr.String()})
+	require.NoError(t, err)
+	require.Equal(t, 1, num)
+
+	waitUntilSize(t, m1, 2)
+	waitUntilSize(t, m2, 2)
+
+	// Get the node state for node2 from m1's perspective
+	m1.nodeLock.RLock()
+	node2State := m1.nodeMap["node2"]
+	m1.nodeLock.RUnlock()
+	require.NotNil(t, node2State)
+
+	// Probe node2 - this should skip UDP pings and go directly to indirect/TCP
+	// Since UDP pings are disabled, it should still work via TCP fallback
+	m1.probeNode(node2State)
+
+	// The node should still be alive (TCP fallback should work)
+	require.Equal(t, StateAlive, node2State.State)
+}
+
+func TestMemberList_DisableUdpPingsForNode_Functional(t *testing.T) {
+	net := &MockNetwork{}
+
+	// Create memberlist with UDP pings disabled for specific node
+	c1 := DefaultLANConfig()
+	c1.Name = "node1"
+	c1.Transport = net.NewTransport("node1")
+	c1.DisableUdpPingsForNode = func(nodeName string) bool {
+		return nodeName == "node2"
+	}
+	c1.ProbeTimeout = 10 * time.Millisecond
+	c1.ProbeInterval = 50 * time.Millisecond
+
+	m1, err := Create(c1)
+	require.NoError(t, err)
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// Create a second memberlist
+	c2 := DefaultLANConfig()
+	c2.Name = "node2"
+	c2.Transport = net.NewTransport("node2")
+	c2.ProbeTimeout = 10 * time.Millisecond
+	c2.ProbeInterval = 50 * time.Millisecond
+
+	m2, err := Create(c2)
+	require.NoError(t, err)
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// Join the nodes
+	num, err := m2.Join([]string{c1.Name + "/" + c1.Transport.(*MockTransport).addr.String()})
+	require.NoError(t, err)
+	require.Equal(t, 1, num)
+
+	// Wait for them to see each other
+	waitUntilSize(t, m1, 2)
+	waitUntilSize(t, m2, 2)
+
+	// Get the node state for node2 from m1's perspective
+	m1.nodeLock.RLock()
+	node2State := m1.nodeMap["node2"]
+	m1.nodeLock.RUnlock()
+	require.NotNil(t, node2State)
+
+	// Probe node2 - this should skip UDP pings for node2 specifically
+	// Since UDP pings are disabled for node2, it should still work via TCP fallback
+	m1.probeNode(node2State)
+
+	// The node should still be alive (TCP fallback should work)
+	require.Equal(t, StateAlive, node2State.State)
+}
+
 func testVerifyProtocolSingle(t *testing.T, A [][6]uint8, B [][6]uint8, expect bool) {
 	m := GetMemberlist(t, nil)
 	defer func() {
