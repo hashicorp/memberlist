@@ -159,11 +159,33 @@ OUTER:
 
 // makeCompoundMessages takes a list of messages and packs
 // them into one or multiple messages based on the limitations
-// of compound messages (255 messages each).
+// of compound messages (255 messages each, 64KB max message size).
+//
+// The input msgs can be modified in-place.
 func makeCompoundMessages(msgs [][]byte) []*bytes.Buffer {
-	const maxMsgs = 255
+	const (
+		maxMsgs      = math.MaxUint8
+		maxMsgLength = math.MaxUint16
+	)
+
+	// Optimistically assume there will be no big message.
 	bufs := make([]*bytes.Buffer, 0, (len(msgs)+(maxMsgs-1))/maxMsgs)
 
+	// Do not add to a compound message any message bigger than the max message length
+	// we can store.
+	smallMsgs := msgs[:0]
+	for _, msg := range msgs {
+		if len(msg) <= maxMsgLength {
+			// Keep it.
+			smallMsgs = append(smallMsgs, msg)
+		} else {
+			// This message is a large one, so we send it alone.
+			bufs = append(bufs, bytes.NewBuffer(msg))
+		}
+	}
+	msgs = smallMsgs
+
+	// Group remaining messages in compound message(s).
 	for ; len(msgs) > maxMsgs; msgs = msgs[maxMsgs:] {
 		bufs = append(bufs, makeCompoundMessage(msgs[:maxMsgs]))
 	}
