@@ -78,9 +78,8 @@ func (n *Node) String() string {
 // NodeState is used to manage our state view of another node
 type nodeState struct {
 	Node
-	Incarnation uint32        // Last known incarnation number
-	State       NodeStateType // Current state
-	StateChange time.Time     // Time last state change happened
+	Incarnation uint32    // Last known incarnation number
+	StateChange time.Time // Time last state change happened
 }
 
 // Address returns the host:port form of a node's address, suitable for use
@@ -1003,12 +1002,12 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		}
 		state = &nodeState{
 			Node: Node{
-				Name: a.Node,
-				Addr: a.Addr,
-				Port: a.Port,
-				Meta: a.Meta,
+				Name:  a.Node,
+				Addr:  a.Addr,
+				Port:  a.Port,
+				Meta:  a.Meta,
+				State: StateDead,
 			},
-			State: StateDead,
 		}
 		if len(a.Vsn) > 5 {
 			state.PMin = a.Vsn[0]
