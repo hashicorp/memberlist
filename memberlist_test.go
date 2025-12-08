@@ -1958,6 +1958,7 @@ func (m *MockPing) AckPayload() []byte {
 }
 
 func TestMemberlist_PingDelegate(t *testing.T) {
+	
 	newConfig := func() *Config {
 		c := testConfig(t)
 		c.ProbeInterval = 100 * time.Millisecond
