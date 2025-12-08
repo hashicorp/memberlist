@@ -1945,11 +1945,11 @@ func (m *MockPing) NotifyPingComplete(other *Node, rtt time.Duration, payload []
 	m.payload = payload
 }
 
-func (m *MockPing) getContents() (*Node, time.Duration, []byte) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.other, m.rtt, m.payload
-}
+// func (m *MockPing) getContents() (*Node, time.Duration, []byte) {
+// 	m.mu.Lock()
+// 	defer m.mu.Unlock()
+// 	return m.other, m.rtt, m.payload
+// }
 
 const DEFAULT_PAYLOAD = "whatever"
 
