@@ -1958,7 +1958,6 @@ func (m *MockPing) AckPayload() []byte {
 }
 
 func TestMemberlist_PingDelegate(t *testing.T) {
-	
 	newConfig := func() *Config {
 		c := testConfig(t)
 		c.ProbeInterval = 100 * time.Millisecond
@@ -1998,6 +1997,7 @@ func TestMemberlist_PingDelegate(t *testing.T) {
 	waitUntilSize(t, m1, 2)
 	waitUntilSize(t, m2, 2)
 
+	// Sleep
 	time.Sleep(2 * c1.ProbeInterval)
 
 	require.NoError(t, m1.Shutdown())
