@@ -1997,7 +1997,6 @@ func TestMemberlist_PingDelegate(t *testing.T) {
 	waitUntilSize(t, m1, 2)
 	waitUntilSize(t, m2, 2)
 
-	// Sleep
 	time.Sleep(2 * c1.ProbeInterval)
 
 	require.NoError(t, m1.Shutdown())
