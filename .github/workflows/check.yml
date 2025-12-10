@@ -75,7 +75,7 @@ jobs:
           echo "Step 1: Environment variables" && printenv
           echo "Step 2: Network interfaces" && ip addr
           echo "Step 3: Ulimit values" && ulimit -a
-          echo "Step 4: UDP connectivity test" && nc -u -l 127.0.0.2 9999 & sleep 1 && echo test | nc -u 127.0.0.2 9999 && sleep 1 && pkill nc
+          echo "Step 4: UDP connectivity test" && (echo test | nc -u -w1 127.0.0.2 9999 & sleep 1)
           echo "Step 5: Go version" && go version
           echo "Step 6: Current user" && whoami
           go test -v -run ^TestMemberlist_PingDelegate$
