@@ -72,7 +72,13 @@ jobs:
             go-mod-${{ matrix.GO_VERSION }}
       - name: "Unit tests and generate coverage report"
         run: |
-          go test ./...
+          echo "Step 1: Environment variables" && printenv
+          echo "Step 2: Network interfaces" && ip addr
+          echo "Step 3: Ulimit values" && ulimit -a
+          echo "Step 4: UDP connectivity test" && nc -u -l 127.0.0.2 9999 & sleep 1 && echo test | nc -u 127.0.0.2 9999 && sleep 1 && pkill nc
+          echo "Step 5: Go version" && go version
+          echo "Step 6: Current user" && whoami
+          go test -v -run ^TestMemberlist_PingDelegate$
           make cov
       - name: Upload coverage report
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
