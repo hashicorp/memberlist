@@ -1945,11 +1945,11 @@ func (m *MockPing) NotifyPingComplete(other *Node, rtt time.Duration, payload []
 	m.payload = payload
 }
 
-// func (m *MockPing) getContents() (*Node, time.Duration, []byte) {
-// 	m.mu.Lock()
-// 	defer m.mu.Unlock()
-// 	return m.other, m.rtt, m.payload
-// }
+func (m *MockPing) getContents() (*Node, time.Duration, []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.other, m.rtt, m.payload
+}
 
 const DEFAULT_PAYLOAD = "whatever"
 
@@ -1957,72 +1957,72 @@ func (m *MockPing) AckPayload() []byte {
 	return []byte(DEFAULT_PAYLOAD)
 }
 
-// func TestMemberlist_PingDelegate(t *testing.T) {
-// 	newConfig := func() *Config {
-// 		c := testConfig(t)
-// 		c.ProbeInterval = 100 * time.Millisecond
-// 		c.Ping = &MockPing{}
-// 		return c
-// 	}
+func TestMemberlist_PingDelegate(t *testing.T) {
+	newConfig := func() *Config {
+		c := testConfig(t)
+		c.ProbeInterval = 100 * time.Millisecond
+		c.Ping = &MockPing{}
+		return c
+	}
 
-// 	c1 := newConfig()
+	c1 := newConfig()
 
-// 	m1, err := Create(c1)
-// 	require.NoError(t, err)
-// 	defer func() {
-// 		if err := m1.Shutdown(); err != nil {
-// 			t.Fatal(err)
-// 		}
-// 	}()
+	m1, err := Create(c1)
+	require.NoError(t, err)
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
-// 	bindPort := m1.config.BindPort
+	bindPort := m1.config.BindPort
 
-// 	// Create a second node
-// 	c2 := newConfig()
-// 	c2.BindPort = bindPort
-// 	mock := c2.Ping.(*MockPing)
+	// Create a second node
+	c2 := newConfig()
+	c2.BindPort = bindPort
+	mock := c2.Ping.(*MockPing)
 
-// 	m2, err := Create(c2)
-// 	require.NoError(t, err)
-// 	defer func() {
-// 		if err := m2.Shutdown(); err != nil {
-// 			t.Fatal(err)
-// 		}
-// 	}()
+	m2, err := Create(c2)
+	require.NoError(t, err)
+	defer func() {
+		if err := m2.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
-// 	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
-// 	require.NoError(t, err)
-// 	require.Equal(t, 1, num)
+	num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
+	require.NoError(t, err)
+	require.Equal(t, 1, num)
 
-// 	waitUntilSize(t, m1, 2)
-// 	waitUntilSize(t, m2, 2)
+	waitUntilSize(t, m1, 2)
+	waitUntilSize(t, m2, 2)
 
-// 	time.Sleep(2 * c1.ProbeInterval)
+	time.Sleep(2 * c1.ProbeInterval)
 
-// 	require.NoError(t, m1.Shutdown())
-// 	require.NoError(t, m2.Shutdown())
+	require.NoError(t, m1.Shutdown())
+	require.NoError(t, m2.Shutdown())
 
-// 	mOther, mRTT, mPayload := mock.getContents()
+	mOther, mRTT, mPayload := mock.getContents()
 
-// 	// Ensure we were notified
-// 	if mOther == nil {
-// 		t.Fatalf("should get notified")
-// 	}
+	// Ensure we were notified
+	if mOther == nil {
+		t.Fatalf("should get notified")
+	}
 
-// 	if !reflect.DeepEqual(mOther, m1.LocalNode()) {
-// 		t.Fatalf("not notified about the correct node; expected: %+v; actual: %+v",
-// 			m2.LocalNode(), mOther)
-// 	}
+	if !reflect.DeepEqual(mOther, m1.LocalNode()) {
+		t.Fatalf("not notified about the correct node; expected: %+v; actual: %+v",
+			m2.LocalNode(), mOther)
+	}
 
-// 	if mRTT <= 0 {
-// 		t.Fatalf("rtt should be greater than 0")
-// 	}
+	if mRTT <= 0 {
+		t.Fatalf("rtt should be greater than 0")
+	}
 
-// 	if !bytes.Equal(mPayload, []byte(DEFAULT_PAYLOAD)) {
-// 		t.Fatalf("incorrect payload. expected: %v; actual: %v",
-// 			[]byte(DEFAULT_PAYLOAD), mPayload)
-// 	}
-// }
+	if !bytes.Equal(mPayload, []byte(DEFAULT_PAYLOAD)) {
+		t.Fatalf("incorrect payload. expected: %v; actual: %v",
+			[]byte(DEFAULT_PAYLOAD), mPayload)
+	}
+}
 
 func waitUntilSize(t *testing.T, m *Memberlist, expected int) {
 	t.Helper()
