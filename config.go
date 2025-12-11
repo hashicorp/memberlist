@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-metrics/compat"
+	metrics "github.com/hashicorp/go-metrics/compat"
 	"github.com/hashicorp/go-multierror"
 )
 
@@ -139,6 +139,15 @@ type Config struct {
 	// DisableTcpPingsForNode is like DisableTcpPings, but lets you control
 	// whether to perform TCP pings on a node-by-node basis.
 	DisableTcpPingsForNode func(nodeName string) bool
+
+	// DisableUdpPings will turn off all UDP pings (both direct and indirect)
+	// that are attempted during node probing. This forces the use of TCP-only
+	// communication for failure detection.
+	DisableUdpPings bool
+
+	// DisableUdpPingsForNode is like DisableUdpPings, but lets you control
+	// whether to perform UDP pings on a node-by-node basis.
+	DisableUdpPingsForNode func(nodeName string) bool
 
 	// AwarenessMaxMultiplier will increase the probe interval if the node
 	// becomes aware that it might be degraded and not meeting the soft real
@@ -317,6 +326,7 @@ func DefaultLANConfig() *Config {
 		ProbeTimeout:            500 * time.Millisecond, // Reasonable RTT time for LAN
 		ProbeInterval:           1 * time.Second,        // Failure check every second
 		DisableTcpPings:         false,                  // TCP pings are safe, even with mixed versions
+		DisableUdpPings:         false,                  // UDP pings are enabled by default
 		AwarenessMaxMultiplier:  8,                      // Probe interval backs off to 8 seconds
 
 		GossipNodes:          3,                      // Gossip to 3 nodes
