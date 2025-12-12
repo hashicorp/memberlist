@@ -262,7 +262,23 @@ func (q *TransmitLimitedQueue) deleteItem(cur *limitedBroadcast) {
 // addItem adds the given item into the overall datastructure. You must already
 // hold the mutex.
 func (q *TransmitLimitedQueue) addItem(cur *limitedBroadcast) {
-	_ = q.tq.ReplaceOrInsert(cur)
+	old := q.tq.ReplaceOrInsert(cur)
+	// All items in the tree are supposed to be unique, so inserting should
+	// never replace any existing tree item. At least that's the theory.
+	// Bugs, bit-flip errors, or q.idGen wrapping around could result in cur
+	// being "equal to" an existing item in the tree. Dropping a broadcast
+	// which has neither been invalidated nor reached the transmit limit
+	// violates the contract with the application, but at least we can call
+	// Finished() on the dropped broadcast so the application doesn't leak
+	// resources or wait forever for a callback that never arrives.
+	if old != nil {
+		old := old.(*limitedBroadcast)
+		old.b.Finished()
+		if old.name != "" {
+			delete(q.tm, old.name)
+		}
+	}
+
 	if cur.name != "" {
 		q.tm[cur.name] = cur
 	}
