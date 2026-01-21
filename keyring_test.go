@@ -5,6 +5,7 @@ package memberlist
 
 import (
 	"bytes"
+	"sync"
 	"testing"
 )
 
@@ -154,4 +155,31 @@ func TestKeyRing_MultiKeyEncryptDecrypt(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected no keys to decrypt message")
 	}
+}
+
+func TestKeyring_AddConcurrentKeys(t *testing.T) {
+	keyring, err := NewKeyring(nil, TestKeys[0])
+	if err != nil {
+		t.Fatalf("err :%s", err)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		errs <- keyring.AddKey(TestKeys[1])
+	}()
+	go func() {
+		defer wg.Done()
+		errs <- keyring.AddKey(TestKeys[2])
+	}()
+
+	if err := <-errs; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errs; err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
 }
