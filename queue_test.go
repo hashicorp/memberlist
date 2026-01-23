@@ -4,6 +4,7 @@
 package memberlist
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/btree"
@@ -114,39 +115,65 @@ func TestTransmitLimited_GetBroadcasts(t *testing.T) {
 }
 
 func TestTransmitLimited_GetBroadcasts_Limit(t *testing.T) {
-	q := &TransmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 10 }}
+	q := &TransmitLimitedQueue{RetransmitMult: 1, NumNodes: func() int { return 100 }}
 
 	require.Equal(t, int64(0), q.idGen, "the id generator seed starts at zero")
-	require.Equal(t, 2, retransmitLimit(q.RetransmitMult, q.NumNodes()), "sanity check transmit limits")
+	require.Equal(t, 3, retransmitLimit(q.RetransmitMult, q.NumNodes()), "sanity check transmit limits")
 
 	// 18 bytes per message
-	q.QueueBroadcast(&memberlistBroadcast{"test", []byte("1. this is a test."), nil})
-	q.QueueBroadcast(&memberlistBroadcast{"foo", []byte("2. this is a test."), nil})
-	q.QueueBroadcast(&memberlistBroadcast{"bar", []byte("3. this is a test."), nil})
-	q.QueueBroadcast(&memberlistBroadcast{"baz", []byte("4. this is a test."), nil})
+	q.queueBroadcast(&memberlistBroadcast{"test", []byte("1. this is a test."), nil}, 1)
+	q.queueBroadcast(&memberlistBroadcast{"foo", []byte("2. this is a test."), nil}, 1)
+	// 54 bytes per message
+	q.queueBroadcast(&memberlistBroadcast{"bar", []byte(strings.Repeat("3. this is a test.", 3)), nil}, 0)
+	q.queueBroadcast(&memberlistBroadcast{"baz", []byte(strings.Repeat("4. this is a test.", 3)), nil}, 1)
 
 	require.Equal(t, int64(4), q.idGen, "we handed out 4 IDs")
 
+	dump := q.orderedView(false)
+	if dump[0].b.(*memberlistBroadcast).node != "bar" {
+		t.Fatalf("missing bar")
+	}
+	if dump[1].b.(*memberlistBroadcast).node != "baz" {
+		t.Fatalf("missing baz")
+	}
+	if dump[2].b.(*memberlistBroadcast).node != "foo" {
+		t.Fatalf("missing foo")
+	}
+	if dump[3].b.(*memberlistBroadcast).node != "test" {
+		t.Fatalf("missing test")
+	}
+
 	// 3 byte overhead, should only get 3 messages back
-	partial1 := q.GetBroadcasts(3, 80)
+	partial1 := q.GetBroadcasts(3, 99)
 	require.Equal(t, 3, len(partial1), "missing messages: %v", prettyPrintMessages(partial1))
 
 	require.Equal(t, int64(4), q.idGen, "id generator doesn't reset until empty")
 
-	partial2 := q.GetBroadcasts(3, 80)
+	partial2 := q.GetBroadcasts(3, 99)
 	require.Equal(t, 3, len(partial2), "missing messages: %v", prettyPrintMessages(partial2))
 
 	require.Equal(t, int64(4), q.idGen, "id generator doesn't reset until empty")
 
 	// Only two not expired
-	partial3 := q.GetBroadcasts(3, 80)
-	require.Equal(t, 2, len(partial3), "missing messages: %v", prettyPrintMessages(partial3))
+	partial3 := q.GetBroadcasts(3, 99)
+	require.Equal(t, 1, len(partial3), "missing messages: %v", prettyPrintMessages(partial3))
+
+	require.Equal(t, int64(4), q.idGen, "id generator doesn't reset until empty")
+	// Only two not expired
+	partial4 := q.GetBroadcasts(3, 99)
+	require.Equal(t, 1, len(partial4), "missing messages: %v", prettyPrintMessages(partial3))
+
+	require.Equal(t, int64(4), q.idGen, "id generator doesn't reset until empty")
+
+	// Only one not expired
+	partial5 := q.GetBroadcasts(3, 99)
+	require.Equal(t, 1, len(partial5), "missing messages: %v", prettyPrintMessages(partial5))
 
 	require.Equal(t, int64(0), q.idGen, "id generator resets on empty")
 
 	// Should get nothing
-	partial5 := q.GetBroadcasts(3, 80)
-	require.Equal(t, 0, len(partial5), "missing messages: %v", prettyPrintMessages(partial5))
+	partial6 := q.GetBroadcasts(3, 99)
+	require.Equal(t, 0, len(partial6), "missing messages: %v", prettyPrintMessages(partial6))
 
 	require.Equal(t, int64(0), q.idGen, "id generator resets on empty")
 }

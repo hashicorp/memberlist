@@ -268,24 +268,6 @@ func (q *TransmitLimitedQueue) addItem(cur *limitedBroadcast) {
 	}
 }
 
-// getTransmitRange returns a pair of min/max values for transmit values
-// represented by the current queue contents. Both values represent actual
-// transmit values on the interval [0, len). You must already hold the mutex.
-func (q *TransmitLimitedQueue) getTransmitRange() (minTransmit, maxTransmit int) {
-	if q.lenLocked() == 0 {
-		return 0, 0
-	}
-	minItem, maxItem := q.tq.Min(), q.tq.Max()
-	if minItem == nil || maxItem == nil {
-		return 0, 0
-	}
-
-	min := minItem.(*limitedBroadcast).transmits
-	max := maxItem.(*limitedBroadcast).transmits
-
-	return min, max
-}
-
 // GetBroadcasts is used to get a number of broadcasts, up to a byte limit
 // and applying a per-message overhead as provided.
 func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
@@ -302,74 +284,38 @@ func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 	var (
 		bytesUsed int
 		toSend    [][]byte
-		reinsert  []*limitedBroadcast
+		picked    []*limitedBroadcast
 	)
-
-	// Visit fresher items first, but only look at stuff that will fit.
-	// We'll go tier by tier, grabbing the largest items first.
-	minTr, maxTr := q.getTransmitRange()
-	for transmits := minTr; transmits <= maxTr; /*do not advance automatically*/ {
-		free := int64(limit - bytesUsed - overhead)
+	var lb *limitedBroadcast
+	var free int64
+	q.tq.Ascend(func(item btree.Item) bool {
+		lb = item.(*limitedBroadcast)
+		free = int64(limit - bytesUsed - overhead)
 		if free <= 0 {
-			break // bail out early
+			return false // bail out early
 		}
-
-		// Search for the least element on a given tier (by transmit count) as
-		// defined in the limitedBroadcast.Less function that will fit into our
-		// remaining space.
-		greaterOrEqual := &limitedBroadcast{
-			transmits: transmits,
-			msgLen:    free,
-			id:        math.MaxInt64,
+		if int64(len(lb.b.Message())) > free {
+			return true // continue to next message
 		}
-		lessThan := &limitedBroadcast{
-			transmits: transmits + 1,
-			msgLen:    math.MaxInt64,
-			id:        math.MaxInt64,
-		}
-		var keep *limitedBroadcast
-		q.tq.AscendRange(greaterOrEqual, lessThan, func(item btree.Item) bool {
-			cur := item.(*limitedBroadcast)
-			// Check if this is within our limits
-			if int64(len(cur.b.Message())) > free {
-				// If this happens it's a bug in the datastructure or
-				// surrounding use doing something like having len(Message())
-				// change over time. There's enough going on here that it's
-				// probably sane to just skip it and move on for now.
-				return true
-			}
-			keep = cur
-			return false
-		})
-		if keep == nil {
-			// No more items of an appropriate size in the tier.
-			transmits++
-			continue
-		}
-
-		msg := keep.b.Message()
-
-		// Add to slice to send
-		bytesUsed += overhead + len(msg)
+		// msg ok to broadcast
+		msg := lb.b.Message()
 		toSend = append(toSend, msg)
+		bytesUsed += overhead + len(msg)
+		picked = append(picked, lb)
+		return true
+	})
 
-		// Check if we should stop transmission
-		q.deleteItem(keep)
-		if keep.transmits+1 >= transmitLimit {
-			keep.b.Finished()
+	// delete the picked message from queue.
+	// check the transmitted times
+	// to decide whether to finish or to continue transmission
+	for _, lb := range picked {
+		q.deleteItem(lb)
+		lb.transmits++
+		if lb.transmits >= transmitLimit {
+			lb.b.Finished()
 		} else {
-			// We need to bump this item down to another transmit tier, but
-			// because it would be in the same direction that we're walking the
-			// tiers, we will have to delay the reinsertion until we are
-			// finished our search. Otherwise we'll possibly re-add the message
-			// when we ascend to the next tier.
-			keep.transmits++
-			reinsert = append(reinsert, keep)
+			q.addItem(lb)
 		}
-	}
-
-	for _, cur := range reinsert {
-		q.addItem(cur)
 	}
 
 	return toSend
