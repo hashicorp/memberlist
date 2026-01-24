@@ -108,28 +108,28 @@ func TestRetransmitLimit(t *testing.T) {
 func TestShuffleNodes(t *testing.T) {
 	orig := []*nodeState{
 		&nodeState{
-			State: StateDead,
+			Node: Node{State: StateDead},
 		},
 		&nodeState{
-			State: StateAlive,
+			Node: Node{State: StateAlive},
 		},
 		&nodeState{
-			State: StateAlive,
+			Node: Node{State: StateAlive},
 		},
 		&nodeState{
-			State: StateDead,
+			Node: Node{State: StateDead},
 		},
 		&nodeState{
-			State: StateAlive,
+			Node: Node{State: StateAlive},
 		},
 		&nodeState{
-			State: StateAlive,
+			Node: Node{State: StateAlive},
 		},
 		&nodeState{
-			State: StateDead,
+			Node: Node{State: StateDead},
 		},
 		&nodeState{
-			State: StateAlive,
+			Node: Node{State: StateAlive},
 		},
 	}
 	nodes := make([]*nodeState, len(orig))
@@ -168,43 +168,43 @@ func TestPushPullScale(t *testing.T) {
 func TestMoveDeadNodes(t *testing.T) {
 	nodes := []*nodeState{
 		&nodeState{
-			State:       StateDead,
+			Node:        Node{State: StateDead},
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State:       StateAlive,
+			Node:        Node{State: StateAlive},
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		// This dead node should not be moved, as its state changed
 		// less than the specified GossipToTheDead time ago
 		&nodeState{
-			State:       StateDead,
+			Node:        Node{State: StateDead},
 			StateChange: time.Now().Add(-10 * time.Second),
 		},
 		// This left node should not be moved, as its state changed
 		// less than the specified GossipToTheDead time ago
 		&nodeState{
-			State:       StateLeft,
+			Node:        Node{State: StateLeft},
 			StateChange: time.Now().Add(-10 * time.Second),
 		},
 		&nodeState{
-			State:       StateLeft,
+			Node:        Node{State: StateLeft},
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State:       StateAlive,
+			Node:        Node{State: StateAlive},
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State:       StateDead,
+			Node:        Node{State: StateDead},
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State:       StateAlive,
+			Node:        Node{State: StateAlive},
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State:       StateLeft,
+			Node:        Node{State: StateLeft},
 			StateChange: time.Now().Add(-20 * time.Second),
 		},
 	}
@@ -254,9 +254,9 @@ func TestKRandomNodes(t *testing.T) {
 		}
 		nodes = append(nodes, &nodeState{
 			Node: Node{
-				Name: fmt.Sprintf("test%d", i),
+				Name:  fmt.Sprintf("test%d", i),
+				State: state,
 			},
-			State: state,
 		})
 	}
 
