@@ -223,7 +223,10 @@ func (m *Memberlist) encryptionVersion() encryptionVersion {
 func (m *Memberlist) streamListen() {
 	for {
 		select {
-		case conn := <-m.transport.StreamCh():
+		case conn, open := <-m.transport.StreamCh():
+			if !open { // no more incoming streams from transport
+				return
+			}
 			go m.handleConn(conn)
 
 		case <-m.shutdownCh:
