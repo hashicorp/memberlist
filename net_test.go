@@ -1,4 +1,4 @@
-// Copyright (c) HashiCorp, Inc.
+// Copyright IBM Corp. 2013, 2025
 // SPDX-License-Identifier: MPL-2.0
 
 package memberlist
@@ -1015,4 +1015,55 @@ func TestHandleCommand(t *testing.T) {
 	}
 	m.handleCommand(nil, &net.TCPAddr{Port: 12345}, time.Now())
 	require.Contains(t, buf.String(), "missing message type byte")
+}
+
+func TestHandleConn_NilConnAfterRemoveLabelHeaderFromStream(t *testing.T) {
+	mockNet := &MockNetwork{}
+
+	t1 := mockNet.NewTransport("node1")
+
+	m := GetMemberlist(t, func(c *Config) {
+		c.Transport = t1
+	})
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	errConn := &errorReadNetConn{
+		closed: make(chan struct{}),
+	}
+	if err := t1.IngestStream(errConn); err != nil {
+		t.Fatal(err)
+	}
+
+	// The connection must be successfully closed
+	<-errConn.closed
+}
+
+type errorReadNetConn struct {
+	net.Conn
+	closed chan struct{}
+}
+
+func (c *errorReadNetConn) LocalAddr() net.Addr {
+	return &MockAddress{"fake:0", "fake"}
+}
+
+func (c *errorReadNetConn) RemoteAddr() net.Addr {
+	return &MockAddress{"fake:0", "fake"}
+}
+
+func (c *errorReadNetConn) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *errorReadNetConn) Read(b []byte) (n int, err error) {
+	return 0, fmt.Errorf("test read error")
+}
+
+func (c *errorReadNetConn) Close() error {
+	close(c.closed)
+	return nil
 }
