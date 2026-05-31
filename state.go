@@ -1074,6 +1074,24 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 	// Bail if the incarnation number is older, and this is not about us
 	isLocalNode := state.Name == m.config.Name
 	if a.Incarnation <= state.Incarnation && !isLocalNode && !updatesNode {
+		// If we believe this node is dead or suspect, re-gossip that state so
+		// the node — which may have restarted with incarnation=1 — can receive
+		// the accusation and refute it. Without this, a stale dead/suspect
+		// message with a high incarnation number can permanently "orphan" in
+		// the cluster: the restarted node broadcasts alive(inc=1), but no node
+		// that receives it forwards the dead(inc=100) back to it, so the node
+		// never gets the chance to call refute().
+		if state.State == StateDead {
+			m.logger.Printf("[WARN] memberlist: Received stale alive for dead node %s (alive-inc: %d <= dead-inc: %d); re-gossiping dead msg to help node refute",
+				a.Node, a.Incarnation, state.Incarnation)
+			d := dead{Incarnation: state.Incarnation, Node: state.Name, From: m.config.Name}
+			m.encodeAndBroadcast(state.Name, deadMsg, d)
+		} else if state.State == StateSuspect {
+			m.logger.Printf("[WARN] memberlist: Received stale alive for suspect node %s (alive-inc: %d <= suspect-inc: %d); re-gossiping suspect msg to help node refute",
+				a.Node, a.Incarnation, state.Incarnation)
+			s := suspect{Incarnation: state.Incarnation, Node: state.Name, From: m.config.Name}
+			m.encodeAndBroadcast(state.Name, suspectMsg, s)
+		}
 		return
 	}
 
@@ -1162,8 +1180,14 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	defer m.nodeLock.Unlock()
 	state, ok := m.nodeMap[s.Node]
 
-	// If we've never heard about this node before, ignore it
+	// If we've never heard about this node before, forward the suspect message
+	// anyway so it can propagate through nodes that may know the target. During
+	// mass restarts, freshly joined nodes have incomplete cluster views and
+	// silently dropping the message here creates a gossip black hole.
 	if !ok {
+		m.logger.Printf("[WARN] memberlist: Forwarding suspect msg for unknown node %s (inc: %d, from: %s)",
+			s.Node, s.Incarnation, s.From)
+		m.encodeAndBroadcast(s.Node, suspectMsg, s)
 		return
 	}
 
@@ -1203,6 +1227,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	// Update the state
 	state.Incarnation = s.Incarnation
 	state.State = StateSuspect
+	m.logger.Printf("[INFO] memberlist: Marking %s as suspect (incarnation: %d, from: %s)", s.Node, s.Incarnation, s.From)
 	changeTime := time.Now()
 	state.StateChange = changeTime
 
@@ -1255,8 +1280,15 @@ func (m *Memberlist) deadNode(d *dead) {
 	defer m.nodeLock.Unlock()
 	state, ok := m.nodeMap[d.Node]
 
-	// If we've never heard about this node before, ignore it
+	// If we've never heard about this node before, forward the dead message
+	// anyway so it can propagate through nodes that do know the target. During
+	// mass restarts, freshly joined nodes have incomplete cluster views and
+	// silently dropping the message here creates a gossip black hole that
+	// prevents the accused node from ever receiving the accusation and refuting.
 	if !ok {
+		m.logger.Printf("[WARN] memberlist: Forwarding dead msg for unknown node %s (inc: %d, from: %s)",
+			d.Node, d.Incarnation, d.From)
+		m.encodeAndBroadcast(d.Node, deadMsg, d)
 		return
 	}
 
@@ -1298,8 +1330,10 @@ func (m *Memberlist) deadNode(d *dead) {
 	// instead of dead.
 	if d.Node == d.From {
 		state.State = StateLeft
+		m.logger.Printf("[INFO] memberlist: %s has left the cluster (incarnation: %d)", d.Node, d.Incarnation)
 	} else {
 		state.State = StateDead
+		m.logger.Printf("[INFO] memberlist: Marking %s as dead (incarnation: %d, from: %s)", d.Node, d.Incarnation, d.From)
 	}
 	state.StateChange = time.Now()
 
