@@ -1081,12 +1081,13 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		// the cluster: the restarted node broadcasts alive(inc=1), but no node
 		// that receives it forwards the dead(inc=100) back to it, so the node
 		// never gets the chance to call refute().
-		if state.State == StateDead {
+		switch state.State {
+		case StateDead:
 			m.logger.Printf("[WARN] memberlist: Received stale alive for dead node %s (alive-inc: %d <= dead-inc: %d); re-gossiping dead msg to help node refute",
 				a.Node, a.Incarnation, state.Incarnation)
 			d := dead{Incarnation: state.Incarnation, Node: state.Name, From: m.config.Name}
 			m.encodeAndBroadcast(state.Name, deadMsg, d)
-		} else if state.State == StateSuspect {
+		case StateSuspect:
 			m.logger.Printf("[WARN] memberlist: Received stale alive for suspect node %s (alive-inc: %d <= suspect-inc: %d); re-gossiping suspect msg to help node refute",
 				a.Node, a.Incarnation, state.Incarnation)
 			s := suspect{Incarnation: state.Incarnation, Node: state.Name, From: m.config.Name}
