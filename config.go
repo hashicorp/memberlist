@@ -241,8 +241,8 @@ type Config struct {
 	UDPBufferSize int
 
 	// DeadNodeReclaimTime controls the time before a dead node's name can be
-	// reclaimed by one with a different address or port. By default, this is 0,
-	// meaning nodes cannot be reclaimed this way.
+	// reclaimed by one with a different address or port. Setting DeadNodeReclaimTime
+	// to 0 means that dead nodes will never be reclaimed.
 	DeadNodeReclaimTime time.Duration
 
 	// RequireNodeNames controls if the name of a node is required when sending
@@ -318,6 +318,8 @@ func DefaultLANConfig() *Config {
 		ProbeInterval:           1 * time.Second,        // Failure check every second
 		DisableTcpPings:         false,                  // TCP pings are safe, even with mixed versions
 		AwarenessMaxMultiplier:  8,                      // Probe interval backs off to 8 seconds
+
+		DeadNodeReclaimTime: 30 * time.Second, // Reclaim dead nodes after 30 seconds
 
 		GossipNodes:          3,                      // Gossip to 3 nodes
 		GossipInterval:       200 * time.Millisecond, // Gossip more rapidly

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -166,76 +167,111 @@ func TestPushPullScale(t *testing.T) {
 }
 
 func TestMoveDeadNodes(t *testing.T) {
-	nodes := []*nodeState{
-		&nodeState{
+	now := time.Now()
+	nodeStates := []*nodeState{
+		{
 			State:       StateDead,
-			StateChange: time.Now().Add(-20 * time.Second),
+			StateChange: now.Add(-20 * time.Second),
 		},
-		&nodeState{
+		{
 			State:       StateAlive,
-			StateChange: time.Now().Add(-20 * time.Second),
+			StateChange: now.Add(-20 * time.Second),
 		},
-		// This dead node should not be moved, as its state changed
-		// less than the specified GossipToTheDead time ago
-		&nodeState{
+		{
 			State:       StateDead,
-			StateChange: time.Now().Add(-10 * time.Second),
+			StateChange: now.Add(-10 * time.Second),
 		},
-		// This left node should not be moved, as its state changed
-		// less than the specified GossipToTheDead time ago
-		&nodeState{
+		{
 			State:       StateLeft,
-			StateChange: time.Now().Add(-10 * time.Second),
+			StateChange: now.Add(-10 * time.Second),
 		},
-		&nodeState{
+		{
 			State:       StateLeft,
-			StateChange: time.Now().Add(-20 * time.Second),
+			StateChange: now.Add(-20 * time.Second),
 		},
-		&nodeState{
+		{
 			State:       StateAlive,
-			StateChange: time.Now().Add(-20 * time.Second),
+			StateChange: now.Add(-20 * time.Second),
 		},
-		&nodeState{
+		{
 			State:       StateDead,
-			StateChange: time.Now().Add(-20 * time.Second),
+			StateChange: now.Add(-20 * time.Second),
 		},
-		&nodeState{
+		{
 			State:       StateAlive,
-			StateChange: time.Now().Add(-20 * time.Second),
+			StateChange: now.Add(-20 * time.Second),
 		},
-		&nodeState{
+		{
 			State:       StateLeft,
-			StateChange: time.Now().Add(-20 * time.Second),
+			StateChange: now.Add(-20 * time.Second),
+		},
+		{
+			State:       StateLeft,
+			StateChange: now.Add(-30 * time.Second),
+		},
+		{
+			State:       StateDead,
+			StateChange: now.Add(-30 * time.Second),
 		},
 	}
 
-	idx := moveDeadNodes(nodes, (15 * time.Second))
-	if idx != 5 {
-		t.Fatalf("bad index")
+	tests := []struct {
+		name                string
+		deadNodeReclaimTime time.Duration
+		gossipToTheDeadTime time.Duration
+		expectedIndex       int
+	}{
+		{
+			name:                "Do not reclaim dead nodes when deadNodeReclaimTime is 0",
+			deadNodeReclaimTime: 0,
+			gossipToTheDeadTime: 15 * time.Second,
+			expectedIndex:       8,
+		},
+		{
+			name:                "Reclaim dead nodes when deadNodeReclaimTime is greater than 0",
+			deadNodeReclaimTime: 10 * time.Second,
+			gossipToTheDeadTime: 15 * time.Second,
+			expectedIndex:       5,
+		},
+		{
+			name:                "deadNodeReclaimTime is greater than gossipToTheDeadTime",
+			deadNodeReclaimTime: 25 * time.Second,
+			gossipToTheDeadTime: 15 * time.Second,
+			expectedIndex:       9,
+		},
 	}
-	for i := 0; i < idx; i++ {
-		switch i {
-		case 2:
-			// Recently dead node remains at index 2,
-			// since nodes are swapped out to move to end.
-			if nodes[i].State != StateDead {
-				t.Fatalf("Bad state %d", i)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			states := make([]*nodeState, len(nodeStates))
+			copy(states, nodeStates)
+			index := moveDeadNodes(states, tt.deadNodeReclaimTime, tt.gossipToTheDeadTime)
+			assert.Equal(t, tt.expectedIndex, index)
+
+			reclaimTime := now.Add(tt.deadNodeReclaimTime)
+			if tt.gossipToTheDeadTime > tt.deadNodeReclaimTime {
+				reclaimTime = now.Add(tt.gossipToTheDeadTime)
 			}
-		case 3:
-			//Recently left node should remain at 3
-			if nodes[i].State != StateLeft {
-				t.Fatalf("Bad State %d", i)
+
+			if tt.deadNodeReclaimTime == 0 {
+				for i := 0; i < index; i++ {
+					if states[i].State == StateLeft {
+						assert.True(t, states[i].StateChange.Before(reclaimTime), "node %d should have been moved", i)
+					}
+				}
+				for i := index; i < len(states); i++ {
+					assert.Equal(t, StateLeft, states[i].State)
+				}
+			} else {
+				for i := 0; i < index; i++ {
+					if states[i].DeadOrLeft() {
+						assert.True(t, states[i].StateChange.Before(reclaimTime), "node %d should have been moved", i)
+					}
+				}
+				for i := index; i < len(states); i++ {
+					assert.True(t, states[i].DeadOrLeft())
+				}
 			}
-		default:
-			if nodes[i].State != StateAlive {
-				t.Fatalf("Bad state %d", i)
-			}
-		}
-	}
-	for i := idx; i < len(nodes); i++ {
-		if !nodes[i].DeadOrLeft() {
-			t.Fatalf("Bad state %d", i)
-		}
+		})
 	}
 }
 
