@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013, 2025
+// Copyright IBM Corp. 2013, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package memberlist
@@ -57,7 +57,7 @@ func TestEncodeDecode(t *testing.T) {
 
 func TestRandomOffset(t *testing.T) {
 	vals := make(map[int]struct{})
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		offset := randomOffset(2 << 30)
 		if _, ok := vals[offset]; ok {
 			t.Fatalf("got collision")
@@ -213,7 +213,7 @@ func TestMoveDeadNodes(t *testing.T) {
 	if idx != 5 {
 		t.Fatalf("bad index")
 	}
-	for i := 0; i < idx; i++ {
+	for i := range idx {
 		switch i {
 		case 2:
 			// Recently dead node remains at index 2,
@@ -241,7 +241,7 @@ func TestMoveDeadNodes(t *testing.T) {
 
 func TestKRandomNodes(t *testing.T) {
 	nodes := []*nodeState{}
-	for i := 0; i < 90; i++ {
+	for i := range 90 {
 		// Half the nodes are in a bad state
 		state := StateAlive
 		switch i % 3 {

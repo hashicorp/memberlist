@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013, 2025
+// Copyright IBM Corp. 2013, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 // Package retry provides support for repeating operations in tests.
@@ -26,7 +26,7 @@ import (
 // Failer is an interface compatible with testing.T.
 type Failer interface {
 	// Log is called for the final test output
-	Log(args ...interface{})
+	Log(args ...any)
 
 	// FailNow is called when the retrying is abandoned.
 	FailNow()
@@ -43,22 +43,22 @@ func (r *R) FailNow() {
 	runtime.Goexit()
 }
 
-func (r *R) Fatal(args ...interface{}) {
+func (r *R) Fatal(args ...any) {
 	r.log(fmt.Sprint(args...))
 	r.FailNow()
 }
 
-func (r *R) Fatalf(format string, args ...interface{}) {
+func (r *R) Fatalf(format string, args ...any) {
 	r.log(fmt.Sprintf(format, args...))
 	r.FailNow()
 }
 
-func (r *R) Error(args ...interface{}) {
+func (r *R) Error(args ...any) {
 	r.log(fmt.Sprint(args...))
 	r.fail = true
 }
 
-func (r *R) Errorf(format string, args ...interface{}) {
+func (r *R) Errorf(format string, args ...any) {
 	r.log(fmt.Sprintf(format, args...))
 	r.fail = true
 }
@@ -126,11 +126,9 @@ func run(r Retryer, t Failer, f func(r *R)) {
 	}
 	for r.NextOr(fail) {
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			f(rr)
-		}()
+		})
 		wg.Wait()
 		if rr.fail {
 			rr.fail = false

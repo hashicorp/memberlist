@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013, 2025
+// Copyright IBM Corp. 2013, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package memberlist
@@ -341,7 +341,7 @@ func TestRemoveLabelHeaderFromStream(t *testing.T) {
 	}
 }
 
-func buildBuffer(t *testing.T, stuff ...interface{}) []byte {
+func buildBuffer(t *testing.T, stuff ...any) []byte {
 	var buf bytes.Buffer
 	for _, item := range stuff {
 		switch x := item.(type) {
