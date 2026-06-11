@@ -1,6 +1,6 @@
 module github.com/hashicorp/memberlist
 
-go 1.24.0
+go 1.25
 
 require (
 	github.com/google/btree v1.1.3

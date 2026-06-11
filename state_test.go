@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013, 2025
+// Copyright IBM Corp. 2013, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package memberlist
@@ -1023,7 +1023,7 @@ func TestMemberList_ProbeNode_Buddy(t *testing.T) {
 	}
 
 	// Should be alive msg.
-	if messageType(m2.broadcasts.orderedView(true)[0].b.Message()[0]) != aliveMsg {
+	if messageType(m2.broadcasts.orderedView()[0].b.Message()[0]) != aliveMsg {
 		t.Fatalf("expected queued alive msg")
 	}
 }
@@ -1174,11 +1174,11 @@ func TestMemberList_NextSeq(t *testing.T) {
 	}
 }
 
-func ackHandlerExists(t *testing.T, m *Memberlist, idx uint32) bool {
+func ackHandlerExists(t *testing.T, m *Memberlist) bool {
 	t.Helper()
 
 	m.ackLock.Lock()
-	_, ok := m.ackHandlers[idx]
+	_, ok := m.ackHandlers[0]
 	m.ackLock.Unlock()
 
 	return ok
@@ -1190,11 +1190,11 @@ func TestMemberList_setProbeChannels(t *testing.T) {
 	ch := make(chan ackMessage, 1)
 	m.setProbeChannels(0, ch, nil, 10*time.Millisecond)
 
-	require.True(t, ackHandlerExists(t, m, 0), "missing handler")
+	require.True(t, ackHandlerExists(t, m), "missing handler")
 
 	time.Sleep(20 * time.Millisecond)
 
-	require.False(t, ackHandlerExists(t, m, 0), "non-reaped handler")
+	require.False(t, ackHandlerExists(t, m), "non-reaped handler")
 }
 
 func TestMemberList_setAckHandler(t *testing.T) {
@@ -1203,11 +1203,11 @@ func TestMemberList_setAckHandler(t *testing.T) {
 	f := func([]byte, time.Time) {}
 	m.setAckHandler(0, f, 10*time.Millisecond)
 
-	require.True(t, ackHandlerExists(t, m, 0), "missing handler")
+	require.True(t, ackHandlerExists(t, m), "missing handler")
 
 	time.Sleep(20 * time.Millisecond)
 
-	require.False(t, ackHandlerExists(t, m, 0), "non-reaped handler")
+	require.False(t, ackHandlerExists(t, m), "non-reaped handler")
 }
 
 func TestMemberList_invokeAckHandler(t *testing.T) {
@@ -1226,7 +1226,7 @@ func TestMemberList_invokeAckHandler(t *testing.T) {
 		t.Fatalf("b not set")
 	}
 
-	require.False(t, ackHandlerExists(t, m, 0), "non-reaped handler")
+	require.False(t, ackHandlerExists(t, m), "non-reaped handler")
 }
 
 func TestMemberList_invokeAckHandler_Channel_Ack(t *testing.T) {
@@ -1260,7 +1260,7 @@ func TestMemberList_invokeAckHandler_Channel_Ack(t *testing.T) {
 		t.Fatalf("message not sent")
 	}
 
-	require.False(t, ackHandlerExists(t, m, 0), "non-reaped handler")
+	require.False(t, ackHandlerExists(t, m), "non-reaped handler")
 }
 
 func TestMemberList_invokeAckHandler_Channel_Nack(t *testing.T) {
@@ -1291,7 +1291,7 @@ func TestMemberList_invokeAckHandler_Channel_Nack(t *testing.T) {
 
 	// Getting a nack doesn't reap the handler so that we can still forward
 	// an ack up to the reap time, if we get one.
-	require.True(t, ackHandlerExists(t, m, 0), "handler should not be reaped")
+	require.True(t, ackHandlerExists(t, m), "handler should not be reaped")
 
 	ack := ackResp{0, []byte{0, 0, 0}}
 	m.invokeAckHandler(ack, time.Now())
@@ -1312,7 +1312,7 @@ func TestMemberList_invokeAckHandler_Channel_Nack(t *testing.T) {
 		t.Fatalf("message not sent")
 	}
 
-	require.False(t, ackHandlerExists(t, m, 0), "non-reaped handler")
+	require.False(t, ackHandlerExists(t, m), "non-reaped handler")
 }
 
 func TestMemberList_AliveNode_NewNode(t *testing.T) {
@@ -1607,7 +1607,7 @@ func TestMemberList_AliveNode_Refute(t *testing.T) {
 	}
 
 	// Should be alive mesg
-	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != aliveMsg {
+	if messageType(m.broadcasts.orderedView()[0].b.Message()[0]) != aliveMsg {
 		t.Fatalf("expected queued alive msg")
 	}
 }
@@ -1748,7 +1748,7 @@ func TestMemberList_SuspectNode(t *testing.T) {
 	}
 
 	// Check its a suspect message
-	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != suspectMsg {
+	if messageType(m.broadcasts.orderedView()[0].b.Message()[0]) != suspectMsg {
 		t.Fatalf("expected queued suspect msg")
 	}
 
@@ -1773,7 +1773,7 @@ func TestMemberList_SuspectNode(t *testing.T) {
 	}
 
 	// Check its a suspect message
-	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != deadMsg {
+	if messageType(m.broadcasts.orderedView()[0].b.Message()[0]) != deadMsg {
 		t.Fatalf("expected queued dead msg")
 	}
 }
@@ -1884,7 +1884,7 @@ func TestMemberList_SuspectNode_Refute(t *testing.T) {
 	}
 
 	// Should be alive mesg
-	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != aliveMsg {
+	if messageType(m.broadcasts.orderedView()[0].b.Message()[0]) != aliveMsg {
 		t.Fatalf("expected queued alive msg")
 	}
 
@@ -1951,7 +1951,7 @@ func TestMemberList_DeadNodeLeft(t *testing.T) {
 	}
 
 	// Check its a dead message
-	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != deadMsg {
+	if messageType(m.broadcasts.orderedView()[0].b.Message()[0]) != deadMsg {
 		t.Fatalf("expected queued dead msg")
 	}
 
@@ -2035,7 +2035,7 @@ func TestMemberList_DeadNode(t *testing.T) {
 	}
 
 	// Check its a dead message
-	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != deadMsg {
+	if messageType(m.broadcasts.orderedView()[0].b.Message()[0]) != deadMsg {
 		t.Fatalf("expected queued dead msg")
 	}
 }
@@ -2159,7 +2159,7 @@ func TestMemberList_DeadNode_Refute(t *testing.T) {
 	}
 
 	// Should be alive mesg
-	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != aliveMsg {
+	if messageType(m.broadcasts.orderedView()[0].b.Message()[0]) != aliveMsg {
 		t.Fatalf("expected queued alive msg")
 	}
 
@@ -2312,7 +2312,7 @@ func TestMemberlist_Gossip(t *testing.T) {
 
 	// Gossip should send all this to m2. Retry a few times because it's UDP and
 	// timing and stuff makes this flaky without.
-	retry(t, 15, 250*time.Millisecond, func(failf func(string, ...interface{})) {
+	retry(t, 15, 250*time.Millisecond, func(failf func(string, ...any)) {
 		m1.gossip()
 
 		time.Sleep(3 * time.Millisecond)
@@ -2323,13 +2323,13 @@ func TestMemberlist_Gossip(t *testing.T) {
 	})
 }
 
-func retry(t *testing.T, n int, w time.Duration, fn func(func(string, ...interface{}))) {
+func retry(t *testing.T, n int, w time.Duration, fn func(func(string, ...any))) {
 	t.Helper()
 	for try := 1; try <= n; try++ {
 		failed := false
 		failFormat := ""
-		failArgs := []interface{}{}
-		failf := func(format string, args ...interface{}) {
+		failArgs := []any{}
+		failf := func(format string, args ...any) {
 			failed = true
 			failFormat = format
 			failArgs = args
@@ -2397,7 +2397,7 @@ func TestMemberlist_GossipToDead(t *testing.T) {
 	// Should gossip to m2 because its state has changed within GossipToTheDeadTime
 	m1.nodeMap[addr2.String()].StateChange = time.Now().Add(-20 * time.Millisecond)
 
-	retry(t, 5, 10*time.Millisecond, func(failf func(string, ...interface{})) {
+	retry(t, 5, 10*time.Millisecond, func(failf func(string, ...any)) {
 		m1.gossip()
 
 		time.Sleep(3 * time.Millisecond)
@@ -2480,7 +2480,7 @@ func TestMemberlist_PushPull(t *testing.T) {
 	m1.aliveNode(&a2, nil, false)
 
 	// Gossip should send all this to m2. It's UDP though so retry a few times
-	retry(t, 5, 10*time.Millisecond, func(failf func(string, ...interface{})) {
+	retry(t, 5, 10*time.Millisecond, func(failf func(string, ...any)) {
 		m1.pushPull()
 
 		time.Sleep(3 * time.Millisecond)

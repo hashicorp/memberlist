@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013, 2025
+// Copyright IBM Corp. 2013, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package memberlist
@@ -76,7 +76,7 @@ func TestHandleCompoundPing(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		in := make([]byte, 1500)
 		n, _, err := udp.ReadFrom(in)
 		if err != nil {

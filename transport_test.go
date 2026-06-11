@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013, 2025
+// Copyright IBM Corp. 2013, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package memberlist
@@ -203,7 +203,7 @@ func TestTransport_TcpListenBackoff(t *testing.T) {
 
 	// sleep (+yield) for testTime seconds before asking the accept loop to shut down
 	time.Sleep(testTime)
-	atomic.StoreInt32(&transport.shutdown, 1)
+	transport.shutdown.Store(1)
 
 	// Verify that the wg was completed on exit (but without blocking this test)
 	// maxDelay == 1s, so we will give the routine 1.25s to loop around and shut down.

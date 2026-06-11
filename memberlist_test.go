@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013, 2025
+// Copyright IBM Corp. 2013, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package memberlist
@@ -508,7 +508,6 @@ func TestMemberList_ResolveAddr(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got, err := m.resolveAddr(tc.in)
@@ -602,7 +601,7 @@ func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
 		}
 	}()
 
-	content := []byte(fmt.Sprintf("nameserver %s", bind))
+	content := fmt.Appendf(nil, "nameserver %s", bind)
 	if _, err := tmpFile.Write(content); err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -1454,7 +1453,7 @@ func TestMemberlist_UserData(t *testing.T) {
 
 	bcasts := make([][]byte, 256)
 	for i := range bcasts {
-		bcasts[i] = []byte(fmt.Sprintf("%d", i))
+		bcasts[i] = fmt.Appendf(nil, "%d", i)
 	}
 
 	// Create a second node
@@ -1812,7 +1811,7 @@ func TestMemberlist_Join_IPv6(t *testing.T) {
 }
 
 func reservePort(t *testing.T, ip net.IP, purpose string) int {
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		tcpAddr := &net.TCPAddr{IP: ip, Port: 0}
 		tcpLn, err := net.ListenTCP("tcp", tcpAddr)
 		if err != nil {
@@ -2026,7 +2025,7 @@ func TestMemberlist_PingDelegate(t *testing.T) {
 
 func waitUntilSize(t *testing.T, m *Memberlist, expected int) {
 	t.Helper()
-	retry(t, 15, 500*time.Millisecond, func(failf func(string, ...interface{})) {
+	retry(t, 15, 500*time.Millisecond, func(failf func(string, ...any)) {
 		t.Helper()
 
 		if m.NumMembers() != expected {
@@ -2064,7 +2063,7 @@ func waitUntilPortIsFree(t *testing.T, m *Memberlist) {
 	addr := m.config.BindAddr
 	port := m.config.BindPort
 
-	retry(t, 15, 250*time.Millisecond, func(failf func(string, ...interface{})) {
+	retry(t, 15, 250*time.Millisecond, func(failf func(string, ...any)) {
 		t.Helper()
 
 		if err := isPortFree(t, addr, port); err != nil {

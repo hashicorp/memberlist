@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013, 2025
+// Copyright IBM Corp. 2013, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package memberlist
@@ -35,7 +35,7 @@ func TestMemberlist_Integ(t *testing.T) {
 	eventCh := make(chan NodeEvent, num)
 
 	addr := "127.0.0.1"
-	for i := 0; i < num; i++ {
+	for i := range num {
 		c := DefaultLANConfig()
 		c.Name = fmt.Sprintf("%s:%d", addr, 12345+i)
 		c.BindAddr = addr

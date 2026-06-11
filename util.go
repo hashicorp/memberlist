@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2013, 2025
+// Copyright IBM Corp. 2013, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package memberlist
@@ -37,7 +37,7 @@ func init() {
 }
 
 // Decode reverses the encode operation on a byte slice input
-func decode(buf []byte, out interface{}) error {
+func decode(buf []byte, out any) error {
 	r := bytes.NewReader(buf)
 	hd := codec.MsgpackHandle{}
 	dec := codec.NewDecoder(r, &hd)
@@ -45,7 +45,7 @@ func decode(buf []byte, out interface{}) error {
 }
 
 // Encode writes an encoded object to a new bytes buffer
-func encode(msgType messageType, in interface{}, msgpackUseNewTimeFormat bool) (*bytes.Buffer, error) {
+func encode(msgType messageType, in any, msgpackUseNewTimeFormat bool) (*bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
 	buf.WriteByte(uint8(msgType))
 	hd := codec.MsgpackHandle{}
@@ -218,7 +218,7 @@ func decodeCompoundMessage(buf []byte) (trunc int, parts [][]byte, err error) {
 
 	// Decode the lengths
 	lengths := make([]uint16, numParts)
-	for i := 0; i < numParts; i++ {
+	for i := range numParts {
 		lengths[i] = binary.BigEndian.Uint16(buf[i*2 : i*2+2])
 	}
 	buf = buf[numParts*2:]
