@@ -86,7 +86,8 @@ const (
 	userMsgOverhead        = 1
 	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
 	maxPushStateBytes      = 20 * 1024 * 1024
-	maxPushPullRequests    = 128 // Maximum number of concurrent push/pull requests
+	maxPushStateNodes      = 1024 * 1024 // Each requires conservatively  ~20 bytes when encoded
+	maxPushPullRequests    = 128         // Maximum number of concurrent push/pull requests
 )
 
 // ping request sent directly to node
@@ -1233,6 +1234,10 @@ func (m *Memberlist) readRemoteState(bufConn io.Reader, dec *codec.Decoder) (boo
 		return false, nil, nil, err
 	}
 
+	if header.Nodes < 0 || header.Nodes > maxPushStateNodes {
+		return false, nil, nil, fmt.Errorf("number of nodes in header (%d) exceeds limit", header.Nodes)
+	}
+
 	// Allocate space for the transfer
 	remoteNodes := make([]pushNodeState, header.Nodes)
 
@@ -1241,6 +1246,10 @@ func (m *Memberlist) readRemoteState(bufConn io.Reader, dec *codec.Decoder) (boo
 		if err := dec.Decode(&remoteNodes[i]); err != nil {
 			return false, nil, nil, err
 		}
+	}
+
+	if header.UserStateLen < 0 || header.UserStateLen > maxPushStateBytes {
+		return false, nil, nil, fmt.Errorf("user state length (%d) exceeds limit", header.UserStateLen)
 	}
 
 	// Read the remote user state into a buffer
