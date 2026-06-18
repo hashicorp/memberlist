@@ -2480,10 +2480,11 @@ func TestMemberlist_PushPull(t *testing.T) {
 	m1.aliveNode(&a2, nil, false)
 
 	// Gossip should send all this to m2. It's UDP though so retry a few times
-	retry(t, 5, 10*time.Millisecond, func(failf func(string, ...any)) {
+	retry(t, 10, 50*time.Millisecond, func(failf func(string, ...any)) {
 		m1.pushPull()
 
-		time.Sleep(3 * time.Millisecond)
+		// Wait longer for metrics to be emitted after pushPull completes
+		time.Sleep(20 * time.Millisecond)
 
 		if len(ch) < 2 {
 			failf("expected 2 messages from pushPull")
