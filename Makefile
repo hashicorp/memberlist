@@ -7,7 +7,7 @@ SHELL := /bin/bash
 
 # test runs the test suite
 test: subnet
-	go test ./...
+	go test -count ./...
 
 # runs integration tests
 integ: subnet
@@ -16,7 +16,7 @@ integ: subnet
 # subnet sets up the require subnet for testing on darwin (osx) - you must run
 # this before running other tests if you are on osx.
 subnet:
-	@sh -c "'$(CURDIR)/scripts/setup_test_subnet.sh'"
+	@sh -c "'$(CURDIR)/test/setup_subnet.sh'"
 
 # cov runs tests with a coverage profile
 cov:
@@ -24,8 +24,8 @@ cov:
 	go tool cover -html=coverage.out
 
 # testrace runs the race checker
-testrace: subnet vet
-	go test -race ./... $(TESTARGS)
+testrace: subnet
+	go test -count=1 -race ./... $(TESTARGS)
 
 # check runs all the linters and custom checks
 check: lint tidy copywriteheaders

@@ -849,10 +849,10 @@ func (m *Memberlist) rawSendMsgPacket(a Address, node *Node, msg []byte) error {
 		}
 		m.nodeLock.RLock()
 		nodeState, ok := m.nodeMap[toAddr]
-		m.nodeLock.RUnlock()
 		if ok {
 			node = &nodeState.Node
 		}
+		m.nodeLock.RUnlock()
 	}
 
 	// Add a CRC to the end of the payload if the recipient understands

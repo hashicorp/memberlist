@@ -19,7 +19,6 @@ import (
 
 	iretry "github.com/hashicorp/memberlist/internal/retry"
 	"github.com/miekg/dns"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -568,7 +567,9 @@ func (h dnsHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
-	bind := "127.0.0.1:8600"
+	// Use unique IP address and dynamic port allocation
+	bindIP := getBindAddr()
+	bind := net.JoinHostPort(bindIP.String(), "0")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -591,6 +592,9 @@ func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
 	}()
 	wg.Wait()
 
+	// Get the actual bind address after server starts
+	actualBind := server.Listener.Addr().String()
+
 	tmpFile, err := os.CreateTemp("", "")
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -601,7 +605,7 @@ func TestMemberList_ResolveAddr_TCP_First(t *testing.T) {
 		}
 	}()
 
-	content := fmt.Appendf(nil, "nameserver %s", bind)
+	content := fmt.Appendf(nil, "nameserver %s", actualBind)
 	if _, err := tmpFile.Write(content); err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -742,19 +746,14 @@ func testMemberlist_Join_with_Labels(t *testing.T, secretKey []byte) {
 		}
 	}()
 
-	checkHost := func(t *testing.T, m *Memberlist, expected int) {
-		assert.Equal(t, expected, len(m.Members()))
-		assert.Equal(t, expected, m.estNumNodes())
-	}
-
 	runStep(t, "same label can join", func(t *testing.T) {
 		num, err := m2.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 		require.NoError(t, err)
 		require.Equal(t, 1, num)
 
-		// Check the hosts
-		checkHost(t, m2, 2)
-		checkHost(t, m1, 2)
+		// Wait for cluster convergence (both members and estimate)
+		waitUntilSizeAndEstimate(t, m2, 2)
+		waitUntilSizeAndEstimate(t, m1, 2)
 	})
 
 	// Create a third node that uses no label
@@ -773,11 +772,10 @@ func testMemberlist_Join_with_Labels(t *testing.T, secretKey []byte) {
 		_, err := m3.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 		require.Error(t, err)
 
-		// Check the failed host
-		checkHost(t, m3, 1)
-		// Check the existing hosts
-		checkHost(t, m2, 2)
-		checkHost(t, m1, 2)
+		// Verify cluster state remains unchanged after failed join
+		waitUntilSizeAndEstimate(t, m3, 1)
+		waitUntilSizeAndEstimate(t, m2, 2)
+		waitUntilSizeAndEstimate(t, m1, 2)
 	})
 
 	// Create a fourth node that uses a mismatched label
@@ -797,13 +795,11 @@ func testMemberlist_Join_with_Labels(t *testing.T, secretKey []byte) {
 		_, err := m4.Join([]string{m1.config.Name + "/" + m1.config.BindAddr})
 		require.Error(t, err)
 
-		// Check the failed host
-		checkHost(t, m4, 1)
-		// Check the previous failed host
-		checkHost(t, m3, 1)
-		// Check the existing hosts
-		checkHost(t, m2, 2)
-		checkHost(t, m1, 2)
+		// Verify cluster state remains unchanged after failed join
+		waitUntilSizeAndEstimate(t, m4, 1)
+		waitUntilSizeAndEstimate(t, m3, 1)
+		waitUntilSizeAndEstimate(t, m2, 2)
+		waitUntilSizeAndEstimate(t, m1, 2)
 	})
 }
 
@@ -1699,15 +1695,9 @@ func TestMemberlist_Join_Protocol_Compatibility(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, num)
 
-		// Check the hosts
-		if len(m2.Members()) != 2 {
-			t.Fatalf("should have 2 nodes! %v", m2.Members())
-		}
-
-		// Check the hosts
-		if len(m1.Members()) != 2 {
-			t.Fatalf("should have 2 nodes! %v", m1.Members())
-		}
+		// Wait for cluster convergence
+		waitUntilSize(t, m2, 2)
+		waitUntilSize(t, m1, 2)
 	}
 
 	t.Run("2,1", func(t *testing.T) {
@@ -2030,6 +2020,22 @@ func waitUntilSize(t *testing.T, m *Memberlist, expected int) {
 
 		if m.NumMembers() != expected {
 			failf("%s expected to have %d members but had: %v", m.config.Name, expected, m.Members())
+		}
+	})
+}
+
+// waitUntilSizeAndEstimate waits for both NumMembers and estNumNodes to reach expected value
+// Use this when you need to verify both metrics converge (e.g., after successful joins)
+func waitUntilSizeAndEstimate(t *testing.T, m *Memberlist, expected int) {
+	t.Helper()
+	retry(t, 15, 500*time.Millisecond, func(failf func(string, ...any)) {
+		t.Helper()
+
+		if m.NumMembers() != expected {
+			failf("%s expected to have %d members but had: %v", m.config.Name, expected, m.Members())
+		}
+		if m.estNumNodes() != expected {
+			failf("%s expected to have %d estimated nodes but had: %d", m.config.Name, expected, m.estNumNodes())
 		}
 	})
 }
