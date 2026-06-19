@@ -294,6 +294,18 @@ func TestKRandomNodes(t *testing.T) {
 			}
 		}
 	}
+
+	// make sure we test the very-small path
+	nodes = nodes[:8]
+	s4 := kRandomNodes(3, nodes, filterFunc)
+	if len(s4) != 2 {
+		t.Fatalf("expected 2 nodes")
+	}
+	for _, n := range s4 {
+		if n.Name != "test3" && n.Name != "test6" {
+			t.Fatalf("unexpected node picked")
+		}
+	}
 }
 
 func TestMakeCompoundMessage(t *testing.T) {
