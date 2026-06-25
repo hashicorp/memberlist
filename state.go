@@ -846,14 +846,8 @@ func (m *Memberlist) setProbeChannels(seqNo uint32, ackCh chan ackMessage, nackC
 		}
 	}
 
-	// Add the handlers
-	ah := &ackHandler{ackFn, nackFn, nil}
-	m.ackLock.Lock()
-	m.ackHandlers[seqNo] = ah
-	m.ackLock.Unlock()
-
-	// Setup a reaping routing
-	ah.timer = time.AfterFunc(timeout, func() {
+	// Add the handler, with a reaping routine
+	ah := &ackHandler{ackFn, nackFn, time.AfterFunc(timeout, func() {
 		m.ackLock.Lock()
 		delete(m.ackHandlers, seqNo)
 		m.ackLock.Unlock()
@@ -861,7 +855,11 @@ func (m *Memberlist) setProbeChannels(seqNo uint32, ackCh chan ackMessage, nackC
 		case ackCh <- ackMessage{false, nil, time.Now()}:
 		default:
 		}
-	})
+	})}
+
+	m.ackLock.Lock()
+	m.ackHandlers[seqNo] = ah
+	m.ackLock.Unlock()
 }
 
 // setAckHandler is used to attach a handler to be invoked when an ack with a

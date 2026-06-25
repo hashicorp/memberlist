@@ -28,7 +28,7 @@ func HostMemberlist(host string, t *testing.T, f func(*Config)) *Memberlist {
 	c.Name = host
 	c.BindAddr = host
 	c.BindPort = 0 // choose a free port
-	c.Logger = log.New(os.Stderr, host, log.LstdFlags)
+	c.Logger = log.New(os.Stderr, host+" ", log.LstdFlags)
 	if f != nil {
 		f(c)
 	}
@@ -818,11 +818,11 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 		c.ProbeInterval = 200 * time.Millisecond
 		probeTimeMax = c.ProbeInterval + 50*time.Millisecond
 	})
-	defer func() {
+	t.Cleanup(func() {
 		if err := m1.Shutdown(); err != nil {
 			t.Fatal(err)
 		}
-	}()
+	})
 
 	bindPort := m1.config.BindPort
 
@@ -831,11 +831,11 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 		c.ProbeTimeout = 10 * time.Millisecond
 		c.ProbeInterval = 200 * time.Millisecond
 	})
-	defer func() {
+	t.Cleanup(func() {
 		if err := m2.Shutdown(); err != nil {
 			t.Fatal(err)
 		}
-	}()
+	})
 
 	a1 := alive{Node: addr1.String(), Addr: ip1, Port: uint16(bindPort), Incarnation: 1, Vsn: m1.config.BuildVsnArray()}
 	m1.aliveNode(&a1, nil, true)
@@ -850,11 +850,9 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 	m1.aliveNode(&a4, nil, false)
 
 	// Make sure health looks good.
-	if score := m1.GetHealthScore(); score != 0 {
-		t.Fatalf("bad: %d", score)
-	}
+	require.Equal(t, 0, m1.GetHealthScore())
 
-	// Have node m1 probe m4.
+	// Have node m1 probe m4, which isn't up
 	n := m1.nodeMap[addr4.String()]
 	startProbe := time.Now()
 	m1.probeNode(n)
@@ -863,9 +861,7 @@ func TestMemberList_ProbeNode_Awareness_MissedNack(t *testing.T) {
 	// Node should be reported suspect.
 
 	m1.nodeLock.Lock()
-	if n.State != StateSuspect {
-		t.Fatalf("expect node to be suspect")
-	}
+	require.Equal(t, StateSuspect, n.State, "expect node to be suspect")
 	m1.nodeLock.Unlock()
 
 	// Make sure we timed out approximately on time.

@@ -12,6 +12,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -130,16 +131,31 @@ func moveDeadNodes(nodes []*nodeState, gossipToTheDeadTime time.Duration) int {
 func kRandomNodes(k int, nodes []*nodeState, exclude func(*nodeState) bool) []Node {
 	n := len(nodes)
 	kNodes := make([]Node, 0, k)
+
+	// When n is very small (ex. 3-5 node Raft clusters), we can easily miss
+	// non-excluded nodes with random selection, so instead shuffle the slice
+	// to ensure the search is exhaustive
+	if n < k*3 {
+		nodes := slices.Clone(nodes)
+		shuffleNodes(nodes)
+		for idx := 0; idx < n && len(kNodes) < k; idx++ {
+			state := nodes[idx]
+			if exclude != nil && exclude(state) {
+				continue
+			}
+			kNodes = append(kNodes, state.Node)
+		}
+		return kNodes
+	}
+
 OUTER:
-	// Probe up to 3*n times, with large n this is not necessary
-	// since k << n, but with small n we want search to be
-	// exhaustive
+	// Probe up to 3*n times, with large n this is not necessary since k << n,
+	// but when n >= k*3 but still not "large", we want to give the search a shot
+	// at being exhaustive
 	for i := 0; i < 3*n && len(kNodes) < k; i++ {
-		// Get random nodeState
 		idx := randomOffset(n)
 		state := nodes[idx]
 
-		// Give the filter a shot at it.
 		if exclude != nil && exclude(state) {
 			continue OUTER
 		}
@@ -151,7 +167,6 @@ OUTER:
 			}
 		}
 
-		// Append the node
 		kNodes = append(kNodes, state.Node)
 	}
 	return kNodes
