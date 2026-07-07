@@ -951,6 +951,11 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		return
 	}
 
+	// maxIncarnation is valid (the highest legit refutation); only above it is rejected.
+	if a.Incarnation > maxIncarnation {
+		return
+	}
+
 	if len(a.Vsn) >= 3 {
 		pMin := a.Vsn[0]
 		pMax := a.Vsn[1]
@@ -1089,6 +1094,11 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 
 	// If this is us we need to refute, otherwise re-broadcast
 	if !bootstrap && isLocalNode {
+		// A self-alive triggers refute(), so treat it as an accusation
+		if a.Incarnation >= maxIncarnation {
+			return
+		}
+
 		// Compute the version vector
 		versions := []uint8{
 			state.PMin, state.PMax, state.PCur,
@@ -1167,6 +1177,11 @@ func (m *Memberlist) suspectNode(s *suspect) {
 
 	// Ignore old incarnation numbers
 	if s.Incarnation < state.Incarnation {
+		return
+	}
+
+	// At/above the cap a refute would overshoot it, so reject (cf. > on alive).
+	if s.Incarnation >= maxIncarnation {
 		return
 	}
 
@@ -1260,6 +1275,11 @@ func (m *Memberlist) deadNode(d *dead) {
 
 	// Ignore old incarnation numbers
 	if d.Incarnation < state.Incarnation {
+		return
+	}
+
+	// At/above the cap a refute would overshoot it, so reject (cf. > on alive).
+	if d.Incarnation >= maxIncarnation {
 		return
 	}
 

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"os"
 	"reflect"
@@ -2660,4 +2661,213 @@ func verifySampleExists(t *testing.T, name string, sink *metrics.InmemSink) {
 	if _, ok := interval.Samples[name]; !ok {
 		t.Fatalf("%s sample not emmited", name)
 	}
+}
+
+// A suspect at the ceiling is dropped before refute can overflow.
+func TestMemberList_SuspectNode_MaxIncarnation(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, true)
+
+	m.suspectNode(&suspect{Node: m.config.Name, Incarnation: math.MaxUint32})
+
+	// Incarnation is unchanged: the pre-cap code refutes and wraps it to 0.
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	state := m.nodeMap[m.config.Name]
+	require.Equal(t, StateAlive, state.State)
+	require.Equal(t, uint32(10), state.Incarnation)
+}
+
+// Just below the ceiling: not dropped, so we refute to maxIncarnation without
+// wrapping and stay in the list.
+func TestMemberList_SuspectNode_NearMaxIncarnation(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, true)
+
+	m.suspectNode(&suspect{Node: m.config.Name, Incarnation: maxIncarnation - 1})
+
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	state := m.nodeMap[m.config.Name]
+	require.Equal(t, StateAlive, state.State)
+	require.Equal(t, uint32(maxIncarnation), state.Incarnation)
+}
+
+// The same for a dead message at the ceiling.
+func TestMemberList_DeadNode_MaxIncarnation(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, true)
+
+	m.deadNode(&dead{Node: m.config.Name, Incarnation: math.MaxUint32})
+
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	state := m.nodeMap[m.config.Name]
+	require.Equal(t, StateAlive, state.State)
+	require.Equal(t, uint32(10), state.Incarnation)
+}
+
+// A self-alive at the ceiling must not leap our incarnation past it.
+func TestMemberList_AliveNode_MaxIncarnation(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, true)
+
+	b := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: maxIncarnation, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&b, nil, false)
+
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	state := m.nodeMap[m.config.Name]
+	require.Equal(t, uint32(10), state.Incarnation)
+}
+
+// A remote alive at maxIncarnation (the highest legitimate refutation) is still accepted.
+func TestMemberList_AliveNode_RefuteAtMax(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: maxIncarnation, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, false)
+
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	state := m.nodeMap["test"]
+	require.Equal(t, StateAlive, state.State)
+	require.Equal(t, uint32(maxIncarnation), state.Incarnation)
+}
+
+// A remote alive above the ceiling is dropped; the incarnation is unchanged.
+func TestMemberList_AliveNode_AboveMaxIncarnation(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, false)
+
+	b := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: math.MaxUint32, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&b, nil, false)
+
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	state := m.nodeMap["test"]
+	require.Equal(t, StateAlive, state.State)
+	require.Equal(t, uint32(10), state.Incarnation)
+}
+
+// A remote suspect at maxIncarnation-1 is cleared by the alive at maxIncarnation.
+func TestMemberList_SuspectNode_RefuteOverridesSuspicion(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, false)
+
+	m.suspectNode(&suspect{Node: "test", Incarnation: maxIncarnation - 1})
+	require.Equal(t, StateSuspect, m.getNodeState("test"))
+
+	b := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: maxIncarnation, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&b, nil, false)
+
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	state := m.nodeMap["test"]
+	require.Equal(t, StateAlive, state.State)
+	require.Equal(t, uint32(maxIncarnation), state.Incarnation)
+}
+
+// A node pinned at the ceiling can't be failed: an accusation is either at/above
+// the cap (dropped) or below its incarnation (stale). Known residual, left to a
+// follow-up.
+func TestMemberList_PinnedNodeIsUnfailable(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, false)
+
+	// Drive the remote node to the ceiling with an accepted alive.
+	b := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: maxIncarnation, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&b, nil, false)
+	require.Equal(t, StateAlive, m.getNodeState("test"))
+
+	// No accusation removes it.
+	m.deadNode(&dead{Node: "test", Incarnation: maxIncarnation})
+	m.deadNode(&dead{Node: "test", Incarnation: maxIncarnation - 1})
+	m.suspectNode(&suspect{Node: "test", Incarnation: maxIncarnation})
+	require.Equal(t, StateAlive, m.getNodeState("test"))
+}
+
+// The cap is enforced on accepted messages, not the counter: a node at the
+// ceiling increments past maxIncarnation on its next self-alive, which is then
+// dropped. Known residual, left to a follow-up.
+func TestMemberList_CounterDriftsPastCap(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	a := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: 10, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, true)
+
+	// Drive the node to the ceiling.
+	m.suspectNode(&suspect{Node: m.config.Name, Incarnation: maxIncarnation - 1})
+	require.Equal(t, uint32(maxIncarnation), m.incarnation.Load())
+
+	// The next self-alive increments past the cap and is dropped.
+	inc := m.nextIncarnation()
+	require.Greater(t, inc, uint32(maxIncarnation))
+	self := alive{Node: m.config.Name, Addr: []byte{127, 0, 0, 1}, Incarnation: inc, Meta: []byte("fresh"), Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&self, nil, true)
+
+	m.nodeLock.RLock()
+	defer m.nodeLock.RUnlock()
+	state := m.nodeMap[m.config.Name]
+	require.Equal(t, uint32(maxIncarnation), state.Incarnation)
+	require.Empty(t, state.Meta)
 }

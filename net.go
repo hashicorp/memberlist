@@ -88,6 +88,8 @@ const (
 	maxPushStateBytes      = 20 * 1024 * 1024
 	maxPushStateNodes      = 1024 * 1024 // Each requires conservatively  ~20 bytes when encoded
 	maxPushPullRequests    = 128         // Maximum number of concurrent push/pull requests
+
+	maxIncarnation = math.MaxUint32 - (1 << 16) // Leave headroom so skipIncarnation can't overflow
 )
 
 // ping request sent directly to node
