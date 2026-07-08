@@ -1074,6 +1074,42 @@ func TestReadRemoteState_Limits(t *testing.T) {
 	})
 }
 
+func TestReadUserMsg_Limit(t *testing.T) {
+
+	mockNet := &MockNetwork{}
+	tr := mockNet.NewTransport("node")
+	logs := &bytes.Buffer{}
+	logger := log.New(logs, "", 0)
+
+	m := GetMemberlist(t, func(c *Config) {
+		c.EnableCompression = false
+		c.Logger = logger
+		c.Transport = tr
+		c.BindAddr = "127.0.0.1"
+		c.BindPort = 1
+	})
+	t.Cleanup(func() { _ = m.Shutdown() })
+
+	addr := joinHostPort(m.config.BindAddr, uint16(m.config.BindPort))
+
+	msg := userMsgHeader{UserMsgLen: 30_000_000}
+	buf, err := encode(userMsg, msg, m.config.MsgpackUseNewTimeFormat)
+	require.NoError(t, err)
+
+	conn, err := tr.DialTimeout(addr, time.Millisecond*100)
+	require.NoError(t, err)
+
+	err = m.rawSendMsgStream(conn, buf.Bytes(), "")
+	require.NoError(t, err)
+
+	// conn closed: get nothing back
+	var out []byte
+	_, err = conn.Read(out)
+	require.ErrorContains(t, err, "EOF")
+	require.Contains(t, logs.String(),
+		"user message length (30000000) exceeds limit")
+}
+
 func TestHandleConn_NilConnAfterRemoveLabelHeaderFromStream(t *testing.T) {
 	mockNet := &MockNetwork{}
 
