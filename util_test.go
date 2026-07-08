@@ -399,3 +399,19 @@ func TestCompressDecompressPayload(t *testing.T) {
 		t.Fatalf("bad payload: %v", decomp)
 	}
 }
+
+func TestDecompressPayload_Limit(t *testing.T) {
+	// Over the limit: rejected.
+	buf, err := compressPayload(make([]byte, maxDecompressedBytes+1), false)
+	require.NoError(t, err)
+
+	_, err = decompressPayload(buf.Bytes()[1:])
+	require.ErrorContains(t, err, "larger than limit")
+
+	// Between the wire limit and the decompressed limit: accepted.
+	buf, err = compressPayload(make([]byte, maxPushStateBytes+1), false)
+	require.NoError(t, err)
+
+	_, err = decompressPayload(buf.Bytes()[1:])
+	require.NoError(t, err)
+}

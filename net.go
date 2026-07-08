@@ -89,6 +89,8 @@ const (
 	maxPushStateNodes      = 1024 * 1024      // Each requires conservatively  ~20 bytes when encoded
 	maxUserMsgBytes        = 20 * 1024 * 1024 // Largest user message we will buffer off the wire
 	maxPushPullRequests    = 128              // Maximum number of concurrent push/pull requests
+
+	maxDecompressedBytes = 2 * maxPushStateBytes // Largest push/pull we will decompress: user state plus an equal node budget
 )
 
 // ping request sent directly to node
