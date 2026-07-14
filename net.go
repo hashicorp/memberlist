@@ -1291,6 +1291,10 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 	if join && m.config.Merge != nil {
 		nodes := make([]*Node, len(remoteNodes))
 		for idx, n := range remoteNodes {
+			// Skip nodes without proper version information
+			if len(n.Vsn) < 6 {
+				continue
+			}
 			nodes[idx] = &Node{
 				Name:  n.Name,
 				Addr:  n.Addr,
