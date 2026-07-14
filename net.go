@@ -1215,6 +1215,9 @@ func (m *Memberlist) readStream(conn net.Conn, streamLabel string) (messageType,
 		if err != nil {
 			return 0, nil, nil, err
 		}
+		if len(decomp) == 0 {
+			return 0, nil, nil, fmt.Errorf("decompressed message is empty")
+		}
 
 		// Reset the message type
 		msgType = messageType(decomp[0])
