@@ -86,8 +86,9 @@ const (
 	userMsgOverhead        = 1
 	blockingWarning        = 10 * time.Millisecond // Warn if a UDP packet takes this long to process
 	maxPushStateBytes      = 20 * 1024 * 1024
-	maxPushStateNodes      = 1024 * 1024 // Each requires conservatively  ~20 bytes when encoded
-	maxPushPullRequests    = 128         // Maximum number of concurrent push/pull requests
+	maxPushStateNodes      = 1024 * 1024      // Each requires conservatively  ~20 bytes when encoded
+	maxUserMsgBytes        = 20 * 1024 * 1024 // Largest user message we will buffer off the wire
+	maxPushPullRequests    = 128              // Maximum number of concurrent push/pull requests
 )
 
 // ping request sent directly to node
@@ -1323,6 +1324,10 @@ func (m *Memberlist) readUserMsg(bufConn io.Reader, dec *codec.Decoder) error {
 	var header userMsgHeader
 	if err := dec.Decode(&header); err != nil {
 		return err
+	}
+
+	if header.UserMsgLen < 0 || header.UserMsgLen > maxUserMsgBytes {
+		return fmt.Errorf("user message length (%d) exceeds limit", header.UserMsgLen)
 	}
 
 	// Read the user message into a buffer
