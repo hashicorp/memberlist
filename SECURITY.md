@@ -1,14 +1,14 @@
 # memberlist Security Model
 
 This document describes the security model of `memberlist`: the guarantees it
-provides, the configuration required to obtain them, and — just as importantly —
+provides, the configuration required to obtain them, and
 what is explicitly **outside** its threat model.
 
 `memberlist` is a library, not a product. It is embedded by higher-level systems
 such as [HashiCorp Serf](https://github.com/hashicorp/serf), and, through Serf,
 by [Consul](https://developer.hashicorp.com/consul) and
 [Nomad](https://developer.hashicorp.com/nomad). This document is written for
-**developers integrating `memberlist`**. Some responsibilities described here
+developers integrating `memberlist`. Some responsibilities described here
 (identity, authorization, key distribution, encryption at rest) are intentionally
 delegated to the embedding application.
 
@@ -29,8 +29,8 @@ Nodes exchange two kinds of traffic:
   `suspect`, `dead`, user messages).
 - **TCP streams** — full-state push/pull synchronization and TCP fallback pings.
 
-The only security primitive `memberlist` provides is **symmetric encryption and
-authentication of this traffic** using a shared keyring (AES-GCM). It does not
+The only security primitive `memberlist` provides is symmetric encryption and
+authentication of this traffic using a shared keyring (AES-GCM). It does not
 provide, and is not designed to provide, per-node identity, authentication, or
 authorization.
 
@@ -64,17 +64,17 @@ identity and authorization systems (e.g. mTLS and ACLs) on top.
 - **Enable gossip encryption.** Provide a key via `Config.SecretKey` (or a
   fully constructed `Config.Keyring`). The key must be 16, 24, or 32 bytes,
   selecting AES-128, AES-192, or AES-256 respectively. When a key is present,
-  `memberlist` encrypts and authenticates **all** UDP gossip and **all** TCP
+  `memberlist` encrypts and authenticates all UDP gossip and all TCP
   push/pull state synchronization using AES-GCM.
 - **Keep verification enforced.** `Config.GossipVerifyIncoming` and
   `Config.GossipVerifyOutgoing` both default to `true` and should remain so.
   - `GossipVerifyIncoming = true` causes messages that cannot be decrypted and
-    authenticated to be dropped.
+    authenticated to be dropped. Setting `GossipVerifyIncoming = false` makes a node 
+    accept plaintext messages even when a key is configured. 
   - `GossipVerifyOutgoing = true` causes all outbound messages to be encrypted.
-  - Setting `GossipVerifyIncoming = false` makes a node accept **plaintext**
-    messages even when a key is configured. These flags exist solely to allow a
-    running cluster to migrate from plaintext to encrypted gossip without
-    downtime, and should be returned to `true` once migration is complete.
+  - These two flags exist solely to allow a running cluster to migrate from 
+    plaintext to encrypted gossip without downtime, and should be returned to `true` 
+    once migration is complete.
 - **Protect the gossip key as a cluster-wide shared secret.** Distribute it
   out-of-band over a secure channel and restrict access to it. Anyone with the
   key is a fully trusted cluster member.
@@ -134,7 +134,7 @@ is enforced), the following are considered part of its threat model:
 
 ## Not in the threat model
 
-The following are **explicitly excluded** from `memberlist`'s threat model.
+The following are explicitly excluded from `memberlist`'s threat model.
 Integrators must mitigate these at a higher layer or through operational
 controls.
 
