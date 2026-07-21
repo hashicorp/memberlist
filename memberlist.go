@@ -581,8 +581,12 @@ func (m *Memberlist) SendToTCP(to *Node, msg []byte) error {
 
 // SendBestEffort uses the unreliable packet-oriented interface of the transport
 // to target a user message at the given node (this does not use the gossip
-// mechanism). The maximum size of the message depends on the configured
-// UDPBufferSize for this memberlist instance.
+// mechanism).
+//
+// Unlike gossip/sendMsg filling, SendBestEffort does not enforce Config.UDPBufferSize
+// as a maximum payload size; oversized messages may still be written and can fail
+// at the transport or OS UDP layer. Prefer SendReliable for large messages.
+// UDPBufferSize is used when packing piggybacked gossip into UDP packets.
 func (m *Memberlist) SendBestEffort(to *Node, msg []byte) error {
 	// Encode as a user message
 	buf := make([]byte, 1, len(msg)+1)
