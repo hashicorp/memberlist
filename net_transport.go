@@ -153,7 +153,8 @@ func (t *NetTransport) FinalAdvertiseAddr(ip string, port int) (net.IP, int, err
 		}
 		advertisePort = port
 	} else {
-		if t.config.BindAddrs[0] == "0.0.0.0" {
+		bindAddr := net.ParseIP(t.config.BindAddrs[0])
+		if bindAddr == nil || bindAddr.IsUnspecified() {
 			// Otherwise, if we're not bound to a specific IP, let's
 			// use a suitable private IP address.
 			var err error
