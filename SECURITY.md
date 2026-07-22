@@ -44,8 +44,8 @@ gossip key**.
   cluster. There is no cryptographic notion of an individual node's identity,
   and therefore no way to distinguish a legitimate member from a malicious one
   that also holds the key.
-- `memberlist` is a weakly consistent group membership protocol. It is **not 
-  Byzantine fault tolerant** and is **not a consensus protocol**. A single 
+- `memberlist` is a weakly consistent group membership protocol. It is **not
+  Byzantine fault tolerant** and is **not a consensus protocol**. A single
   authenticated-but-malicious peer can disrupt the cluster:
   it can add nodes, remove nodes (by broadcasting `dead`/`suspect`), reclaim or
   impersonate a node's name (by broadcasting a higher incarnation number), and
@@ -69,11 +69,11 @@ identity and authorization systems (e.g. mTLS and ACLs) on top.
 - **Keep verification enforced.** `Config.GossipVerifyIncoming` and
   `Config.GossipVerifyOutgoing` both default to `true` and should remain so.
   - `GossipVerifyIncoming = true` causes messages that cannot be decrypted and
-    authenticated to be dropped. Setting `GossipVerifyIncoming = false` makes a node 
-    accept plaintext messages even when a key is configured. 
+    authenticated to be dropped. Setting `GossipVerifyIncoming = false` makes a node
+    accept plaintext messages even when a key is configured.
   - `GossipVerifyOutgoing = true` causes all outbound messages to be encrypted.
-  - These two flags exist solely to allow a running cluster to migrate from 
-    plaintext to encrypted gossip without downtime, and should be returned to `true` 
+  - These two flags exist solely to allow a running cluster to migrate from
+    plaintext to encrypted gossip without downtime, and should be returned to `true`
     once migration is complete.
 - **Protect the gossip key as a cluster-wide shared secret.** Distribute it
   out-of-band over a secure channel and restrict access to it. Anyone with the
