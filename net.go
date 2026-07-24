@@ -1295,19 +1295,22 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 	if join && m.config.Merge != nil {
 		nodes := make([]*Node, len(remoteNodes))
 		for idx, n := range remoteNodes {
-			nodes[idx] = &Node{
+			node := &Node{
 				Name:  n.Name,
 				Addr:  n.Addr,
 				Port:  n.Port,
 				Meta:  n.Meta,
 				State: n.State,
-				PMin:  n.Vsn[0],
-				PMax:  n.Vsn[1],
-				PCur:  n.Vsn[2],
-				DMin:  n.Vsn[3],
-				DMax:  n.Vsn[4],
-				DCur:  n.Vsn[5],
 			}
+			if len(n.Vsn) >= 6 {
+				node.PMin = n.Vsn[0]
+				node.PMax = n.Vsn[1]
+				node.PCur = n.Vsn[2]
+				node.DMin = n.Vsn[3]
+				node.DMax = n.Vsn[4]
+				node.DCur = n.Vsn[5]
+			}
+			nodes[idx] = node
 		}
 		if err := m.config.Merge.NotifyMerge(nodes); err != nil {
 			return err
