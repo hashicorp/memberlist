@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -1216,7 +1217,7 @@ func (m *Memberlist) readStream(conn net.Conn, streamLabel string) (messageType,
 			return 0, nil, nil, err
 		}
 		if len(decomp) == 0 {
-			return 0, nil, nil, fmt.Errorf("decompressed message is empty")
+			return 0, nil, nil, errors.New("decompressed message is empty")
 		}
 
 		// Reset the message type
