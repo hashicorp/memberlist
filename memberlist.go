@@ -127,6 +127,11 @@ func newMemberlist(conf *Config) (*Memberlist, error) {
 		return nil, fmt.Errorf("cannot specify both LogOutput and Logger; please choose a single log configuration setting")
 	}
 
+	// Validate that both TCP and UDP pings are not disabled simultaneously
+	if conf.DisableTcpPings && conf.DisableUdpPings {
+		return nil, fmt.Errorf("cannot disable both TCP and UDP pings; at least one ping method must be enabled")
+	}
+
 	logDest := conf.LogOutput
 	if logDest == nil {
 		logDest = os.Stderr

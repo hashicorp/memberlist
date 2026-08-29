@@ -339,11 +339,23 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	deadline := sent.Add(probeInterval)
 	addr := node.Address()
 
+	// Check if UDP pings are disabled for this node
+	disableUdpPings := m.config.DisableUdpPings ||
+		(m.config.DisableUdpPingsForNode != nil && m.config.DisableUdpPingsForNode(node.Name))
+
 	// Arrange for our self-awareness to get updated.
 	var awarenessDelta int
 	defer func() {
 		m.awareness.ApplyDelta(awarenessDelta)
 	}()
+
+	if disableUdpPings {
+		// UDP pings are disabled, skip UDP ping entirely and go directly to
+		// indirect pings and TCP fallback
+		m.logger.Printf("[DEBUG] memberlist: UDP pings disabled for node %s, skipping UDP ping", node.Name)
+		goto HANDLE_REMOTE_FAILURE
+	}
+
 	if node.State == StateAlive {
 		if err := m.encodeAndSendMsg(node.FullAddress(), pingMsg, &ping); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send UDP ping: %s", err)
@@ -414,37 +426,42 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	}
 
 HANDLE_REMOTE_FAILURE:
-	// Get some random live nodes.
-	m.nodeLock.RLock()
-	kNodes := kRandomNodes(m.config.IndirectChecks, m.nodes, func(n *nodeState) bool {
-		return n.Name == m.config.Name ||
-			n.Name == node.Name ||
-			n.State != StateAlive
-	})
-	m.nodeLock.RUnlock()
 
-	// Attempt an indirect ping.
 	expectedNacks := 0
-	selfAddr, selfPort = m.getAdvertise()
-	ind := indirectPingReq{
-		SeqNo:      ping.SeqNo,
-		Target:     node.Addr,
-		Port:       node.Port,
-		Node:       node.Name,
-		SourceAddr: selfAddr,
-		SourcePort: selfPort,
-		SourceNode: m.config.Name,
-	}
-	for _, peer := range kNodes {
-		// We only expect nack to be sent from peers who understand
-		// version 4 of the protocol.
-		if ind.Nack = peer.PMax >= 4; ind.Nack {
-			expectedNacks++
-		}
+	if !disableUdpPings {
+		// Get some random live nodes for indirect UDP pings.
+		m.nodeLock.RLock()
+		kNodes := kRandomNodes(m.config.IndirectChecks, m.nodes, func(n *nodeState) bool {
+			return n.Name == m.config.Name ||
+				n.Name == node.Name ||
+				n.State != StateAlive
+		})
+		m.nodeLock.RUnlock()
 
-		if err := m.encodeAndSendMsg(peer.FullAddress(), indirectPingMsg, &ind); err != nil {
-			m.logger.Printf("[ERR] memberlist: Failed to send indirect UDP ping: %s", err)
+		// Attempt an indirect ping.
+		selfAddr, selfPort = m.getAdvertise()
+		ind := indirectPingReq{
+			SeqNo:      ping.SeqNo,
+			Target:     node.Addr,
+			Port:       node.Port,
+			Node:       node.Name,
+			SourceAddr: selfAddr,
+			SourcePort: selfPort,
+			SourceNode: m.config.Name,
 		}
+		for _, peer := range kNodes {
+			// We only expect nack to be sent from peers who understand
+			// version 4 of the protocol.
+			if ind.Nack = peer.PMax >= 4; ind.Nack {
+				expectedNacks++
+			}
+
+			if err := m.encodeAndSendMsg(peer.FullAddress(), indirectPingMsg, &ind); err != nil {
+				m.logger.Printf("[ERR] memberlist: Failed to send indirect UDP ping: %s", err)
+			}
+		}
+	} else {
+		m.logger.Printf("[DEBUG] memberlist: UDP pings disabled for node %s, skipping indirect UDP pings", node.Name)
 	}
 
 	// Also make an attempt to contact the node directly over TCP. This
@@ -493,7 +510,15 @@ HANDLE_REMOTE_FAILURE:
 	// any additional time here.
 	for didContact := range fallbackCh {
 		if didContact {
-			m.logger.Printf("[WARN] memberlist: Was able to connect to %s over TCP but UDP probes failed, network may be misconfigured", node.Name)
+			// Check if UDP pings were disabled for this node
+			disableUdpPings := m.config.DisableUdpPings ||
+				(m.config.DisableUdpPingsForNode != nil && m.config.DisableUdpPingsForNode(node.Name))
+
+			if disableUdpPings {
+				m.logger.Printf("[INFO] memberlist: Successfully connected to %s over TCP (UDP pings disabled for this node)", node.Name)
+			} else {
+				m.logger.Printf("[WARN] memberlist: Was able to connect to %s over TCP but UDP probes failed, network may be misconfigured", node.Name)
+			}
 			return
 		}
 	}
