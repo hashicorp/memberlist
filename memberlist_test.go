@@ -671,6 +671,113 @@ func TestMemberList_Members(t *testing.T) {
 	}
 }
 
+// TestMembers_ReturnsIndependentCopy checks that Members() does not return
+// pointers into the internal node list. Callers are allowed to read the
+// returned nodes without holding any lock, so those nodes must be snapshots.
+func TestMembers_ReturnsIndependentCopy(t *testing.T) {
+	origAddr := net.ParseIP("127.0.0.1").To4()
+	n1 := Node{Name: "test", Addr: origAddr, Port: 8000, Meta: []byte("meta")}
+	m := &Memberlist{}
+	m.nodes = []*nodeState{
+		{Node: n1, State: StateAlive},
+	}
+
+	members := m.Members()
+	if len(members) != 1 {
+		t.Fatalf("expected 1 member, got %d", len(members))
+	}
+	if members[0] == &m.nodes[0].Node {
+		t.Fatal("Members() returned a pointer to the internal node")
+	}
+
+	// Simulate aliveNode mutating the internal node (issue #306).
+	m.nodes[0].Addr = net.ParseIP("10.0.0.1").To4()
+	m.nodes[0].Port = 9000
+	m.nodes[0].Meta = []byte("changed")
+
+	if members[0].Port != 8000 {
+		t.Fatalf("Members() snapshot Port changed to %d", members[0].Port)
+	}
+	if !members[0].Addr.Equal(origAddr) {
+		t.Fatalf("Members() snapshot Addr changed to %v", members[0].Addr)
+	}
+	if !bytes.Equal(members[0].Meta, []byte("meta")) {
+		t.Fatalf("Members() snapshot Meta changed to %q", members[0].Meta)
+	}
+	if got := members[0].Address(); got != "127.0.0.1:8000" {
+		t.Fatalf("Members() snapshot Address() = %s", got)
+	}
+}
+
+// TestMembers_NoRaceWithAliveNode reproduces the data race in issue #306:
+// Members() used to return pointers to internal nodes, so a caller reading
+// Node.Address() raced with aliveNode writing Addr/Port/Meta.
+func TestMembers_NoRaceWithAliveNode(t *testing.T) {
+	addr1 := getBindAddr()
+	m1 := HostMemberlist(addr1.String(), t, nil)
+	defer func() {
+		if err := m1.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	a1 := alive{
+		Node:        addr1.String(),
+		Addr:        []byte(addr1),
+		Port:        uint16(m1.config.BindPort),
+		Incarnation: 1,
+		Vsn:         m1.config.BuildVsnArray(),
+	}
+	m1.aliveNode(&a1, nil, true)
+
+	peer := getBindAddr()
+	a2 := alive{
+		Node:        peer.String(),
+		Addr:        []byte(peer),
+		Port:        8000,
+		Incarnation: 1,
+		Meta:        []byte("meta"),
+		Vsn:         m1.config.BuildVsnArray(),
+	}
+	m1.aliveNode(&a2, nil, false)
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				for _, n := range m1.Members() {
+					_ = n.Address()
+					_ = n.FullAddress()
+					_ = n.Name
+					_ = n.Port
+					_ = len(n.Addr)
+					_ = len(n.Meta)
+				}
+			}
+		}
+	}()
+
+	for i := uint32(2); i < 2000; i++ {
+		a := alive{
+			Node:        peer.String(),
+			Addr:        []byte(peer),
+			Port:        8000,
+			Incarnation: i,
+			Meta:        []byte{byte(i)},
+			Vsn:         m1.config.BuildVsnArray(),
+		}
+		m1.aliveNode(&a, nil, false)
+	}
+	close(stop)
+	wg.Wait()
+}
+
 func TestMemberlist_Join(t *testing.T) {
 	c1 := testConfig(t)
 	m1, err := Create(c1)

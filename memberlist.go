@@ -612,7 +612,10 @@ func (m *Memberlist) Members() []*Node {
 	nodes := make([]*Node, 0, len(m.nodes))
 	for _, n := range m.nodes {
 		if !n.DeadOrLeft() {
-			nodes = append(nodes, &n.Node)
+			// Copy so callers can read without racing aliveNode updates
+			// to the internal node (Addr/Port/Meta).
+			node := n.Node
+			nodes = append(nodes, &node)
 		}
 	}
 
