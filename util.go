@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"slices"
 	"strconv"
@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-msgpack/v2/codec"
-	"github.com/sean-/seed"
 )
 
 // pushPullScale is the minimum number of nodes
@@ -32,10 +31,6 @@ const (
 	// Constant litWidth 2-8
 	lzwLitWidth = 8
 )
-
-func init() {
-	_, _ = seed.Init()
-}
 
 // Decode reverses the encode operation on a byte slice input
 func decode(buf []byte, out any) error {
@@ -62,7 +57,7 @@ func randomOffset(n int) int {
 	if n == 0 {
 		return 0
 	}
-	return int(rand.Uint32() % uint32(n))
+	return rand.IntN(n)
 }
 
 // suspicionTimeout computes the timeout that should be used when
@@ -83,8 +78,7 @@ func retransmitLimit(retransmitMult, n int) int {
 
 // shuffleNodes randomly shuffles the input nodes using the Fisher-Yates shuffle
 func shuffleNodes(nodes []*nodeState) {
-	n := len(nodes)
-	rand.Shuffle(n, func(i, j int) {
+	rand.Shuffle(len(nodes), func(i, j int) {
 		nodes[i], nodes[j] = nodes[j], nodes[i]
 	})
 }

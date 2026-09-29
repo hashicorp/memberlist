@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -162,8 +162,8 @@ func (m *Memberlist) schedule() {
 // triggerFunc is used to trigger a function call each time a
 // message is received until a stop tick arrives.
 func (m *Memberlist) triggerFunc(stagger time.Duration, C <-chan time.Time, stop <-chan struct{}, f func()) {
-	// Use a random stagger to avoid syncronizing
-	randStagger := time.Duration(uint64(rand.Int63()) % uint64(stagger))
+	// Use a random stagger to avoid synchronizing.
+	randStagger := rand.N(stagger)
 	select {
 	case <-time.After(randStagger):
 	case <-stop:
@@ -186,8 +186,8 @@ func (m *Memberlist) triggerFunc(stagger time.Duration, C <-chan time.Time, stop
 func (m *Memberlist) pushPullTrigger(stop <-chan struct{}) {
 	interval := m.config.PushPullInterval
 
-	// Use a random stagger to avoid syncronizing
-	randStagger := time.Duration(uint64(rand.Int63()) % uint64(interval))
+	// Use a random stagger to avoid synchronizing.
+	randStagger := rand.N(interval)
 	select {
 	case <-time.After(randStagger):
 	case <-stop:
