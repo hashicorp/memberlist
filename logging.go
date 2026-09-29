@@ -8,6 +8,10 @@ import (
 	"net"
 )
 
+type Logger interface {
+	Printf(format string, v ...interface{})
+}
+
 func LogAddress(addr net.Addr) string {
 	if addr == nil {
 		return "from=<unknown address>"
