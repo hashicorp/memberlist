@@ -40,6 +40,10 @@ const (
 	StateLeft
 )
 
+func (nst NodeStateType) String() string {
+	return []string{"StateAlive", "StateSuspect", "StateDead", "StateLeft"}[nst]
+}
+
 // Node represents a node in the cluster.
 type Node struct {
 	Name  string
