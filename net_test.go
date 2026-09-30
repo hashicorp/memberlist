@@ -518,12 +518,12 @@ func TestTCPPushPull(t *testing.T) {
 
 	m.nodes = append(m.nodes, &nodeState{
 		Node: Node{
-			Name: "Test 0",
-			Addr: net.ParseIP(m.config.BindAddr),
-			Port: uint16(m.config.BindPort),
+			Name:  "Test 0",
+			Addr:  net.ParseIP(m.config.BindAddr),
+			Port:  uint16(m.config.BindPort),
+			State: StateSuspect,
 		},
 		Incarnation: 0,
-		State:       StateSuspect,
 		StateChange: time.Now().Add(-1 * time.Second),
 	})
 
