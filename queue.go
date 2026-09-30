@@ -25,7 +25,7 @@ type TransmitLimitedQueue struct {
 	RetransmitMult int
 
 	mu    sync.Mutex
-	tq    *btree.BTree // stores *limitedBroadcast as btree.Item
+	tq    *btree.BTreeG[*limitedBroadcast]
 	tm    map[string]*limitedBroadcast
 	idGen int64
 }
@@ -49,19 +49,18 @@ type limitedBroadcast struct {
 // - [transmits=0, ..., transmits=inf]
 // - [transmits=0:len=999, ..., transmits=0:len=2, ...]
 // - [transmits=0:len=999,id=999, ..., transmits=0:len=999:id=1, ...]
-func (b *limitedBroadcast) Less(than btree.Item) bool {
-	o := than.(*limitedBroadcast)
-	if b.transmits < o.transmits {
+func (b *limitedBroadcast) Less(than *limitedBroadcast) bool {
+	if b.transmits < than.transmits {
 		return true
-	} else if b.transmits > o.transmits {
+	} else if b.transmits > than.transmits {
 		return false
 	}
-	if b.msgLen > o.msgLen {
+	if b.msgLen > than.msgLen {
 		return true
-	} else if b.msgLen < o.msgLen {
+	} else if b.msgLen < than.msgLen {
 		return false
 	}
-	return b.id > o.id
+	return b.id > than.id
 }
 
 // walkReadOnlyLocked calls f for each item in the queue traversing it in
@@ -75,9 +74,7 @@ func (q *TransmitLimitedQueue) walkReadOnlyLocked(reverse bool, f func(*limitedB
 		return
 	}
 
-	iter := func(item btree.Item) bool {
-		cur := item.(*limitedBroadcast)
-
+	iter := func(cur *limitedBroadcast) bool {
 		prevTransmits := cur.transmits
 		prevMsgLen := cur.msgLen
 		prevID := cur.id
@@ -158,7 +155,7 @@ func (q *TransmitLimitedQueue) QueueBroadcast(b Broadcast) {
 // needed.  You must already hold the mutex.
 func (q *TransmitLimitedQueue) lazyInit() {
 	if q.tq == nil {
-		q.tq = btree.New(32)
+		q.tq = btree.NewG(32, (*limitedBroadcast).Less)
 	}
 	if q.tm == nil {
 		q.tm = make(map[string]*limitedBroadcast)
@@ -204,9 +201,7 @@ func (q *TransmitLimitedQueue) queueBroadcast(b Broadcast, initialTransmits int)
 	} else if !unique {
 		// Slow path, hopefully nothing hot hits this.
 		var remove []*limitedBroadcast
-		q.tq.Ascend(func(item btree.Item) bool {
-			cur := item.(*limitedBroadcast)
-
+		q.tq.Ascend(func(cur *limitedBroadcast) bool {
 			// Special Broadcasts can only invalidate each other.
 			switch cur.b.(type) {
 			case NamedBroadcast:
@@ -233,7 +228,7 @@ func (q *TransmitLimitedQueue) queueBroadcast(b Broadcast, initialTransmits int)
 // deleteItem removes the given item from the overall datastructure. You
 // must already hold the mutex.
 func (q *TransmitLimitedQueue) deleteItem(cur *limitedBroadcast) {
-	_ = q.tq.Delete(cur)
+	_, _ = q.tq.Delete(cur)
 	if cur.name != "" {
 		delete(q.tm, cur.name)
 	}
@@ -248,7 +243,7 @@ func (q *TransmitLimitedQueue) deleteItem(cur *limitedBroadcast) {
 // addItem adds the given item into the overall datastructure. You must already
 // hold the mutex.
 func (q *TransmitLimitedQueue) addItem(cur *limitedBroadcast) {
-	_ = q.tq.ReplaceOrInsert(cur)
+	_, _ = q.tq.ReplaceOrInsert(cur)
 	if cur.name != "" {
 		q.tm[cur.name] = cur
 	}
@@ -261,15 +256,13 @@ func (q *TransmitLimitedQueue) getTransmitRange() (minTransmit, maxTransmit int)
 	if q.lenLocked() == 0 {
 		return 0, 0
 	}
-	minItem, maxItem := q.tq.Min(), q.tq.Max()
-	if minItem == nil || maxItem == nil {
+	minItem, minOK := q.tq.Min()
+	maxItem, maxOK := q.tq.Max()
+	if !minOK || !maxOK {
 		return 0, 0
 	}
 
-	min := minItem.(*limitedBroadcast).transmits
-	max := maxItem.(*limitedBroadcast).transmits
-
-	return min, max
+	return minItem.transmits, maxItem.transmits
 }
 
 // GetBroadcasts is used to get a number of broadcasts, up to a byte limit
@@ -314,8 +307,7 @@ func (q *TransmitLimitedQueue) GetBroadcasts(overhead, limit int) [][]byte {
 			id:        math.MaxInt64,
 		}
 		var keep *limitedBroadcast
-		q.tq.AscendRange(greaterOrEqual, lessThan, func(item btree.Item) bool {
-			cur := item.(*limitedBroadcast)
+		q.tq.AscendRange(greaterOrEqual, lessThan, func(cur *limitedBroadcast) bool {
 			// Check if this is within our limits
 			if int64(len(cur.b.Message())) > free {
 				// If this happens it's a bug in the datastructure or
@@ -400,11 +392,10 @@ func (q *TransmitLimitedQueue) Prune(maxRetain int) {
 
 	// Do nothing if queue size is less than the limit
 	for q.tq.Len() > maxRetain {
-		item := q.tq.Max()
-		if item == nil {
+		cur, ok := q.tq.Max()
+		if !ok {
 			break
 		}
-		cur := item.(*limitedBroadcast)
 		cur.b.Finished()
 		q.deleteItem(cur)
 	}
