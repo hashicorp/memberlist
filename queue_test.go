@@ -156,13 +156,13 @@ func TestTransmitLimited_GetBroadcasts_Limit(t *testing.T) {
 	partial3 := q.GetBroadcasts(3, 80)
 	require.Equal(t, 2, len(partial3), "missing messages: %v", prettyPrintMessages(partial3))
 
-	require.Equal(t, int64(0), q.idGen, "id generator resets on empty")
+	require.Equal(t, int64(4), q.idGen, "id generator doesn't reset on empty")
 
 	// Should get nothing
 	partial5 := q.GetBroadcasts(3, 80)
 	require.Equal(t, 0, len(partial5), "missing messages: %v", prettyPrintMessages(partial5))
 
-	require.Equal(t, int64(0), q.idGen, "id generator resets on empty")
+	require.Equal(t, int64(4), q.idGen, "id generator doesn't reset on empty")
 }
 
 func prettyPrintMessages(msgs [][]byte) []string {
@@ -242,4 +242,84 @@ func TestTransmitLimited_ordering(t *testing.T) {
 	if dump[4].transmits != 0 {
 		t.Fatalf("bad val %v, %d", dump[4].b.(*memberlistBroadcast).node, dump[4].transmits)
 	}
+}
+
+type namedTestBroadcast struct {
+	name string
+	msg  []byte
+}
+
+func (b *namedTestBroadcast) Name() string                 { return b.name }
+func (b *namedTestBroadcast) Message() []byte              { return b.msg }
+func (b *namedTestBroadcast) Finished()                    {}
+func (b *namedTestBroadcast) Invalidates(o Broadcast) bool { return false }
+
+func namedMsg(name string, fill byte) *namedTestBroadcast {
+	msg := make([]byte, 115)
+	for i := range msg {
+		msg[i] = fill
+	}
+	return &namedTestBroadcast{name: name, msg: msg}
+}
+
+// A named broadcast that replaces an earlier one empties the queue, which
+// resets the id generator; the replacement must not reuse the id of an item
+// queued after it.
+func TestTransmitLimitedQueue_NamedReplaceThenRelaysKeepsAll(t *testing.T) {
+	q := &TransmitLimitedQueue{
+		NumNodes:       func() int { return 3 },
+		RetransmitMult: 4,
+	}
+
+	q.QueueBroadcast(namedMsg("node-3", 'a'))
+	q.QueueBroadcast(namedMsg("node-3", 'b'))
+	q.QueueBroadcast(namedMsg("node-1", 'c'))
+	q.QueueBroadcast(namedMsg("node-2", 'd'))
+
+	require.Equal(t, 3, q.NumQueued())
+
+	var found bool
+	for _, m := range q.GetBroadcasts(2, 1398) {
+		if len(m) > 0 && m[0] == 'b' {
+			found = true
+		}
+	}
+	require.True(t, found, "second node-3 message missing from GetBroadcasts")
+}
+
+// Sending the only queued item deletes it and re-adds it one tier down. If
+// that delete reset the id generator, items queued afterwards would reuse its
+// id and, once they reach its tier, overwrite it in the tree.
+func TestTransmitLimitedQueue_ReinsertAfterIdleKeepsAll(t *testing.T) {
+	q := &TransmitLimitedQueue{
+		NumNodes:       func() int { return 3 },
+		RetransmitMult: 4,
+	}
+
+	// The limit fits exactly one 115-byte message per call.
+	const overhead, limit = 2, 2 + 115
+
+	q.QueueBroadcast(namedMsg("node-a", 'a'))
+	require.Equal(t, 1, q.NumQueued())
+
+	// A is sent once and re-added; the delete empties the queue.
+	got := q.GetBroadcasts(overhead, limit)
+	require.Len(t, got, 1)
+	require.Equal(t, byte('a'), got[0][0])
+	require.Equal(t, 1, q.NumQueued())
+
+	q.QueueBroadcast(namedMsg("node-b", 'b'))
+	q.QueueBroadcast(namedMsg("node-c", 'c'))
+	require.Equal(t, 3, q.NumQueued())
+
+	// B and C each reach A's transmit count; then drain A's tier too.
+	seen := map[byte]bool{}
+	for i := 0; i < 5; i++ {
+		for _, m := range q.GetBroadcasts(overhead, limit) {
+			seen[m[0]] = true
+		}
+		require.Equal(t, 3, q.NumQueued(), "call %d", i)
+	}
+	require.True(t, seen['a'], "A's message was not returned again")
+	require.True(t, seen['b'] && seen['c'])
 }
