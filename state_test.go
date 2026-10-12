@@ -2661,3 +2661,190 @@ func verifySampleExists(t *testing.T, name string, sink *metrics.InmemSink) {
 		t.Fatalf("%s sample not emmited", name)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Tests for the mass-restart incarnation race condition fix
+//
+// Scenario: A node is declared dead at a high incarnation (e.g. 100).  The
+// node then restarts and re-announces itself at incarnation 1.  Two separate
+// bugs prevented the dead accusation from ever reaching the restarted node:
+//
+//   Bug 1 (aliveNode): a stale alive(inc=1) arriving at a node that already
+//   holds dead(inc=100) was silently dropped — the dead message was never
+//   re-gossiped, so the restarted node never learned it needed to refute.
+//
+//   Bug 2 (deadNode / suspectNode): a dead/suspect message arriving at a node
+//   that has never heard of the target was silently dropped instead of being
+//   forwarded, creating a gossip black hole in freshly-joined nodes.
+// ---------------------------------------------------------------------------
+
+// TestMemberList_AliveNode_ReGossipsDeadAccusation verifies Bug 1 fix for the
+// dead state: receiving a stale alive message must re-queue the dead accusation
+// so the restarted node can learn about it and call refute().
+func TestMemberList_AliveNode_ReGossipsDeadAccusation(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// Establish the node at the high pre-restart incarnation (100).
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 100, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, false)
+
+	// Another node marks it dead at incarnation 100 — this is the stale
+	// accusation that will keep floating around after the restart.
+	d := dead{Node: "test", From: "accuser", Incarnation: 100}
+	m.deadNode(&d)
+
+	if m.getNodeState("test") != StateDead {
+		t.Fatalf("expected node to be dead after setup")
+	}
+
+	// Drain setup broadcasts so assertions below are clean.
+	m.broadcasts.Reset()
+
+	// The restarted node announces alive(inc=1) — incarnation reset to 1
+	// because the in-memory counter was wiped on restart.
+	staleAlive := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&staleAlive, nil, false)
+
+	// The node must remain dead — a stale alive(inc=1) must not revive a
+	// node that is dead at inc=100.
+	if m.getNodeState("test") != StateDead {
+		t.Fatalf("stale alive(inc=1) must not revive a dead(inc=100) node")
+	}
+
+	// The dead accusation must have been re-queued for gossip so that the
+	// restarted node can eventually receive it and call refute().
+	if m.broadcasts.NumQueued() != 1 {
+		t.Fatalf("expected dead accusation to be re-gossiped: got %d queued broadcasts", m.broadcasts.NumQueued())
+	}
+
+	// Confirm the re-queued broadcast is a dead message, not alive or suspect.
+	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != deadMsg {
+		t.Fatalf("re-gossiped broadcast must be a dead message")
+	}
+}
+
+// TestMemberList_AliveNode_ReGossipsSuspectAccusation verifies Bug 1 fix for
+// the suspect state: receiving a stale alive message must re-queue the suspect
+// accusation so the restarted node can refute before the suspicion timer fires.
+func TestMemberList_AliveNode_ReGossipsSuspectAccusation(t *testing.T) {
+	m := GetMemberlist(t, func(c *Config) {
+		// Use a very long probe interval so the suspect-to-dead timer does
+		// not fire and add a second broadcast during the assertion window.
+		c.ProbeInterval = time.Hour
+		c.SuspicionMult = 5
+	})
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// Establish the node at the high pre-restart incarnation (100).
+	a := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 100, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&a, nil, false)
+
+	// Mark it suspect at incarnation 100.
+	s := suspect{Node: "test", From: "accuser", Incarnation: 100}
+	m.suspectNode(&s)
+
+	if m.getNodeState("test") != StateSuspect {
+		t.Fatalf("expected node to be suspect after setup")
+	}
+
+	// Drain setup broadcasts.
+	m.broadcasts.Reset()
+
+	// The restarted node announces alive(inc=1).
+	staleAlive := alive{Node: "test", Addr: []byte{127, 0, 0, 1}, Incarnation: 1, Vsn: m.config.BuildVsnArray()}
+	m.aliveNode(&staleAlive, nil, false)
+
+	// Suspect state must be preserved — stale alive(inc=1) must not clear it.
+	if m.getNodeState("test") != StateSuspect {
+		t.Fatalf("stale alive(inc=1) must not clear suspect(inc=100) state")
+	}
+
+	// The suspect accusation must be re-queued so the restarted node can
+	// receive it and refute before the suspicion timer declares it dead.
+	if m.broadcasts.NumQueued() != 1 {
+		t.Fatalf("expected suspect accusation to be re-gossiped: got %d queued broadcasts", m.broadcasts.NumQueued())
+	}
+
+	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != suspectMsg {
+		t.Fatalf("re-gossiped broadcast must be a suspect message")
+	}
+}
+
+// TestMemberList_DeadNode_UnknownNode_ForwardsMessage verifies Bug 2 fix for
+// dead messages: a dead message about a node we have never heard of must be
+// forwarded via gossip rather than silently dropped, so the message can
+// propagate through nodes with incomplete cluster views during mass restarts.
+func TestMemberList_DeadNode_UnknownNode_ForwardsMessage(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// Sanity: no nodes registered before the call.
+	if len(m.nodes) != 0 {
+		t.Fatalf("expected empty node list at start, got %d", len(m.nodes))
+	}
+
+	d := dead{Node: "unknown", From: "accuser", Incarnation: 100}
+	m.deadNode(&d)
+
+	// The unknown node must NOT be added to the node map — we are only
+	// forwarding the message, not adopting membership state for it.
+	if len(m.nodes) != 0 {
+		t.Fatalf("dead msg for unknown node must not create a node entry")
+	}
+
+	// The dead message must be queued for re-broadcast so it can reach nodes
+	// that do know the target (including the target itself if it is alive).
+	if m.broadcasts.NumQueued() != 1 {
+		t.Fatalf("expected dead message to be forwarded: got %d queued broadcasts", m.broadcasts.NumQueued())
+	}
+
+	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != deadMsg {
+		t.Fatalf("forwarded broadcast must be a dead message")
+	}
+}
+
+// TestMemberList_SuspectNode_UnknownNode_ForwardsMessage verifies Bug 2 fix
+// for suspect messages: a suspect message about an unknown node must be
+// forwarded rather than dropped, for the same reason as the dead-message case.
+func TestMemberList_SuspectNode_UnknownNode_ForwardsMessage(t *testing.T) {
+	m := GetMemberlist(t, nil)
+	defer func() {
+		if err := m.Shutdown(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	if len(m.nodes) != 0 {
+		t.Fatalf("expected empty node list at start, got %d", len(m.nodes))
+	}
+
+	s := suspect{Node: "unknown", From: "accuser", Incarnation: 100}
+	m.suspectNode(&s)
+
+	// No node entry must be created for the unknown node.
+	if len(m.nodes) != 0 {
+		t.Fatalf("suspect msg for unknown node must not create a node entry")
+	}
+
+	// Suspect message must be forwarded via gossip.
+	if m.broadcasts.NumQueued() != 1 {
+		t.Fatalf("expected suspect message to be forwarded: got %d queued broadcasts", m.broadcasts.NumQueued())
+	}
+
+	if messageType(m.broadcasts.orderedView(true)[0].b.Message()[0]) != suspectMsg {
+		t.Fatalf("forwarded broadcast must be a suspect message")
+	}
+}
