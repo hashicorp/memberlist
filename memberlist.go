@@ -589,6 +589,18 @@ func (m *Memberlist) SendBestEffort(to *Node, msg []byte) error {
 	buf[0] = byte(userMsg)
 	buf = append(buf, msg...)
 
+	// Enforce the documented UDPBufferSize limit. Leave the same compound-header
+	// and label overhead that sendMsg/gossip reserve so a best-effort user
+	// message cannot exceed what the rest of the library treats as the max
+	// UDP payload.
+	limit := m.config.UDPBufferSize - compoundHeaderOverhead - labelOverhead(m.config.Label)
+	if limit < 0 {
+		limit = 0
+	}
+	if len(buf) > limit {
+		return fmt.Errorf("memberlist: SendBestEffort message too large (%d bytes > %d limit)", len(buf), limit)
+	}
+
 	// Send the message
 	a := Address{Addr: to.Address(), Name: to.Name}
 	return m.rawSendMsgPacket(a, to, buf)
