@@ -604,7 +604,10 @@ func (m *Memberlist) SendReliable(to *Node, msg []byte) error {
 
 // Members returns a list of all known live nodes. The node structures
 // returned must not be modified. If you wish to modify a Node, make a
-// copy first.
+// copy first. Reading the Addr or Port field from the node structures
+// may trigger a data race in case a Node is reclaimed with a new address
+// or port inside the DeadNodeReclaimTime timeout. This known issue (#250)
+// will be addressed in future API versions.
 func (m *Memberlist) Members() []*Node {
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
