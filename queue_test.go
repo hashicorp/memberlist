@@ -4,6 +4,7 @@
 package memberlist
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/btree"
@@ -53,20 +54,22 @@ func TestLimitedBroadcastLess(t *testing.T) {
 
 			require.True(t, a.Less(b))
 
-			tree := btree.New(32)
+			tree := btree.NewG(32, (*limitedBroadcast).Less)
 
-			tree.ReplaceOrInsert(b)
-			tree.ReplaceOrInsert(a)
+			_, _ = tree.ReplaceOrInsert(b)
+			_, _ = tree.ReplaceOrInsert(a)
 
-			min := tree.Min().(*limitedBroadcast)
-			require.Equal(t, a.transmits, min.transmits)
-			require.Equal(t, a.msgLen, min.msgLen)
-			require.Equal(t, a.id, min.id)
+			minItem, ok := tree.Min()
+			require.True(t, ok)
+			require.Equal(t, a.transmits, minItem.transmits)
+			require.Equal(t, a.msgLen, minItem.msgLen)
+			require.Equal(t, a.id, minItem.id)
 
-			max := tree.Max().(*limitedBroadcast)
-			require.Equal(t, b.transmits, max.transmits)
-			require.Equal(t, b.msgLen, max.msgLen)
-			require.Equal(t, b.id, max.id)
+			maxItem, ok := tree.Max()
+			require.True(t, ok)
+			require.Equal(t, b.transmits, maxItem.transmits)
+			require.Equal(t, b.msgLen, maxItem.msgLen)
+			require.Equal(t, b.id, maxItem.id)
 		})
 	}
 }
@@ -241,5 +244,61 @@ func TestTransmitLimited_ordering(t *testing.T) {
 	}
 	if dump[4].transmits != 0 {
 		t.Fatalf("bad val %v, %d", dump[4].b.(*memberlistBroadcast).node, dump[4].transmits)
+	}
+}
+
+func BenchmarkTransmitLimitedQueueTree(b *testing.B) {
+	const size = 1024
+
+	var q TransmitLimitedQueue
+
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	q.lazyInit()
+
+	items := make([]*limitedBroadcast, size)
+	for i := range items {
+		cur := &limitedBroadcast{
+			transmits: i % 4,
+			msgLen:    int64(64 + i%1024),
+			id:        int64(i + 1),
+		}
+		items[i] = cur
+		q.addItem(cur)
+	}
+
+	b.ReportAllocs()
+
+	i := 0
+	for b.Loop() {
+		cur := items[i]
+		i++
+		if i == len(items) {
+			i = 0
+		}
+
+		q.deleteItem(cur)
+
+		// Give the reinserted item a different position in the tree.
+		cur.id += size
+
+		q.addItem(cur)
+	}
+}
+
+func BenchmarkTransmitLimitedQueueWalk(b *testing.B) {
+	const size = 1024
+
+	var q TransmitLimitedQueue
+	for i := range size {
+		q.queueBroadcast(&memberlistBroadcast{node: fmt.Sprintf("node-%d", i)}, i%4)
+	}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		q.mu.Lock()
+		q.walkReadOnlyLocked(false, func(*limitedBroadcast) bool { return true })
+		q.mu.Unlock()
 	}
 }
