@@ -602,9 +602,10 @@ func (m *Memberlist) SendReliable(to *Node, msg []byte) error {
 	return m.sendUserMsg(to.FullAddress(), msg)
 }
 
-// Members returns a list of all known live nodes. The node structures
-// returned must not be modified. If you wish to modify a Node, make a
-// copy first.
+// Members returns a list of all known live nodes. The returned pointers refer
+// to internal memberlist state, not snapshots. Do not modify them, or access
+// their fields or methods concurrently with memberlist updates: doing so can
+// cause data races.
 func (m *Memberlist) Members() []*Node {
 	m.nodeLock.RLock()
 	defer m.nodeLock.RUnlock()
