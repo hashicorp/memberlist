@@ -267,9 +267,9 @@ func TestKRandomNodes(t *testing.T) {
 		return false
 	}
 
-	s1 := kRandomNodes(3, nodes, filterFunc)
-	s2 := kRandomNodes(3, nodes, filterFunc)
-	s3 := kRandomNodes(3, nodes, filterFunc)
+	s1 := kRandomNodes(3, nodes, filterFunc, nil)
+	s2 := kRandomNodes(3, nodes, filterFunc, nil)
+	s3 := kRandomNodes(3, nodes, filterFunc, nil)
 
 	if reflect.DeepEqual(s1, s2) {
 		t.Fatalf("unexpected equal")
@@ -297,13 +297,46 @@ func TestKRandomNodes(t *testing.T) {
 
 	// make sure we test the very-small path
 	nodes = nodes[:8]
-	s4 := kRandomNodes(3, nodes, filterFunc)
+	s4 := kRandomNodes(3, nodes, filterFunc, nil)
 	if len(s4) != 2 {
 		t.Fatalf("expected 2 nodes")
 	}
 	for _, n := range s4 {
 		if n.Name != "test3" && n.Name != "test6" {
 			t.Fatalf("unexpected node picked")
+		}
+	}
+}
+
+type nodeSelectionDelegateFunc func([]*NodeState) ([]*NodeState, *NodeState)
+
+func (f nodeSelectionDelegateFunc) SelectNodes(nodes []*NodeState) ([]*NodeState, *NodeState) {
+	return f(nodes)
+}
+
+func TestKRandomNodesWithSelectionDelegate(t *testing.T) {
+	nodes := []*nodeState{
+		{Node: Node{Name: "candidate1"}, State: StateAlive},
+		{Node: Node{Name: "candidate2"}, State: StateAlive},
+		{Node: Node{Name: "candidate3"}, State: StateAlive},
+	}
+	delegate := nodeSelectionDelegateFunc(func(nodes []*NodeState) ([]*NodeState, *NodeState) {
+		return nodes[:2], nodes[2]
+	})
+
+	selected := kRandomNodes(2, nodes, func(n *nodeState) bool {
+		return n.State != StateAlive
+	}, delegate)
+
+	if len(selected) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(selected))
+	}
+	if !containsNode(selected, "candidate3") {
+		t.Fatal("expected preferred node to be selected")
+	}
+	for _, node := range selected {
+		if node.Name != "candidate1" && node.Name != "candidate2" && node.Name != "candidate3" {
+			t.Fatalf("unexpected selected node %q", node.Name)
 		}
 	}
 }

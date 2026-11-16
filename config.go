@@ -109,14 +109,18 @@ type Config struct {
 	SuspicionMaxTimeoutMult int
 
 	// PushPullInterval is the interval between complete state syncs.
-	// Complete state syncs are done with a single node over TCP and are
-	// quite expensive relative to standard gossiped messages. Setting this
-	// to zero will disable state push/pull syncs completely.
+	// Complete state syncs are done over TCP and are quite expensive relative
+	// to standard gossiped messages. Setting this to zero disables push/pull.
 	//
 	// Setting this interval lower (more frequent) will increase convergence
 	// speeds across larger clusters at the expense of increased bandwidth
 	// usage.
 	PushPullInterval time.Duration
+
+	// PushPullNodes is the number of random live nodes to perform complete
+	// state syncs with per PushPullInterval. Values less than or equal to zero
+	// use the default of one node.
+	PushPullNodes int
 
 	// ProbeInterval and ProbeTimeout are used to configure probing
 	// behavior for memberlist.
@@ -210,6 +214,8 @@ type Config struct {
 	Merge                   MergeDelegate
 	Ping                    PingDelegate
 	Alive                   AliveDelegate
+	// NodeSelection filters and prioritizes gossip and push/pull candidates.
+	NodeSelection NodeSelectionDelegate
 
 	// DNSConfigPath points to the system's DNS config file, usually located
 	// at /etc/resolv.conf. It can be overridden via config for easier testing.
