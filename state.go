@@ -75,13 +75,16 @@ func (n *Node) String() string {
 	return n.Name
 }
 
-// NodeState is used to manage our state view of another node
+// nodeState is used to manage our state view of another node.
 type nodeState struct {
 	Node
 	Incarnation uint32        // Last known incarnation number
 	State       NodeStateType // Current state
 	StateChange time.Time     // Time last state change happened
 }
+
+// NodeState is used to manage our state view of another node.
+type NodeState = nodeState
 
 // Address returns the host:port form of a node's address, suitable for use
 // with a transport.
@@ -420,7 +423,7 @@ HANDLE_REMOTE_FAILURE:
 		return n.Name == m.config.Name ||
 			n.Name == node.Name ||
 			n.State != StateAlive
-	})
+	}, nil)
 	m.nodeLock.RUnlock()
 
 	// Attempt an indirect ping.
@@ -607,7 +610,7 @@ func (m *Memberlist) gossip() {
 		default:
 			return true
 		}
-	})
+	}, m.config.NodeSelection)
 	m.nodeLock.RUnlock()
 
 	// Compute the bytes available
@@ -646,23 +649,27 @@ func (m *Memberlist) gossip() {
 // reasonably expensive as the entire state of this node is exchanged
 // with the other node.
 func (m *Memberlist) pushPull() {
-	// Get a random live node
+	numNodes := m.config.PushPullNodes
+	if numNodes <= 0 {
+		numNodes = 1
+	}
+
+	// Get random live nodes
 	m.nodeLock.RLock()
-	nodes := kRandomNodes(1, m.nodes, func(n *nodeState) bool {
+	nodes := kRandomNodes(numNodes, m.nodes, func(n *nodeState) bool {
 		return n.Name == m.config.Name ||
 			n.State != StateAlive
-	})
+	}, m.config.NodeSelection)
 	m.nodeLock.RUnlock()
 
 	// If no nodes, bail
 	if len(nodes) == 0 {
 		return
 	}
-	node := nodes[0]
-
-	// Attempt a push pull
-	if err := m.pushPullNode(node.FullAddress(), false); err != nil {
-		m.logger.Printf("[ERR] memberlist: Push/Pull with %s failed: %s", node.Name, err)
+	for _, node := range nodes {
+		if err := m.pushPullNode(node.FullAddress(), false); err != nil {
+			m.logger.Printf("[ERR] memberlist: Push/Pull with %s failed: %s", node.Name, err)
+		}
 	}
 }
 

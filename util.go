@@ -120,11 +120,20 @@ func moveDeadNodes(nodes []*nodeState, gossipToTheDeadTime time.Duration) int {
 }
 
 // kRandomNodes is used to select up to k random Nodes, excluding any nodes where
-// the exclude function returns true. It is possible that less than k nodes are
-// returned.
-func kRandomNodes(k int, nodes []*nodeState, exclude func(*nodeState) bool) []Node {
-	n := len(nodes)
+// the exclude function returns true. A delegate can filter and prioritize
+// candidates. It is possible that less than k nodes are returned.
+func kRandomNodes(k int, nodes []*nodeState, exclude func(*nodeState) bool, delegate NodeSelectionDelegate) []Node {
 	kNodes := make([]Node, 0, k)
+
+	if delegate != nil {
+		var preferred *NodeState
+		nodes, preferred = delegate.SelectNodes(nodes)
+		if preferred != nil && k > 0 && (exclude == nil || !exclude(preferred)) {
+			kNodes = append(kNodes, preferred.Node)
+		}
+	}
+
+	n := len(nodes)
 
 	// When n is very small (ex. 3-5 node Raft clusters), we can easily miss
 	// non-excluded nodes with random selection, so instead shuffle the slice
@@ -135,6 +144,9 @@ func kRandomNodes(k int, nodes []*nodeState, exclude func(*nodeState) bool) []No
 		for idx := 0; idx < n && len(kNodes) < k; idx++ {
 			state := nodes[idx]
 			if exclude != nil && exclude(state) {
+				continue
+			}
+			if containsNode(kNodes, state.Name) {
 				continue
 			}
 			kNodes = append(kNodes, state.Node)
@@ -164,6 +176,15 @@ OUTER:
 		kNodes = append(kNodes, state.Node)
 	}
 	return kNodes
+}
+
+func containsNode(nodes []Node, name string) bool {
+	for _, node := range nodes {
+		if node.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // makeCompoundMessages takes a list of messages and packs
